@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement `surgeist::style` from `surgeist/requirements/style.md` as a headless, typed, Rust-authored style layer.
+**Goal:** Implement `surgeist::style` from the root `requirements/style.md` as a headless, typed, Rust-authored style layer.
 
 **Architecture:** Add `crates/surgeist/src/style` as a sibling module with focused files for values, properties, declarations, selectors, conditions, tree adapters, sheets, resolver, invalidation, and tests. Keep style free of CSS parsing and host rendering while reusing retained facts through a read-only tree trait.
 
@@ -193,7 +193,7 @@ git commit -m "Implement Surgeist style retained integration"
 ### Task 5: Final Verification And Spec Audit
 
 **Files:**
-- Read: `surgeist/requirements/style.md`
+- Read: root `requirements/style.md`
 - Read: `crates/surgeist/src/style/*.rs`
 
 - [ ] **Step 1: Run focused verification**
@@ -219,7 +219,7 @@ Expected: all tests pass and formatting is clean.
 
 - [ ] **Step 3: Audit against the spec**
 
-Check each section in `surgeist/requirements/style.md` against the implementation. Record any intentional deferrals in the final response and keep the goal active if required scope remains unimplemented.
+Check each section in root `requirements/style.md` against the implementation. Record any intentional deferrals in the final response and keep the goal active if required scope remains unimplemented.
 
 - [ ] **Step 4: Final commit if needed**
 
