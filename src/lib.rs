@@ -5,6 +5,7 @@
 //! parsing is specified separately and does not live in this first contract.
 
 pub mod adapters;
+mod calc;
 mod condition;
 mod declaration;
 mod error;
@@ -16,6 +17,7 @@ mod sheet;
 mod tree;
 mod value;
 
+pub use calc::{CalcLength, CalcLengthTerm, CalcOperator};
 pub use condition::{Condition, Container, Viewport};
 pub use declaration::{Declaration, Declarations, Fingerprint};
 pub use error::{Error, ErrorCode, Result};
