@@ -532,16 +532,16 @@ mod tests {
         resolver
             .resolve(Context::new(&tree, id_two).local(&local_two))
             .unwrap();
-        assert_eq!(resolver.cache_hits(), 3);
+        assert_eq!(resolver.cache_hits(), 2);
         resolver
             .resolve(Context::new(&tree, id_one).local(&local_one))
             .unwrap();
-        assert_eq!(resolver.cache_hits(), 3);
+        assert_eq!(resolver.cache_hits(), 2);
 
         resolver
             .resolve(Context::new(&tree, id_one).local(&local_one))
             .unwrap();
-        assert_eq!(resolver.cache_hits(), 4);
+        assert_eq!(resolver.cache_hits(), 3);
         let broad_change = model
             .apply(Patch::SetClasses {
                 id: id_one,
