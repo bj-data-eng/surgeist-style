@@ -1,13 +1,131 @@
 //! Lower resolved style values into the layout calculator surface.
 
 use crate::{
-    Display, Edges, Error, ErrorCode, GridAutoFlow, GridFlowTolerance, GridLine,
-    GridTrackComponent, GridTrackList, Length, MaxTrackSizing, MinTrackSizing, Property, Resolved,
-    Result, TrackRepeat, TrackRepeatCount, TrackSizing, Value,
+    CalcLength, CalcOperator, Display, Edges, Error, ErrorCode, GridAutoFlow, GridFlowTolerance,
+    GridLine, GridTrackComponent, GridTrackList, Length, MaxTrackSizing, MinTrackSizing, Property,
+    Resolved, Result, TrackRepeat, TrackRepeatCount, TrackSizing, Value,
 };
 use surgeist_layout as layout;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayoutLoweringOutput {
+    pub node: layout::NodeInput,
+    pub calc_store: layout::LayoutCalcStore,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct LayoutLoweringSession {
+    calc_store: layout::LayoutCalcStore,
+}
+
 pub fn lower(resolved: &Resolved) -> Result<layout::NodeInput> {
+    if resolved_uses_calc(resolved) {
+        return Err(unsupported("calc values require lower_with_store"));
+    }
+    let mut session = LayoutLoweringSession::new();
+    session.lower_node(resolved)
+}
+
+pub fn lower_with_store(resolved: &Resolved) -> Result<LayoutLoweringOutput> {
+    let mut session = LayoutLoweringSession::new();
+    let node = session.lower_node(resolved)?;
+    Ok(LayoutLoweringOutput {
+        node,
+        calc_store: session.finish(),
+    })
+}
+
+impl LayoutLoweringSession {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn lower_node(&mut self, resolved: &Resolved) -> Result<layout::NodeInput> {
+        lower_node_with_session(resolved, self)
+    }
+
+    #[must_use]
+    pub fn finish(self) -> layout::LayoutCalcStore {
+        self.calc_store
+    }
+
+    fn push_calc_length(&mut self, calc: &CalcLength) -> layout::CalcId {
+        let expression = lower_calc_expression(calc);
+        self.calc_store.push(expression)
+    }
+}
+
+fn resolved_uses_calc(resolved: &Resolved) -> bool {
+    length_uses_calc(resolved.width())
+        || length_uses_calc(resolved.height())
+        || edges_use_calc(edges(resolved, Property::Inset))
+        || length_uses_calc(length(resolved, Property::MinWidth))
+        || length_uses_calc(length(resolved, Property::MinHeight))
+        || length_uses_calc(length(resolved, Property::MaxWidth))
+        || length_uses_calc(length(resolved, Property::MaxHeight))
+        || edges_use_calc(resolved.margin_edges())
+        || edges_use_calc(resolved.padding_edges())
+        || edges_use_calc(resolved.border_width_edges())
+        || length_uses_calc(length(resolved, Property::ColumnGap))
+        || length_uses_calc(length(resolved, Property::RowGap))
+        || length_uses_calc(length(resolved, Property::FlexBasis))
+        || length_uses_calc(resolved.font_size())
+        || grid_flow_tolerance_uses_calc(grid_flow_tolerance(resolved))
+        || track_list_uses_calc(track_list(resolved, Property::GridTemplateColumns))
+        || track_list_uses_calc(track_list(resolved, Property::GridTemplateRows))
+        || track_list_uses_calc(track_list(resolved, Property::GridAutoColumns))
+        || track_list_uses_calc(track_list(resolved, Property::GridAutoRows))
+}
+
+fn length_uses_calc(length: Length) -> bool {
+    matches!(length, Length::Calc(_))
+}
+
+fn edges_use_calc(edges: Edges) -> bool {
+    length_uses_calc(edges.top)
+        || length_uses_calc(edges.right)
+        || length_uses_calc(edges.bottom)
+        || length_uses_calc(edges.left)
+}
+
+fn grid_flow_tolerance_uses_calc(tolerance: GridFlowTolerance) -> bool {
+    matches!(tolerance, GridFlowTolerance::Length(Length::Calc(_)))
+}
+
+fn track_list_uses_calc(list: &GridTrackList) -> bool {
+    list.components.iter().any(track_component_uses_calc)
+}
+
+fn track_component_uses_calc(component: &GridTrackComponent) -> bool {
+    match component {
+        GridTrackComponent::Track(track) => track_sizing_uses_calc(track),
+        GridTrackComponent::Repeat(repeat) => {
+            repeat.components.iter().any(track_component_uses_calc)
+        }
+        GridTrackComponent::LineNames(_) | GridTrackComponent::Subgrid(_) => false,
+    }
+}
+
+fn track_sizing_uses_calc(track: &TrackSizing) -> bool {
+    min_track_sizing_uses_calc(&track.min) || max_track_sizing_uses_calc(&track.max)
+}
+
+fn min_track_sizing_uses_calc(track: &MinTrackSizing) -> bool {
+    matches!(track, MinTrackSizing::Length(Length::Calc(_)))
+}
+
+fn max_track_sizing_uses_calc(track: &MaxTrackSizing) -> bool {
+    matches!(
+        track,
+        MaxTrackSizing::Length(Length::Calc(_)) | MaxTrackSizing::FitContent(Length::Calc(_))
+    )
+}
+
+fn lower_node_with_session(
+    resolved: &Resolved,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::NodeInput> {
     Ok(layout::NodeInput {
         display: lower_display(resolved.display())?,
         box_sizing: lower_box_sizing(resolved),
@@ -22,26 +140,26 @@ pub fn lower(resolved: &Resolved) -> Result<layout::NodeInput> {
         position: lower_position(resolved),
         float: lower_float(resolved),
         clear: lower_clear(resolved),
-        inset: lower_edges_auto(edges(resolved, Property::Inset))?,
+        inset: lower_edges_auto_with_session(edges(resolved, Property::Inset), session)?,
         size: layout::Size::new(
-            lower_dimension(resolved.width())?,
-            lower_dimension(resolved.height())?,
+            lower_dimension_with_session(resolved.width(), session)?,
+            lower_dimension_with_session(resolved.height(), session)?,
         ),
         min_size: layout::Size::new(
-            lower_dimension(length(resolved, Property::MinWidth))?,
-            lower_dimension(length(resolved, Property::MinHeight))?,
+            lower_dimension_with_session(length(resolved, Property::MinWidth), session)?,
+            lower_dimension_with_session(length(resolved, Property::MinHeight), session)?,
         ),
         max_size: layout::Size::new(
-            lower_dimension(length(resolved, Property::MaxWidth))?,
-            lower_dimension(length(resolved, Property::MaxHeight))?,
+            lower_dimension_with_session(length(resolved, Property::MaxWidth), session)?,
+            lower_dimension_with_session(length(resolved, Property::MaxHeight), session)?,
         ),
         aspect_ratio: aspect_ratio(resolved),
-        margin: lower_edges_auto(resolved.margin_edges())?,
-        padding: lower_edges(resolved.padding_edges())?,
-        border: lower_edges(resolved.border_width_edges())?,
+        margin: lower_edges_auto_with_session(resolved.margin_edges(), session)?,
+        padding: lower_edges_with_session(resolved.padding_edges(), session)?,
+        border: lower_edges_with_session(resolved.border_width_edges(), session)?,
         gap: layout::Size::new(
-            lower_gap_length(length(resolved, Property::ColumnGap))?,
-            lower_gap_length(length(resolved, Property::RowGap))?,
+            lower_gap_length_with_session(length(resolved, Property::ColumnGap), session)?,
+            lower_gap_length_with_session(length(resolved, Property::RowGap), session)?,
         ),
         align_items: lower_align_items(resolved, Property::AlignItems),
         align_self: lower_align_items(resolved, Property::AlignSelf),
@@ -51,19 +169,28 @@ pub fn lower(resolved: &Resolved) -> Result<layout::NodeInput> {
         justify_content: lower_align_content(resolved, Property::JustifyContent),
         flex_direction: lower_flex_direction(resolved),
         flex_wrap: lower_flex_wrap(resolved),
-        flex_basis: lower_dimension(length(resolved, Property::FlexBasis))?,
+        flex_basis: lower_dimension_with_session(length(resolved, Property::FlexBasis), session)?,
         flex_grow: number(resolved, Property::FlexGrow),
         flex_shrink: number(resolved, Property::FlexShrink),
-        grid_template_columns: lower_track_list(track_list(
-            resolved,
-            Property::GridTemplateColumns,
-        ))?,
-        grid_template_rows: lower_track_list(track_list(resolved, Property::GridTemplateRows))?,
+        grid_template_columns: lower_track_list_with_session(
+            track_list(resolved, Property::GridTemplateColumns),
+            session,
+        )?,
+        grid_template_rows: lower_track_list_with_session(
+            track_list(resolved, Property::GridTemplateRows),
+            session,
+        )?,
         grid_template_areas: lower_grid_template_areas(grid_template_areas(resolved)),
-        grid_auto_columns: lower_track_list(track_list(resolved, Property::GridAutoColumns))?,
-        grid_auto_rows: lower_track_list(track_list(resolved, Property::GridAutoRows))?,
+        grid_auto_columns: lower_track_list_with_session(
+            track_list(resolved, Property::GridAutoColumns),
+            session,
+        )?,
+        grid_auto_rows: lower_track_list_with_session(
+            track_list(resolved, Property::GridAutoRows),
+            session,
+        )?,
         grid_auto_flow: lower_grid_auto_flow(grid_auto_flow(resolved)),
-        grid_flow_tolerance: lower_grid_flow_tolerance(resolved)?,
+        grid_flow_tolerance: lower_grid_flow_tolerance_with_session(resolved, session)?,
         grid_column: lower_grid_placement(
             grid_line(resolved, Property::GridColumnStart),
             grid_line(resolved, Property::GridColumnEnd),
@@ -254,6 +381,19 @@ fn lower_dimension(length: Length) -> Result<layout::Dimension> {
     })
 }
 
+fn lower_dimension_with_session(
+    length: Length,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::Dimension> {
+    Ok(match length {
+        Length::Calc(calc) => {
+            let id = session.push_calc_length(&calc);
+            layout::Dimension::calc(id)
+        }
+        length => lower_dimension(length)?,
+    })
+}
+
 fn lower_length_auto(length: Length) -> Result<layout::LengthAuto> {
     Ok(match length {
         Length::Px(value) => layout::LengthAuto::px(value),
@@ -267,6 +407,19 @@ fn lower_length_auto(length: Length) -> Result<layout::LengthAuto> {
         | Length::MaxContent => {
             return Err(unsupported("intrinsic, flexible, or calc edge length"));
         }
+    })
+}
+
+fn lower_length_auto_with_session(
+    length: Length,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::LengthAuto> {
+    Ok(match length {
+        Length::Calc(calc) => {
+            let id = session.push_calc_length(&calc);
+            layout::LengthAuto::calc(id)
+        }
+        length => lower_length_auto(length)?,
     })
 }
 
@@ -286,40 +439,69 @@ fn lower_length(length: Length) -> Result<layout::Length> {
     })
 }
 
-fn lower_gap_length(length: Length) -> Result<layout::Length> {
+fn lower_length_with_session(
+    length: Length,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::Length> {
     Ok(match length {
-        Length::Normal => layout::Length::NORMAL,
+        Length::Calc(calc) => {
+            let id = session.push_calc_length(&calc);
+            layout::Length::calc(id)
+        }
         length => lower_length(length)?,
     })
 }
 
-fn lower_edges(edges: Edges) -> Result<layout::Edges<layout::Length>> {
+fn lower_gap_length_with_session(
+    length: Length,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::Length> {
+    Ok(match length {
+        Length::Normal => layout::Length::NORMAL,
+        length => lower_length_with_session(length, session)?,
+    })
+}
+
+fn lower_edges_with_session(
+    edges: Edges,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::Edges<layout::Length>> {
     Ok(layout::Edges::new(
-        lower_length(edges.top)?,
-        lower_length(edges.right)?,
-        lower_length(edges.bottom)?,
-        lower_length(edges.left)?,
+        lower_length_with_session(edges.top, session)?,
+        lower_length_with_session(edges.right, session)?,
+        lower_length_with_session(edges.bottom, session)?,
+        lower_length_with_session(edges.left, session)?,
     ))
 }
 
-fn lower_edges_auto(edges: Edges) -> Result<layout::Edges<layout::LengthAuto>> {
+fn lower_edges_auto_with_session(
+    edges: Edges,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::Edges<layout::LengthAuto>> {
     Ok(layout::Edges::new(
-        lower_length_auto(edges.top)?,
-        lower_length_auto(edges.right)?,
-        lower_length_auto(edges.bottom)?,
-        lower_length_auto(edges.left)?,
+        lower_length_auto_with_session(edges.top, session)?,
+        lower_length_auto_with_session(edges.right, session)?,
+        lower_length_auto_with_session(edges.bottom, session)?,
+        lower_length_auto_with_session(edges.left, session)?,
     ))
 }
 
-fn lower_track_list(list: &GridTrackList) -> Result<Vec<layout::TrackComponent>> {
+fn lower_track_list_with_session(
+    list: &GridTrackList,
+    session: &mut LayoutLoweringSession,
+) -> Result<Vec<layout::TrackComponent>> {
     let mut lowered = Vec::new();
     for component in &list.components {
         match component {
             GridTrackComponent::Track(track) => {
-                lowered.push(layout::TrackComponent::Track(lower_track_sizing(track)?));
+                lowered.push(layout::TrackComponent::Track(
+                    lower_track_sizing_with_session(track, session)?,
+                ));
             }
             GridTrackComponent::Repeat(repeat) => {
-                lowered.push(layout::TrackComponent::Repeat(lower_track_repeat(repeat)?));
+                lowered.push(layout::TrackComponent::Repeat(
+                    lower_track_repeat_with_session(repeat, session)?,
+                ));
             }
             GridTrackComponent::LineNames(names) => {
                 lowered.push(layout::TrackComponent::LineNames(names.clone()));
@@ -334,12 +516,17 @@ fn lower_track_list(list: &GridTrackList) -> Result<Vec<layout::TrackComponent>>
     Ok(lowered)
 }
 
-fn lower_track_repeat(repeat: &TrackRepeat) -> Result<layout::TrackRepetition> {
+fn lower_track_repeat_with_session(
+    repeat: &TrackRepeat,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::TrackRepetition> {
     let mut components = Vec::new();
     for component in &repeat.components {
         match component {
             GridTrackComponent::Track(track) => {
-                components.push(layout::TrackComponent::Track(lower_track_sizing(track)?));
+                components.push(layout::TrackComponent::Track(
+                    lower_track_sizing_with_session(track, session)?,
+                ));
             }
             GridTrackComponent::LineNames(names) => {
                 components.push(layout::TrackComponent::LineNames(names.clone()));
@@ -386,17 +573,23 @@ fn lower_subgrid_line_name_components(
         .collect()
 }
 
-fn lower_track_sizing(track: &TrackSizing) -> Result<layout::TrackSizing> {
+fn lower_track_sizing_with_session(
+    track: &TrackSizing,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::TrackSizing> {
     Ok(layout::TrackSizing::new(
-        lower_min_track_sizing(&track.min)?,
-        lower_max_track_sizing(&track.max)?,
+        lower_min_track_sizing_with_session(&track.min, session)?,
+        lower_max_track_sizing_with_session(&track.max, session)?,
     ))
 }
 
-fn lower_min_track_sizing(track: &MinTrackSizing) -> Result<layout::MinTrackSizing> {
+fn lower_min_track_sizing_with_session(
+    track: &MinTrackSizing,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::MinTrackSizing> {
     Ok(match track {
         MinTrackSizing::Length(length) => {
-            layout::MinTrackSizing::Length(lower_length(length.clone())?)
+            layout::MinTrackSizing::Length(lower_length_with_session(length.clone(), session)?)
         }
         MinTrackSizing::Auto => layout::MinTrackSizing::AUTO,
         MinTrackSizing::MinContent => layout::MinTrackSizing::MIN_CONTENT,
@@ -404,17 +597,20 @@ fn lower_min_track_sizing(track: &MinTrackSizing) -> Result<layout::MinTrackSizi
     })
 }
 
-fn lower_max_track_sizing(track: &MaxTrackSizing) -> Result<layout::MaxTrackSizing> {
+fn lower_max_track_sizing_with_session(
+    track: &MaxTrackSizing,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::MaxTrackSizing> {
     Ok(match track {
         MaxTrackSizing::Length(length) => {
-            layout::MaxTrackSizing::Length(lower_length(length.clone())?)
+            layout::MaxTrackSizing::Length(lower_length_with_session(length.clone(), session)?)
         }
         MaxTrackSizing::Flex(value) => layout::MaxTrackSizing::fr(*value),
         MaxTrackSizing::Auto => layout::MaxTrackSizing::AUTO,
         MaxTrackSizing::MinContent => layout::MaxTrackSizing::MIN_CONTENT,
         MaxTrackSizing::MaxContent => layout::MaxTrackSizing::MAX_CONTENT,
         MaxTrackSizing::FitContent(limit) => {
-            layout::MaxTrackSizing::fit_content(lower_length(limit.clone())?)
+            layout::MaxTrackSizing::fit_content(lower_length_with_session(limit.clone(), session)?)
         }
     })
 }
@@ -428,13 +624,16 @@ fn lower_grid_auto_flow(flow: GridAutoFlow) -> layout::GridAutoFlow {
     }
 }
 
-fn lower_grid_flow_tolerance(resolved: &Resolved) -> Result<layout::GridFlowTolerance> {
+fn lower_grid_flow_tolerance_with_session(
+    resolved: &Resolved,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::GridFlowTolerance> {
     Ok(match grid_flow_tolerance(resolved) {
         GridFlowTolerance::Normal => layout::GridFlowTolerance::Normal {
             font_size: font_size_scalar(resolved.font_size())?,
         },
         GridFlowTolerance::Length(length) => {
-            layout::GridFlowTolerance::Length(lower_length(length)?)
+            layout::GridFlowTolerance::Length(lower_length_with_session(length, session)?)
         }
         GridFlowTolerance::Percent(value) => layout::GridFlowTolerance::Percent(percent(value)),
         GridFlowTolerance::Infinite => layout::GridFlowTolerance::Infinite,
@@ -587,6 +786,44 @@ fn percent(value: f32) -> f32 {
     value / 100.0
 }
 
+fn lower_calc_expression(calc: &CalcLength) -> layout::CalcExpression {
+    match calc {
+        CalcLength::Px(value) => layout::CalcExpression::sum([layout::CalcTerm::px(*value)]),
+        CalcLength::Percent(value) => {
+            layout::CalcExpression::sum([layout::CalcTerm::percent(percent(*value))])
+        }
+        CalcLength::Sum(terms) => {
+            let mut lowered = Vec::new();
+            for term in terms {
+                let sign = match term.operator {
+                    CalcOperator::Add => 1.0,
+                    CalcOperator::Sub => -1.0,
+                };
+                collect_calc_terms(&term.value, sign, &mut lowered);
+            }
+            layout::CalcExpression::sum(lowered)
+        }
+    }
+}
+
+fn collect_calc_terms(calc: &CalcLength, sign: f32, output: &mut Vec<layout::CalcTerm>) {
+    match calc {
+        CalcLength::Px(value) => output.push(layout::CalcTerm::px(sign * *value)),
+        CalcLength::Percent(value) => {
+            output.push(layout::CalcTerm::percent(sign * percent(*value)));
+        }
+        CalcLength::Sum(terms) => {
+            for term in terms {
+                let term_sign = match term.operator {
+                    CalcOperator::Add => sign,
+                    CalcOperator::Sub => -sign,
+                };
+                collect_calc_terms(&term.value, term_sign, output);
+            }
+        }
+    }
+}
+
 fn unsupported(feature: &str) -> Error {
     Error::new(
         ErrorCode::InvalidValue,
@@ -598,11 +835,51 @@ fn unsupported(feature: &str) -> Error {
 mod tests {
     use super::*;
     use crate::CalcLength;
+    use surgeist_retained::{Element, Model, Patch, Tag};
 
     #[test]
     fn calc_font_size_is_unsupported_for_normal_grid_flow_tolerance_lowering() {
         let error = font_size_scalar(Length::Calc(CalcLength::px(12.0))).unwrap_err();
 
         assert!(error.to_string().contains("calc font size"));
+    }
+
+    #[test]
+    fn lowers_calc_dimension_into_layout_calc_store() {
+        let calc = crate::CalcLength::sum([
+            crate::CalcLengthTerm::add(crate::CalcLength::px(20.0)),
+            crate::CalcLengthTerm::add(crate::CalcLength::percent(10.0)),
+        ]);
+        let declarations = crate::Declarations::new()
+            .try_set(
+                crate::Property::Width,
+                crate::Value::Length(crate::Length::Calc(calc)),
+            )
+            .unwrap();
+        let mut model = Model::empty();
+        let root = model.root();
+        let panel = model
+            .apply(Patch::Insert {
+                parent: root,
+                index: 0,
+                element: Element::tagged(Tag::new("panel").unwrap()),
+            })
+            .unwrap()
+            .changes()
+            .inserted()[0];
+        let tree = model.snapshot();
+        let resolved = crate::Resolver::new(crate::Sheet::new())
+            .resolve(crate::Context::new(&tree, panel).local(&declarations))
+            .unwrap();
+
+        let lowered = lower_with_store(&resolved).unwrap();
+
+        let surgeist_layout::Dimension::Calc(id) = lowered.node.size.width else {
+            panic!("expected calc width, got {:?}", lowered.node.size.width);
+        };
+        let expression = lowered.calc_store.get(id).unwrap();
+        assert!((expression.percent_fraction() - 0.10).abs() < f32::EPSILON);
+        assert_eq!(expression.resolve(Some(200.0)).value, Some(40.0));
+        assert_eq!(lowered.calc_store.len(), 1);
     }
 }
