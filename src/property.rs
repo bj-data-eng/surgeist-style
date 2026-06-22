@@ -1,7 +1,7 @@
 use super::{
-    AlignContent, AlignItems, BoxSizing, Clear, Color, Corners, Direction, Edges, Error, ErrorCode,
-    FlexDirection, FlexWrap, Float, GridFlowTolerance, LayoutPosition, Length, Overflow, Result,
-    StyleTextAlign, Value, Visibility, WritingMode,
+    AlignContent, AlignItems, BoxSizing, CalcLength, CalcOperator, Clear, Color, Corners,
+    Direction, Edges, Error, ErrorCode, FlexDirection, FlexWrap, Float, GridFlowTolerance,
+    LayoutPosition, Length, Overflow, Result, StyleTextAlign, Value, Visibility, WritingMode,
 };
 
 #[non_exhaustive]
@@ -540,11 +540,11 @@ impl Property {
                 | Self::LineHeight,
                 Value::Length(length),
             ) => {
-                validate_normal_length_scope(*length, self)?;
-                validate_non_negative_length(*length, self)
+                validate_normal_length_scope(length, self)?;
+                validate_non_negative_length(length, self)
             }
             (Self::Padding | Self::BorderWidth, Value::Edges(edges)) => {
-                validate_non_negative_edges(*edges, self)
+                validate_non_negative_edges(edges, self)
             }
             (Self::GridTemplateRows | Self::GridTemplateColumns, Value::GridTrackList(value)) => {
                 value.validate()
@@ -556,7 +556,7 @@ impl Property {
             (Self::GridTemplate, Value::GridTemplate(value)) => value.validate(),
             (Self::Grid, Value::GridDefinition(value)) => value.validate(),
             (Self::GridFlowTolerance, Value::GridFlowTolerance(value)) => {
-                validate_grid_flow_tolerance(*value, self)
+                validate_grid_flow_tolerance(value, self)
             }
             (
                 Self::GridRowStart | Self::GridRowEnd | Self::GridColumnStart | Self::GridColumnEnd,
@@ -565,10 +565,10 @@ impl Property {
             (Self::GridRow | Self::GridColumn, Value::GridPlacement(value)) => value.validate(),
             (Self::GridArea, Value::GridAreaPlacement(value)) => value.validate(),
             (Self::Radius, Value::Corners(corners)) => {
-                validate_non_negative_length(corners.top_left, self)?;
-                validate_non_negative_length(corners.top_right, self)?;
-                validate_non_negative_length(corners.bottom_right, self)?;
-                validate_non_negative_length(corners.bottom_left, self)
+                validate_non_negative_length(&corners.top_left, self)?;
+                validate_non_negative_length(&corners.top_right, self)?;
+                validate_non_negative_length(&corners.bottom_right, self)?;
+                validate_non_negative_length(&corners.bottom_left, self)
             }
             (Self::Opacity, Value::Number(value)) => validate_unit_number(*value, self),
             (
@@ -583,15 +583,15 @@ impl Property {
     }
 }
 
-fn validate_non_negative_edges(edges: Edges, property: Property) -> Result<()> {
-    validate_non_negative_length(edges.top, property)?;
-    validate_non_negative_length(edges.right, property)?;
-    validate_non_negative_length(edges.bottom, property)?;
-    validate_non_negative_length(edges.left, property)
+fn validate_non_negative_edges(edges: &Edges, property: Property) -> Result<()> {
+    validate_non_negative_length(&edges.top, property)?;
+    validate_non_negative_length(&edges.right, property)?;
+    validate_non_negative_length(&edges.bottom, property)?;
+    validate_non_negative_length(&edges.left, property)
 }
 
-fn validate_normal_length_scope(length: Length, property: Property) -> Result<()> {
-    if length == Length::Normal
+fn validate_normal_length_scope(length: &Length, property: Property) -> Result<()> {
+    if matches!(length, Length::Normal)
         && !matches!(
             property,
             Property::Gap | Property::RowGap | Property::ColumnGap
@@ -605,13 +605,56 @@ fn validate_normal_length_scope(length: Length, property: Property) -> Result<()
     Ok(())
 }
 
-fn validate_non_negative_length(length: Length, property: Property) -> Result<()> {
+fn validate_non_negative_length(length: &Length, property: Property) -> Result<()> {
     match length {
-        Length::Px(value) | Length::Percent(value) if value < 0.0 => Err(Error::new(
+        Length::Px(value) | Length::Percent(value) if *value < 0.0 => Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{property:?} must be non-negative"),
+        )),
+        Length::Calc(calc) if calc_is_definitely_negative(calc) => Err(Error::new(
             ErrorCode::InvalidValue,
             format!("{property:?} must be non-negative"),
         )),
         _ => Ok(()),
+    }
+}
+
+fn calc_is_definitely_negative(calc: &CalcLength) -> bool {
+    calc_coefficients(calc, 1.0).is_some_and(|coefficients| {
+        coefficients.px < 0.0 && coefficients.percent <= 0.0
+            || coefficients.px <= 0.0 && coefficients.percent < 0.0
+    })
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CalcCoefficients {
+    px: f32,
+    percent: f32,
+}
+
+fn calc_coefficients(calc: &CalcLength, sign: f32) -> Option<CalcCoefficients> {
+    match calc {
+        CalcLength::Px(value) => Some(CalcCoefficients {
+            px: sign * *value,
+            percent: 0.0,
+        }),
+        CalcLength::Percent(value) => Some(CalcCoefficients {
+            px: 0.0,
+            percent: sign * *value,
+        }),
+        CalcLength::Sum(terms) => {
+            let mut total = CalcCoefficients::default();
+            for term in terms {
+                let term_sign = match term.operator {
+                    CalcOperator::Add => sign,
+                    CalcOperator::Sub => -sign,
+                };
+                let term = calc_coefficients(&term.value, term_sign)?;
+                total.px += term.px;
+                total.percent += term.percent;
+            }
+            Some(total)
+        }
     }
 }
 
@@ -626,14 +669,17 @@ fn validate_non_negative_number(value: f32, property: Property) -> Result<()> {
     }
 }
 
-fn validate_grid_flow_tolerance(value: GridFlowTolerance, property: Property) -> Result<()> {
+fn validate_grid_flow_tolerance(value: &GridFlowTolerance, property: Property) -> Result<()> {
     value.validate()?;
     match value {
         GridFlowTolerance::Length(Length::Px(value)) => {
-            validate_non_negative_number(value, property)
+            validate_non_negative_number(*value, property)
         }
-        GridFlowTolerance::Length(_) => unreachable!("value validation rejects non-px lengths"),
-        GridFlowTolerance::Percent(value) => validate_non_negative_number(value, property),
+        GridFlowTolerance::Length(_) => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "grid flow tolerance length must be a concrete px length",
+        )),
+        GridFlowTolerance::Percent(value) => validate_non_negative_number(*value, property),
         GridFlowTolerance::Normal | GridFlowTolerance::Infinite => Ok(()),
     }
 }

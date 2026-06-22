@@ -1,5 +1,5 @@
 use super::{
-    Error, ErrorCode, Interpolation, Property, Result,
+    CalcLength, Error, ErrorCode, Interpolation, Property, Result,
     error::{validate_finite, validate_non_negative},
 };
 
@@ -46,11 +46,12 @@ impl From<Color> for peniko::Color {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Length {
     Normal,
     Px(f32),
     Percent(f32),
+    Calc(CalcLength),
     Fill,
     Fit,
     MinContent,
@@ -84,11 +85,12 @@ impl Length {
         Ok(length)
     }
 
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         match self {
             Self::Normal => Ok(()),
-            Self::Px(value) => validate_finite(value, "length px"),
-            Self::Percent(value) => validate_finite(value, "length percent"),
+            Self::Px(value) => validate_finite(*value, "length px"),
+            Self::Percent(value) => validate_finite(*value, "length percent"),
+            Self::Calc(value) => value.validate(),
             Self::Fill | Self::Fit | Self::MinContent | Self::MaxContent | Self::Auto => Ok(()),
         }
     }
@@ -100,7 +102,7 @@ impl Default for Length {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Edges {
     pub top: Length,
     pub right: Length,
@@ -110,11 +112,11 @@ pub struct Edges {
 
 impl Edges {
     #[must_use]
-    pub const fn all(value: Length) -> Self {
+    pub fn all(value: Length) -> Self {
         Self {
-            top: value,
-            right: value,
-            bottom: value,
+            top: value.clone(),
+            right: value.clone(),
+            bottom: value.clone(),
             left: value,
         }
     }
@@ -129,7 +131,7 @@ impl Edges {
         }
     }
 
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.top.validate()?;
         self.right.validate()?;
         self.bottom.validate()?;
@@ -143,7 +145,7 @@ impl Default for Edges {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Corners {
     pub top_left: Length,
     pub top_right: Length,
@@ -153,11 +155,11 @@ pub struct Corners {
 
 impl Corners {
     #[must_use]
-    pub const fn all(value: Length) -> Self {
+    pub fn all(value: Length) -> Self {
         Self {
-            top_left: value,
-            top_right: value,
-            bottom_right: value,
+            top_left: value.clone(),
+            top_right: value.clone(),
+            bottom_right: value.clone(),
             bottom_left: value,
         }
     }
@@ -177,7 +179,7 @@ impl Corners {
         }
     }
 
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.top_left.validate()?;
         self.top_right.validate()?;
         self.bottom_right.validate()?;
@@ -702,7 +704,7 @@ pub enum SubgridLineNameRepeatCount {
     AutoFill,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TrackSizing {
     pub min: MinTrackSizing,
     pub max: MaxTrackSizing,
@@ -743,13 +745,13 @@ impl TrackSizing {
         Self { min, max }
     }
 
-    fn validate(self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         self.min.validate()?;
         self.max.validate()
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MinTrackSizing {
     Length(Length),
     Auto,
@@ -758,7 +760,7 @@ pub enum MinTrackSizing {
 }
 
 impl MinTrackSizing {
-    fn validate(self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         match self {
             Self::Length(length) => length.validate(),
             Self::Auto | Self::MinContent | Self::MaxContent => Ok(()),
@@ -766,7 +768,7 @@ impl MinTrackSizing {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MaxTrackSizing {
     Length(Length),
     Flex(f32),
@@ -782,10 +784,10 @@ impl MaxTrackSizing {
         Self::Flex(value)
     }
 
-    fn validate(self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         match self {
             Self::Length(length) | Self::FitContent(length) => length.validate(),
-            Self::Flex(value) => validate_non_negative(value, "grid track flex"),
+            Self::Flex(value) => validate_non_negative(*value, "grid track flex"),
             Self::Auto | Self::MinContent | Self::MaxContent => Ok(()),
         }
     }
@@ -1059,7 +1061,7 @@ pub enum GridAutoFlow {
     ColumnDense,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum GridFlowTolerance {
     #[default]
     Normal,
@@ -1069,20 +1071,16 @@ pub enum GridFlowTolerance {
 }
 
 impl GridFlowTolerance {
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         match self {
-            Self::Length(Length::Px(value)) => validate_finite(value, "grid flow tolerance px"),
-            Self::Length(_) => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "grid flow tolerance length must be a concrete px length",
-            )),
-            Self::Percent(value) => validate_finite(value, "grid flow tolerance percent"),
+            Self::Length(length) => length.validate(),
+            Self::Percent(value) => validate_finite(*value, "grid flow tolerance percent"),
             Self::Normal | Self::Infinite => Ok(()),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Size {
     pub width: Length,
     pub height: Length,
@@ -1094,13 +1092,13 @@ impl Size {
         Self { width, height }
     }
 
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.width.validate()?;
         self.height.validate()
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Shadow {
     pub x: Length,
     pub y: Length,
@@ -1140,7 +1138,7 @@ impl Shadow {
         self
     }
 
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.x.validate()?;
         self.y.validate()?;
         self.blur.validate()?;
@@ -1149,7 +1147,7 @@ impl Shadow {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Stroke {
     pub width: Length,
     pub color: Color,
@@ -1196,7 +1194,7 @@ impl Stroke {
         self
     }
 
-    pub fn validate(self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.width.validate()?;
         self.color.validate()?;
         self.sides.validate()?;
@@ -1398,7 +1396,7 @@ impl TextValue {
     }
 
     #[must_use]
-    pub const fn size(mut self, size: Length) -> Self {
+    pub fn size(mut self, size: Length) -> Self {
         self.font_size = size;
         self
     }
@@ -1416,7 +1414,7 @@ impl TextValue {
     }
 
     #[must_use]
-    pub const fn line_height(mut self, line_height: Length) -> Self {
+    pub fn line_height(mut self, line_height: Length) -> Self {
         self.line_height = line_height;
         self
     }
@@ -1524,7 +1522,7 @@ impl Transform {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TransformOp {
     Translate { x: Length, y: Length },
     Scale { x: f32, y: f32 },
@@ -1532,17 +1530,17 @@ pub enum TransformOp {
 }
 
 impl TransformOp {
-    fn validate(self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         match self {
             Self::Translate { x, y } => {
                 x.validate()?;
                 y.validate()
             }
             Self::Scale { x, y } => {
-                validate_finite(x, "scale x")?;
-                validate_finite(y, "scale y")
+                validate_finite(*x, "scale x")?;
+                validate_finite(*y, "scale y")
             }
-            Self::Rotate { radians } => validate_finite(radians, "rotate radians"),
+            Self::Rotate { radians } => validate_finite(*radians, "rotate radians"),
         }
     }
 }

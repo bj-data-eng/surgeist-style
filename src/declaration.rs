@@ -4,11 +4,11 @@ use std::{
 };
 
 use super::{
-    Color, Corners, Cursor, Display, Edges, GridAreaPlacement, GridAutoFlow, GridDefinition,
-    GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreas,
-    GridTrackComponent, GridTrackList, Length, MaxTrackSizing, MinTrackSizing, PointerEvents,
-    Property, Result, Shadow, Size, SubgridLineNameComponent, TrackRepeatCount, TrackSizing,
-    Transform, Value, Visibility,
+    CalcLength, CalcLengthTerm, Color, Corners, Cursor, Display, Edges, GridAreaPlacement,
+    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
+    GridTemplateAreas, GridTrackComponent, GridTrackList, Length, MaxTrackSizing, MinTrackSizing,
+    PointerEvents, Property, Result, Shadow, Size, SubgridLineNameComponent, TrackRepeatCount,
+    TrackSizing, Transform, Value, Visibility,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -322,7 +322,7 @@ impl Declarations {
     #[must_use]
     pub fn padding_edges(&self) -> Option<Edges> {
         match self.get(Property::Padding) {
-            Some(Value::Edges(edges)) => Some(*edges),
+            Some(Value::Edges(edges)) => Some(edges.clone()),
             _ => None,
         }
     }
@@ -330,7 +330,7 @@ impl Declarations {
     #[must_use]
     pub fn margin_edges(&self) -> Option<Edges> {
         match self.get(Property::Margin) {
-            Some(Value::Edges(edges)) => Some(*edges),
+            Some(Value::Edges(edges)) => Some(edges.clone()),
             _ => None,
         }
     }
@@ -346,7 +346,7 @@ impl Declarations {
     #[must_use]
     pub fn font_size_length(&self) -> Option<Length> {
         match self.get(Property::FontSize) {
-            Some(Value::Length(size)) => Some(*size),
+            Some(Value::Length(size)) => Some(size.clone()),
             _ => None,
         }
     }
@@ -370,7 +370,7 @@ impl Declarations {
     #[must_use]
     pub fn width_length(&self) -> Option<Length> {
         match self.get(Property::Width) {
-            Some(Value::Length(length)) => Some(*length),
+            Some(Value::Length(length)) => Some(length.clone()),
             _ => None,
         }
     }
@@ -378,7 +378,7 @@ impl Declarations {
     #[must_use]
     pub fn height_length(&self) -> Option<Length> {
         match self.get(Property::Height) {
-            Some(Value::Length(length)) => Some(*length),
+            Some(Value::Length(length)) => Some(length.clone()),
             _ => None,
         }
     }
@@ -386,7 +386,7 @@ impl Declarations {
     #[must_use]
     pub fn border_width_edges(&self) -> Option<Edges> {
         match self.get(Property::BorderWidth) {
-            Some(Value::Edges(edges)) => Some(*edges),
+            Some(Value::Edges(edges)) => Some(edges.clone()),
             _ => None,
         }
     }
@@ -410,7 +410,7 @@ impl Declarations {
     #[must_use]
     pub fn transform_origin_size(&self) -> Option<Size> {
         match self.get(Property::TransformOrigin) {
-            Some(Value::Size(origin)) => Some(*origin),
+            Some(Value::Size(origin)) => Some(origin.clone()),
             _ => None,
         }
     }
@@ -707,19 +707,19 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         }
         Value::Length(value) => {
             2u8.hash(state);
-            hash_length(*value, state);
+            hash_length(value, state);
         }
         Value::Size(value) => {
             3u8.hash(state);
-            hash_length(value.width, state);
-            hash_length(value.height, state);
+            hash_length(&value.width, state);
+            hash_length(&value.height, state);
         }
         Value::Edges(value) => {
             4u8.hash(state);
-            hash_length(value.top, state);
-            hash_length(value.right, state);
-            hash_length(value.bottom, state);
-            hash_length(value.left, state);
+            hash_length(&value.top, state);
+            hash_length(&value.right, state);
+            hash_length(&value.bottom, state);
+            hash_length(&value.left, state);
         }
         Value::GridTrackList(value) => {
             16u8.hash(state);
@@ -755,7 +755,7 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         }
         Value::GridFlowTolerance(value) => {
             39u8.hash(state);
-            hash_grid_flow_tolerance(*value, state);
+            hash_grid_flow_tolerance(value, state);
         }
         Value::Color(value) => {
             5u8.hash(state);
@@ -763,10 +763,10 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         }
         Value::Corners(value) => {
             6u8.hash(state);
-            hash_length(value.top_left, state);
-            hash_length(value.top_right, state);
-            hash_length(value.bottom_right, state);
-            hash_length(value.bottom_left, state);
+            hash_length(&value.top_left, state);
+            hash_length(&value.top_right, state);
+            hash_length(&value.bottom_right, state);
+            hash_length(&value.bottom_left, state);
         }
         Value::StringList(value) => {
             7u8.hash(state);
@@ -780,17 +780,17 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             9u8.hash(state);
             value.len().hash(state);
             for shadow in value {
-                hash_length(shadow.x, state);
-                hash_length(shadow.y, state);
-                hash_length(shadow.blur, state);
-                hash_length(shadow.spread, state);
+                hash_length(&shadow.x, state);
+                hash_length(&shadow.y, state);
+                hash_length(&shadow.blur, state);
+                hash_length(&shadow.spread, state);
                 hash_color(shadow.color, state);
                 shadow.inset.hash(state);
             }
         }
         Value::Stroke(value) => {
             10u8.hash(state);
-            hash_length(value.width, state);
+            hash_length(&value.width, state);
             hash_color(value.color, state);
             value.style.hash(state);
             value.sides.top.hash(state);
@@ -811,10 +811,10 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::Text(value) => {
             11u8.hash(state);
             value.font_family.hash(state);
-            hash_length(value.font_size, state);
+            hash_length(&value.font_size, state);
             value.font_weight.hash(state);
             hash_slant(value.font_style, state);
-            hash_length(value.line_height, state);
+            hash_length(&value.line_height, state);
             hash_color(value.color, state);
             value.alignment.hash(state);
             value.wrap.hash(state);
@@ -829,7 +829,7 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             12u8.hash(state);
             value.operations.len().hash(state);
             for operation in &value.operations {
-                hash_transform_op(*operation, state);
+                hash_transform_op(operation, state);
             }
         }
         Value::Cursor(value) => {
@@ -881,7 +881,7 @@ fn hash_grid_track_component(component: &GridTrackComponent, state: &mut Default
     match component {
         GridTrackComponent::Track(track) => {
             0u8.hash(state);
-            hash_track_sizing(*track, state);
+            hash_track_sizing(track, state);
         }
         GridTrackComponent::Repeat(repeat) => {
             1u8.hash(state);
@@ -925,7 +925,7 @@ fn hash_grid_track_component(component: &GridTrackComponent, state: &mut Default
     }
 }
 
-fn hash_grid_flow_tolerance(value: GridFlowTolerance, state: &mut DefaultHasher) {
+fn hash_grid_flow_tolerance(value: &GridFlowTolerance, state: &mut DefaultHasher) {
     match value {
         GridFlowTolerance::Normal => 0u8.hash(state),
         GridFlowTolerance::Length(length) => {
@@ -934,18 +934,18 @@ fn hash_grid_flow_tolerance(value: GridFlowTolerance, state: &mut DefaultHasher)
         }
         GridFlowTolerance::Percent(value) => {
             2u8.hash(state);
-            hash_f32(value, state);
+            hash_f32(*value, state);
         }
         GridFlowTolerance::Infinite => 3u8.hash(state),
     }
 }
 
-fn hash_track_sizing(value: TrackSizing, state: &mut DefaultHasher) {
-    hash_min_track_sizing(value.min, state);
-    hash_max_track_sizing(value.max, state);
+fn hash_track_sizing(value: &TrackSizing, state: &mut DefaultHasher) {
+    hash_min_track_sizing(&value.min, state);
+    hash_max_track_sizing(&value.max, state);
 }
 
-fn hash_min_track_sizing(value: MinTrackSizing, state: &mut DefaultHasher) {
+fn hash_min_track_sizing(value: &MinTrackSizing, state: &mut DefaultHasher) {
     match value {
         MinTrackSizing::Length(length) => {
             0u8.hash(state);
@@ -957,7 +957,7 @@ fn hash_min_track_sizing(value: MinTrackSizing, state: &mut DefaultHasher) {
     }
 }
 
-fn hash_max_track_sizing(value: MaxTrackSizing, state: &mut DefaultHasher) {
+fn hash_max_track_sizing(value: &MaxTrackSizing, state: &mut DefaultHasher) {
     match value {
         MaxTrackSizing::Length(length) => {
             0u8.hash(state);
@@ -965,7 +965,7 @@ fn hash_max_track_sizing(value: MaxTrackSizing, state: &mut DefaultHasher) {
         }
         MaxTrackSizing::Flex(flex) => {
             1u8.hash(state);
-            hash_f32(flex, state);
+            hash_f32(*flex, state);
         }
         MaxTrackSizing::Auto => 2u8.hash(state),
         MaxTrackSizing::MinContent => 3u8.hash(state),
@@ -1017,16 +1017,20 @@ fn hash_grid_line(value: &GridLine, state: &mut DefaultHasher) {
     }
 }
 
-fn hash_length(value: super::Length, state: &mut DefaultHasher) {
+fn hash_length(value: &super::Length, state: &mut DefaultHasher) {
     match value {
         super::Length::Normal => 7u8.hash(state),
         super::Length::Px(value) => {
             0u8.hash(state);
-            hash_f32(value, state);
+            hash_f32(*value, state);
         }
         super::Length::Percent(value) => {
             1u8.hash(state);
-            hash_f32(value, state);
+            hash_f32(*value, state);
+        }
+        super::Length::Calc(value) => {
+            8u8.hash(state);
+            hash_calc_length(value, state);
         }
         super::Length::Fill => 2u8.hash(state),
         super::Length::Fit => 3u8.hash(state),
@@ -1036,7 +1040,32 @@ fn hash_length(value: super::Length, state: &mut DefaultHasher) {
     }
 }
 
-fn hash_transform_op(value: super::TransformOp, state: &mut DefaultHasher) {
+fn hash_calc_length(value: &CalcLength, state: &mut DefaultHasher) {
+    match value {
+        CalcLength::Px(value) => {
+            0u8.hash(state);
+            hash_f32(*value, state);
+        }
+        CalcLength::Percent(value) => {
+            1u8.hash(state);
+            hash_f32(*value, state);
+        }
+        CalcLength::Sum(terms) => {
+            2u8.hash(state);
+            terms.len().hash(state);
+            for term in terms {
+                hash_calc_term(term, state);
+            }
+        }
+    }
+}
+
+fn hash_calc_term(term: &CalcLengthTerm, state: &mut DefaultHasher) {
+    term.operator.hash(state);
+    hash_calc_length(&term.value, state);
+}
+
+fn hash_transform_op(value: &super::TransformOp, state: &mut DefaultHasher) {
     match value {
         super::TransformOp::Translate { x, y } => {
             0u8.hash(state);
@@ -1045,12 +1074,12 @@ fn hash_transform_op(value: super::TransformOp, state: &mut DefaultHasher) {
         }
         super::TransformOp::Scale { x, y } => {
             1u8.hash(state);
-            hash_f32(x, state);
-            hash_f32(y, state);
+            hash_f32(*x, state);
+            hash_f32(*y, state);
         }
         super::TransformOp::Rotate { radians } => {
             2u8.hash(state);
-            hash_f32(radians, state);
+            hash_f32(*radians, state);
         }
     }
 }
@@ -1095,7 +1124,7 @@ fn hash_f32(value: f32, state: &mut DefaultHasher) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BoxSizing, GridFlowTolerance};
+    use crate::{BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, GridFlowTolerance};
 
     fn value_hash(value: &Value) -> u64 {
         let mut hasher = DefaultHasher::new();
@@ -1109,5 +1138,93 @@ mod tests {
             value_hash(&Value::GridFlowTolerance(GridFlowTolerance::Normal)),
             value_hash(&Value::BoxSizing(BoxSizing::ContentBox))
         );
+    }
+
+    #[test]
+    fn value_hash_distinguishes_calc_lengths() {
+        let calc_a = CalcLength::sum([
+            CalcLengthTerm::add(CalcLength::px(20.0)),
+            CalcLengthTerm::add(CalcLength::percent(10.0)),
+        ]);
+        let calc_b = CalcLength::sum([
+            CalcLengthTerm::add(CalcLength::px(21.0)),
+            CalcLengthTerm::add(CalcLength::percent(10.0)),
+        ]);
+
+        assert_ne!(
+            value_hash(&Value::Length(Length::Calc(calc_a))),
+            value_hash(&Value::Length(Length::Calc(calc_b)))
+        );
+    }
+
+    #[test]
+    fn calc_lengths_validate_through_length_properties() {
+        let calc = CalcLength::sum([
+            CalcLengthTerm::add(CalcLength::px(20.0)),
+            CalcLengthTerm::add(CalcLength::percent(10.0)),
+        ]);
+
+        Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap();
+    }
+
+    #[test]
+    fn calc_px_only_negative_results_are_rejected_for_non_negative_properties() {
+        let calc = CalcLength::sum([
+            CalcLengthTerm::add(CalcLength::px(0.0)),
+            CalcLengthTerm::sub(CalcLength::px(1.0)),
+        ]);
+
+        let error =
+            Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+    }
+
+    #[test]
+    fn calc_percent_only_negative_results_are_rejected_for_non_negative_properties() {
+        let calc = CalcLength::sum([
+            CalcLengthTerm::add(CalcLength::percent(0.0)),
+            CalcLengthTerm::sub(CalcLength::percent(1.0)),
+        ]);
+
+        let error =
+            Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+    }
+
+    #[test]
+    fn mixed_all_nonpositive_calc_lengths_are_rejected_for_non_negative_properties() {
+        let calc = CalcLength::sum([
+            CalcLengthTerm::sub(CalcLength::px(1.0)),
+            CalcLengthTerm::sub(CalcLength::percent(1.0)),
+        ]);
+
+        let error =
+            Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+    }
+
+    #[test]
+    fn indefinite_mixed_calc_lengths_remain_valid_for_non_negative_properties() {
+        let calc = CalcLength::sum([
+            CalcLengthTerm::sub(CalcLength::px(1.0)),
+            CalcLengthTerm::add(CalcLength::percent(10.0)),
+        ]);
+
+        Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap();
+    }
+
+    #[test]
+    fn grid_flow_tolerance_calc_reaches_property_domain_validation() {
+        let calc = CalcLength::sum([
+            CalcLengthTerm::add(CalcLength::px(8.0)),
+            CalcLengthTerm::add(CalcLength::percent(2.0)),
+        ]);
+
+        let error = Declaration::try_new(
+            Property::GridFlowTolerance,
+            Value::GridFlowTolerance(GridFlowTolerance::Length(Length::Calc(calc))),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("grid flow tolerance length"));
     }
 }

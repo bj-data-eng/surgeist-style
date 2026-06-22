@@ -250,6 +250,7 @@ fn lower_dimension(length: Length) -> Result<layout::Dimension> {
         Length::Fit | Length::Auto => layout::Dimension::AUTO,
         Length::MinContent => layout::Dimension::MIN_CONTENT,
         Length::MaxContent => layout::Dimension::MAX_CONTENT,
+        Length::Calc(_) => return Err(unsupported("calc dimension length")),
     })
 }
 
@@ -258,8 +259,13 @@ fn lower_length_auto(length: Length) -> Result<layout::LengthAuto> {
         Length::Px(value) => layout::LengthAuto::px(value),
         Length::Percent(value) => layout::LengthAuto::percent(percent(value)),
         Length::Auto => layout::LengthAuto::AUTO,
-        Length::Normal | Length::Fill | Length::Fit | Length::MinContent | Length::MaxContent => {
-            return Err(unsupported("intrinsic or flexible edge length"));
+        Length::Calc(_)
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => {
+            return Err(unsupported("intrinsic, flexible, or calc edge length"));
         }
     })
 }
@@ -268,7 +274,8 @@ fn lower_length(length: Length) -> Result<layout::Length> {
     Ok(match length {
         Length::Px(value) => layout::Length::px(value),
         Length::Percent(value) => layout::Length::percent(percent(value)),
-        Length::Normal
+        Length::Calc(_)
+        | Length::Normal
         | Length::Auto
         | Length::Fill
         | Length::Fit
@@ -309,7 +316,7 @@ fn lower_track_list(list: &GridTrackList) -> Result<Vec<layout::TrackComponent>>
     for component in &list.components {
         match component {
             GridTrackComponent::Track(track) => {
-                lowered.push(layout::TrackComponent::Track(lower_track_sizing(*track)?));
+                lowered.push(layout::TrackComponent::Track(lower_track_sizing(track)?));
             }
             GridTrackComponent::Repeat(repeat) => {
                 lowered.push(layout::TrackComponent::Repeat(lower_track_repeat(repeat)?));
@@ -332,7 +339,7 @@ fn lower_track_repeat(repeat: &TrackRepeat) -> Result<layout::TrackRepetition> {
     for component in &repeat.components {
         match component {
             GridTrackComponent::Track(track) => {
-                components.push(layout::TrackComponent::Track(lower_track_sizing(*track)?));
+                components.push(layout::TrackComponent::Track(lower_track_sizing(track)?));
             }
             GridTrackComponent::LineNames(names) => {
                 components.push(layout::TrackComponent::LineNames(names.clone()));
@@ -379,31 +386,35 @@ fn lower_subgrid_line_name_components(
         .collect()
 }
 
-fn lower_track_sizing(track: TrackSizing) -> Result<layout::TrackSizing> {
+fn lower_track_sizing(track: &TrackSizing) -> Result<layout::TrackSizing> {
     Ok(layout::TrackSizing::new(
-        lower_min_track_sizing(track.min)?,
-        lower_max_track_sizing(track.max)?,
+        lower_min_track_sizing(&track.min)?,
+        lower_max_track_sizing(&track.max)?,
     ))
 }
 
-fn lower_min_track_sizing(track: MinTrackSizing) -> Result<layout::MinTrackSizing> {
+fn lower_min_track_sizing(track: &MinTrackSizing) -> Result<layout::MinTrackSizing> {
     Ok(match track {
-        MinTrackSizing::Length(length) => layout::MinTrackSizing::Length(lower_length(length)?),
+        MinTrackSizing::Length(length) => {
+            layout::MinTrackSizing::Length(lower_length(length.clone())?)
+        }
         MinTrackSizing::Auto => layout::MinTrackSizing::AUTO,
         MinTrackSizing::MinContent => layout::MinTrackSizing::MIN_CONTENT,
         MinTrackSizing::MaxContent => layout::MinTrackSizing::MAX_CONTENT,
     })
 }
 
-fn lower_max_track_sizing(track: MaxTrackSizing) -> Result<layout::MaxTrackSizing> {
+fn lower_max_track_sizing(track: &MaxTrackSizing) -> Result<layout::MaxTrackSizing> {
     Ok(match track {
-        MaxTrackSizing::Length(length) => layout::MaxTrackSizing::Length(lower_length(length)?),
-        MaxTrackSizing::Flex(value) => layout::MaxTrackSizing::fr(value),
+        MaxTrackSizing::Length(length) => {
+            layout::MaxTrackSizing::Length(lower_length(length.clone())?)
+        }
+        MaxTrackSizing::Flex(value) => layout::MaxTrackSizing::fr(*value),
         MaxTrackSizing::Auto => layout::MaxTrackSizing::AUTO,
         MaxTrackSizing::MinContent => layout::MaxTrackSizing::MIN_CONTENT,
         MaxTrackSizing::MaxContent => layout::MaxTrackSizing::MAX_CONTENT,
         MaxTrackSizing::FitContent(limit) => {
-            layout::MaxTrackSizing::fit_content(lower_length(limit)?)
+            layout::MaxTrackSizing::fit_content(lower_length(limit.clone())?)
         }
     })
 }
@@ -420,7 +431,7 @@ fn lower_grid_auto_flow(flow: GridAutoFlow) -> layout::GridAutoFlow {
 fn lower_grid_flow_tolerance(resolved: &Resolved) -> Result<layout::GridFlowTolerance> {
     Ok(match grid_flow_tolerance(resolved) {
         GridFlowTolerance::Normal => layout::GridFlowTolerance::Normal {
-            font_size: font_size_scalar(resolved.font_size()),
+            font_size: font_size_scalar(resolved.font_size())?,
         },
         GridFlowTolerance::Length(length) => {
             layout::GridFlowTolerance::Length(lower_length(length)?)
@@ -430,8 +441,8 @@ fn lower_grid_flow_tolerance(resolved: &Resolved) -> Result<layout::GridFlowTole
     })
 }
 
-fn font_size_scalar(length: Length) -> f32 {
-    match length {
+fn font_size_scalar(length: Length) -> Result<f32> {
+    Ok(match length {
         Length::Px(value) => value,
         Length::Percent(value) => 16.0 * percent(value),
         Length::Normal
@@ -440,7 +451,8 @@ fn font_size_scalar(length: Length) -> f32 {
         | Length::Fit
         | Length::MinContent
         | Length::MaxContent => 16.0,
-    }
+        Length::Calc(_) => return Err(unsupported("calc font size")),
+    })
 }
 
 fn lower_grid_placement(start: GridLine, end: GridLine) -> Result<layout::GridPlacement> {
@@ -498,14 +510,14 @@ fn lower_raw_grid_placement(start: GridLine, end: GridLine) -> Result<layout::Ra
 
 fn length(resolved: &Resolved, property: Property) -> Length {
     match resolved.get(property) {
-        Value::Length(length) => *length,
+        Value::Length(length) => length.clone(),
         _ => Length::Auto,
     }
 }
 
 fn edges(resolved: &Resolved, property: Property) -> Edges {
     match resolved.get(property) {
-        Value::Edges(edges) => *edges,
+        Value::Edges(edges) => edges.clone(),
         _ => Edges::default(),
     }
 }
@@ -566,7 +578,7 @@ fn grid_auto_flow(resolved: &Resolved) -> GridAutoFlow {
 
 fn grid_flow_tolerance(resolved: &Resolved) -> GridFlowTolerance {
     match resolved.get(Property::GridFlowTolerance) {
-        Value::GridFlowTolerance(tolerance) => *tolerance,
+        Value::GridFlowTolerance(tolerance) => tolerance.clone(),
         _ => GridFlowTolerance::Normal,
     }
 }
@@ -580,4 +592,17 @@ fn unsupported(feature: &str) -> Error {
         ErrorCode::InvalidValue,
         format!("{feature} cannot be lowered to layout style yet"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::CalcLength;
+
+    #[test]
+    fn calc_font_size_is_unsupported_for_normal_grid_flow_tolerance_lowering() {
+        let error = font_size_scalar(Length::Calc(CalcLength::px(12.0))).unwrap_err();
+
+        assert!(error.to_string().contains("calc font size"));
+    }
 }

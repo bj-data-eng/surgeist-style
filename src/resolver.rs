@@ -56,7 +56,7 @@ impl Resolved {
     #[must_use]
     pub fn width(&self) -> Length {
         match self.get(Property::Width) {
-            Value::Length(value) => *value,
+            Value::Length(value) => value.clone(),
             _ => Length::Auto,
         }
     }
@@ -64,7 +64,7 @@ impl Resolved {
     #[must_use]
     pub fn height(&self) -> Length {
         match self.get(Property::Height) {
-            Value::Length(value) => *value,
+            Value::Length(value) => value.clone(),
             _ => Length::Auto,
         }
     }
@@ -72,7 +72,7 @@ impl Resolved {
     #[must_use]
     pub fn padding_edges(&self) -> Edges {
         match self.get(Property::Padding) {
-            Value::Edges(edges) => *edges,
+            Value::Edges(edges) => edges.clone(),
             _ => Edges::default(),
         }
     }
@@ -80,7 +80,7 @@ impl Resolved {
     #[must_use]
     pub fn margin_edges(&self) -> Edges {
         match self.get(Property::Margin) {
-            Value::Edges(edges) => *edges,
+            Value::Edges(edges) => edges.clone(),
             _ => Edges::default(),
         }
     }
@@ -88,7 +88,7 @@ impl Resolved {
     #[must_use]
     pub fn radius_corners(&self) -> Corners {
         match self.get(Property::Radius) {
-            Value::Corners(corners) => *corners,
+            Value::Corners(corners) => corners.clone(),
             _ => Corners::default(),
         }
     }
@@ -104,7 +104,7 @@ impl Resolved {
     #[must_use]
     pub fn font_size(&self) -> Length {
         match self.get(Property::FontSize) {
-            Value::Length(value) => *value,
+            Value::Length(value) => value.clone(),
             _ => Length::Px(16.0),
         }
     }
@@ -128,7 +128,7 @@ impl Resolved {
     #[must_use]
     pub fn border_width_edges(&self) -> Edges {
         match self.get(Property::BorderWidth) {
-            Value::Edges(edges) => *edges,
+            Value::Edges(edges) => edges.clone(),
             _ => Edges::default(),
         }
     }
@@ -160,7 +160,7 @@ impl Resolved {
     #[must_use]
     pub fn transform_origin(&self) -> Size {
         match self.get(Property::TransformOrigin) {
-            Value::Size(origin) => *origin,
+            Value::Size(origin) => origin.clone(),
             _ => Size::new(Length::Percent(50.0), Length::Percent(50.0)),
         }
     }
