@@ -26,10 +26,15 @@ Task 3 depends on the layout crate exposing these public APIs from its typed-val
 ```rust
 pub struct CalcId;
 pub trait CalcResolver;
+pub struct CalcExpression;
+pub enum CalcTerm;
 pub struct LayoutCalcStore;
 
 impl LayoutCalcStore {
-    pub fn push_length_calc(&mut self, calc: impl Into<surgeist_layout::LayoutCalc>) -> CalcId;
+    pub fn push(&mut self, expression: CalcExpression) -> CalcId;
+    pub fn get(&self, id: CalcId) -> Option<&CalcExpression>;
+    pub fn len(&self) -> usize;
+    pub fn is_empty(&self) -> bool;
 }
 
 impl surgeist_layout::Length {
@@ -59,8 +64,10 @@ If those APIs differ, stop Task 3 and file an upstream issue in `surgeist-layout
   - Include calc values in declaration fingerprints and shorthand expansion.
 - Modify: `src/property.rs`
   - Ensure calc lengths are accepted for length-bearing properties and rejected by existing domain rules when negative or invalid.
+- Modify: `src/resolver.rs`
+  - Update resolved-value accessors for non-`Copy` length-bearing values.
 - Modify: `src/adapters/layout.rs`
-  - Lower authored calc values into layout calc handles after the layout contract exists.
+  - Update non-`Copy` style accessors and lower authored calc values into layout calc handles after the layout contract exists.
 - Modify: `api/public-api.txt`
   - Refresh only after implementation and API review.
 
@@ -281,6 +288,8 @@ git commit -m "style: add authored calc length values"
 - Modify: `src/value.rs`
 - Modify: `src/declaration.rs`
 - Modify: `src/property.rs`
+- Modify: `src/resolver.rs`
+- Modify: `src/adapters/layout.rs`
 
 - [ ] **Step 1: Write failing value and fingerprint tests**
 
@@ -313,12 +322,51 @@ fn calc_lengths_validate_through_length_properties() {
 
     Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap();
 }
+
+#[test]
+fn calc_px_only_negative_results_are_rejected_for_non_negative_properties() {
+    let calc = CalcLength::sum([
+        CalcLengthTerm::add(CalcLength::px(0.0)),
+        CalcLengthTerm::sub(CalcLength::px(1.0)),
+    ]);
+
+    let error = Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc)))
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::InvalidValue);
+}
+
+#[test]
+fn calc_percent_only_negative_results_are_rejected_for_non_negative_properties() {
+    let calc = CalcLength::sum([
+        CalcLengthTerm::add(CalcLength::percent(0.0)),
+        CalcLengthTerm::sub(CalcLength::percent(1.0)),
+    ]);
+
+    let error = Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc)))
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::InvalidValue);
+}
+
+#[test]
+fn grid_flow_tolerance_calc_reaches_property_domain_validation() {
+    let calc = CalcLength::sum([
+        CalcLengthTerm::add(CalcLength::px(8.0)),
+        CalcLengthTerm::add(CalcLength::percent(2.0)),
+    ]);
+
+    let error = Declaration::try_new(
+        Property::GridFlowTolerance,
+        Value::GridFlowTolerance(GridFlowTolerance::Length(Length::Calc(calc))),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("grid flow tolerance length"));
+}
 ```
 
 Import the calc types in the test module:
 
 ```rust
-use crate::{BoxSizing, CalcLength, CalcLengthTerm, GridFlowTolerance};
+use crate::{BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, GridFlowTolerance};
 ```
 
 - [ ] **Step 2: Run tests to verify failure**
@@ -326,7 +374,7 @@ use crate::{BoxSizing, CalcLength, CalcLengthTerm, GridFlowTolerance};
 Run:
 
 ```sh
-cargo test -p surgeist-style declaration::tests::value_hash_distinguishes_calc_lengths declaration::tests::calc_lengths_validate_through_length_properties
+cargo test -p surgeist-style declaration::tests::value_hash_distinguishes_calc_lengths declaration::tests::calc_lengths_validate_through_length_properties declaration::tests::calc_px_only_negative_results_are_rejected_for_non_negative_properties declaration::tests::calc_percent_only_negative_results_are_rejected_for_non_negative_properties declaration::tests::grid_flow_tolerance_calc_reaches_property_domain_validation
 ```
 
 Expected: compile failure because `Length::Calc` and calc hashing do not exist.
@@ -361,9 +409,76 @@ Update `Length::validate`:
 Self::Calc(value) => value.validate(),
 ```
 
-Remove `Copy` from structs and enums that contain `Length` if the compiler requires it: `Edges`, `Corners`, `Size`, `TrackSizing`, `MinTrackSizing`, `MaxTrackSizing`, `GridFlowTolerance`, `Stroke`, and `TransformOp`. Prefer cloning at call sites over changing calc ownership back to handles in style.
+Remove `Copy` from structs and enums that contain `Length`: `Edges`, `Corners`, `Size`, `TrackSizing`, `MinTrackSizing`, `MaxTrackSizing`, `GridFlowTolerance`, `Stroke`, and `TransformOp`. Do not change calc ownership back to handles in style.
 
-- [ ] **Step 4: Add calc hashing**
+- [ ] **Step 4: Update non-`Copy` accessors and call sites**
+
+In `src/resolver.rs`, change resolved-value accessors that currently dereference `Length`, `Edges`, `Size`, or other length-bearing values to clone instead:
+
+```rust
+pub fn width(&self) -> Length {
+    match self.get(Property::Width) {
+        Value::Length(length) => length.clone(),
+        _ => Length::Auto,
+    }
+}
+
+pub fn padding_edges(&self) -> Edges {
+    match self.get(Property::Padding) {
+        Value::Edges(edges) => edges.clone(),
+        _ => Edges::default(),
+    }
+}
+```
+
+Apply the same pattern to `height`, `margin_edges`, `border_width_edges`, `font_size`, `line_height`, `transform_origin`, and any other accessor that returns a length-bearing value by copying from `Value`.
+
+In `src/adapters/layout.rs`, update helper extraction functions to clone:
+
+```rust
+fn length(resolved: &Resolved, property: Property) -> Length {
+    match resolved.get(property) {
+        Value::Length(length) => length.clone(),
+        _ => Length::Auto,
+    }
+}
+
+fn edges(resolved: &Resolved, property: Property) -> Edges {
+    match resolved.get(property) {
+        Value::Edges(edges) => edges.clone(),
+        _ => Edges::default(),
+    }
+}
+```
+
+In `src/declaration.rs` and `src/property.rs`, replace dereference patterns such as `*length`, `*edges`, and `*value` for non-`Copy` length-bearing values with `.clone()` or borrowed validation helpers. Keep numeric `f32` dereferences unchanged.
+
+In `src/value.rs`, update length-bearing constructors, validators, and convenience methods so they do not rely on `Length: Copy`. Keep constructors such as `Edges::all`, `Edges::new`, `Size::new`, `TrackSizing::px`, and `TrackSizing::percent` taking owned `Length` or scalar inputs, and clone repeated owned values inside constructors where a value is reused:
+
+```rust
+impl Edges {
+    #[must_use]
+    pub fn all(value: Length) -> Self {
+        Self {
+            top: value.clone(),
+            right: value.clone(),
+            bottom: value.clone(),
+            left: value,
+        }
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.top.validate()?;
+        self.right.validate()?;
+        self.bottom.validate()?;
+        self.left.validate()
+    }
+}
+```
+
+Apply the same borrow-based validation pattern to `Corners`, `Size`, `GridTrackList`, `TrackSizing`, `MinTrackSizing`, `MaxTrackSizing`, `GridFlowTolerance`, `Stroke`, `Transform`, and any helper that currently takes a length-bearing type by value only because it was `Copy`.
+
+- [ ] **Step 5: Add calc hashing**
 
 In `src/declaration.rs`, import calc types:
 
@@ -415,9 +530,9 @@ fn hash_calc_term(term: &CalcLengthTerm, state: &mut DefaultHasher) {
 }
 ```
 
-- [ ] **Step 5: Update domain validation for non-negative length properties**
+- [ ] **Step 6: Update domain validation for non-negative length properties**
 
-In `src/property.rs`, update `validate_non_negative_length` so calc is accepted only when every term is non-negative:
+In `src/property.rs`, import `CalcLength` and `CalcOperator`, then update `validate_non_negative_length` so calc expressions that are definitely negative for every non-negative basis are rejected while mixed indefinite expressions remain valid for layout-time resolution:
 
 ```rust
 fn validate_non_negative_length(length: Length, property: Property) -> Result<()> {
@@ -426,7 +541,7 @@ fn validate_non_negative_length(length: Length, property: Property) -> Result<()
             ErrorCode::InvalidValue,
             format!("{property:?} must be non-negative"),
         )),
-        Length::Calc(calc) if calc_has_negative_term(&calc) => Err(Error::new(
+        Length::Calc(calc) if calc_is_definitely_negative(&calc) => Err(Error::new(
             ErrorCode::InvalidValue,
             format!("{property:?} must be non-negative"),
         )),
@@ -434,29 +549,106 @@ fn validate_non_negative_length(length: Length, property: Property) -> Result<()
     }
 }
 
-fn calc_has_negative_term(calc: &CalcLength) -> bool {
+fn calc_is_definitely_negative(calc: &CalcLength) -> bool {
+    calc_coefficients(calc, 1.0).is_some_and(|coefficients| {
+        coefficients.px < 0.0 && coefficients.percent <= 0.0
+            || coefficients.px <= 0.0 && coefficients.percent < 0.0
+    })
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CalcCoefficients {
+    px: f32,
+    percent: f32,
+}
+
+fn calc_coefficients(calc: &CalcLength, sign: f32) -> Option<CalcCoefficients> {
     match calc {
-        CalcLength::Px(value) | CalcLength::Percent(value) => *value < 0.0,
-        CalcLength::Sum(terms) => terms.iter().any(|term| calc_has_negative_term(&term.value)),
+        CalcLength::Px(value) => Some(CalcCoefficients {
+            px: sign * *value,
+            percent: 0.0,
+        }),
+        CalcLength::Percent(value) => Some(CalcCoefficients {
+            px: 0.0,
+            percent: sign * *value,
+        }),
+        CalcLength::Sum(terms) => {
+            let mut total = CalcCoefficients::default();
+            for term in terms {
+                let term_sign = match term.operator {
+                    CalcOperator::Add => sign,
+                    CalcOperator::Sub => -sign,
+                };
+                let term = calc_coefficients(&term.value, term_sign)?;
+                total.px += term.px;
+                total.percent += term.percent;
+            }
+            Some(total)
+        }
     }
 }
 ```
 
-- [ ] **Step 6: Run tests to verify pass**
+- [ ] **Step 7: Move grid-flow-tolerance compatibility into property validation**
+
+In `src/value.rs`, keep `GridFlowTolerance::validate` to structural value validation only:
+
+```rust
+impl GridFlowTolerance {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Length(length) => length.validate(),
+            Self::Percent(value) => validate_finite(*value, "grid flow tolerance percent"),
+            Self::Normal | Self::Infinite => Ok(()),
+        }
+    }
+}
+```
+
+In `src/property.rs`, keep the compatibility rule in `validate_grid_flow_tolerance`:
+
+```rust
+fn validate_grid_flow_tolerance(value: &GridFlowTolerance, property: Property) -> Result<()> {
+    value.validate()?;
+    match value {
+        GridFlowTolerance::Length(Length::Px(value)) => {
+            validate_non_negative_number(*value, property)
+        }
+        GridFlowTolerance::Length(_) => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "grid flow tolerance length must be a concrete px length",
+        )),
+        GridFlowTolerance::Percent(value) => validate_non_negative_number(*value, property),
+        GridFlowTolerance::Normal | GridFlowTolerance::Infinite => Ok(()),
+    }
+}
+```
+
+Update the caller to pass a borrowed value:
+
+```rust
+(Self::GridFlowTolerance, Value::GridFlowTolerance(value)) => {
+    validate_grid_flow_tolerance(value, self)
+}
+```
+
+This lets `surgeist-css` construct `GridFlowTolerance::Length(Length::Calc(_))` and leaves the rejection with the owning style property domain.
+
+- [ ] **Step 8: Run tests to verify pass**
 
 Run:
 
 ```sh
-cargo test -p surgeist-style declaration::tests::value_hash_distinguishes_calc_lengths declaration::tests::calc_lengths_validate_through_length_properties
+cargo test -p surgeist-style declaration::tests::value_hash_distinguishes_calc_lengths declaration::tests::calc_lengths_validate_through_length_properties declaration::tests::calc_px_only_negative_results_are_rejected_for_non_negative_properties declaration::tests::calc_percent_only_negative_results_are_rejected_for_non_negative_properties declaration::tests::grid_flow_tolerance_calc_reaches_property_domain_validation
 cargo test -p surgeist-style
 ```
 
 Expected: all style tests pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```sh
-git add -- src/value.rs src/declaration.rs src/property.rs
+git add -- src/value.rs src/declaration.rs src/property.rs src/resolver.rs src/adapters/layout.rs
 git commit -m "style: integrate calc lengths with values"
 ```
 
@@ -470,7 +662,7 @@ git commit -m "style: integrate calc lengths with values"
 Run:
 
 ```sh
-rg "pub struct CalcId|pub struct LayoutCalcStore|pub trait CalcResolver|fn calc" ../surgeist-layout/src ../surgeist-layout/api/public-api.txt
+rg "pub struct CalcId|pub struct CalcExpression|pub enum CalcTerm|pub struct LayoutCalcStore|pub trait CalcResolver|fn calc|fn push\\(" ../surgeist-layout/src ../surgeist-layout/api/public-api.txt
 ```
 
 Expected: the required layout contract symbols are visible. If they are not visible, stop this task and open an upstream `surgeist-layout` issue instead of editing style lowering.
@@ -507,9 +699,12 @@ fn lowers_calc_dimension_into_layout_calc_store() {
         .resolve(crate::Context::new(&tree, panel).local(&declarations))
         .unwrap();
 
-    let lowered = lower_with_calc_store(&resolved).unwrap();
+    let lowered = lower_with_store(&resolved).unwrap();
 
-    assert!(matches!(lowered.node.size.width, surgeist_layout::Dimension::Calc(_)));
+    let surgeist_layout::Dimension::Calc(id) = lowered.node.size.width else {
+        panic!("expected calc width, got {:?}", lowered.node.size.width);
+    };
+    assert!(lowered.calc_store.get(id).is_some());
     assert_eq!(lowered.calc_store.len(), 1);
 }
 ```
@@ -529,32 +724,125 @@ Expected: compile failure until style exposes a lowering result with a calc stor
 Add the result type:
 
 ```rust
-pub struct LoweredLayout {
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayoutLoweringOutput {
     pub node: layout::NodeInput,
     pub calc_store: layout::LayoutCalcStore,
 }
 
-pub fn lower_with_calc_store(resolved: &Resolved) -> Result<LoweredLayout> {
-    let mut calc_store = layout::LayoutCalcStore::default();
-    let node = lower_into_store(resolved, &mut calc_store)?;
-    Ok(LoweredLayout { node, calc_store })
+#[derive(Clone, Debug, Default)]
+pub struct LayoutLoweringSession {
+    calc_store: layout::LayoutCalcStore,
 }
 ```
 
-Refactor current `lower` to preserve compatibility:
+Refactor current `lower` so calc-free callers keep the old API without receiving unresolvable calc handles:
 
 ```rust
 pub fn lower(resolved: &Resolved) -> Result<layout::NodeInput> {
-    Ok(lower_with_calc_store(resolved)?.node)
+    if resolved_uses_calc(resolved) {
+        return Err(unsupported("calc values require lower_with_store"));
+    }
+    let mut session = LayoutLoweringSession::new();
+    session.lower_node(resolved)
+}
+
+pub fn lower_with_store(resolved: &Resolved) -> Result<LayoutLoweringOutput> {
+    let mut session = LayoutLoweringSession::new();
+    let node = session.lower_node(resolved)?;
+    Ok(LayoutLoweringOutput {
+        node,
+        calc_store: session.finish(),
+    })
+}
+
+impl LayoutLoweringSession {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn lower_node(&mut self, resolved: &Resolved) -> Result<layout::NodeInput> {
+        lower_node_with_session(resolved, self)
+    }
+
+    #[must_use]
+    pub fn finish(self) -> layout::LayoutCalcStore {
+        self.calc_store
+    }
+}
+```
+
+Add a calc-detection helper that checks every length-bearing resolved field lowered into layout:
+
+```rust
+fn resolved_uses_calc(resolved: &Resolved) -> bool {
+    length_uses_calc(resolved.width())
+        || length_uses_calc(resolved.height())
+        || edges_use_calc(edges(resolved, Property::Inset))
+        || length_uses_calc(length(resolved, Property::MinWidth))
+        || length_uses_calc(length(resolved, Property::MinHeight))
+        || length_uses_calc(length(resolved, Property::MaxWidth))
+        || length_uses_calc(length(resolved, Property::MaxHeight))
+        || edges_use_calc(resolved.margin_edges())
+        || edges_use_calc(resolved.padding_edges())
+        || edges_use_calc(resolved.border_width_edges())
+        || length_uses_calc(length(resolved, Property::ColumnGap))
+        || length_uses_calc(length(resolved, Property::RowGap))
+        || length_uses_calc(length(resolved, Property::FlexBasis))
+        || track_list_uses_calc(track_list(resolved, Property::GridTemplateColumns))
+        || track_list_uses_calc(track_list(resolved, Property::GridTemplateRows))
+        || track_list_uses_calc(track_list(resolved, Property::GridAutoColumns))
+        || track_list_uses_calc(track_list(resolved, Property::GridAutoRows))
+}
+
+fn length_uses_calc(length: Length) -> bool {
+    matches!(length, Length::Calc(_))
+}
+
+fn edges_use_calc(edges: Edges) -> bool {
+    length_uses_calc(edges.top)
+        || length_uses_calc(edges.right)
+        || length_uses_calc(edges.bottom)
+        || length_uses_calc(edges.left)
+}
+
+fn track_list_uses_calc(list: &GridTrackList) -> bool {
+    list.components.iter().any(track_component_uses_calc)
+}
+
+fn track_component_uses_calc(component: &GridTrackComponent) -> bool {
+    match component {
+        GridTrackComponent::Track(track) => track_sizing_uses_calc(track),
+        GridTrackComponent::Repeat(repeat) => {
+            repeat.components.iter().any(track_component_uses_calc)
+        }
+        GridTrackComponent::LineNames(_) | GridTrackComponent::Subgrid(_) => false,
+    }
+}
+
+fn track_sizing_uses_calc(track: &TrackSizing) -> bool {
+    min_track_sizing_uses_calc(&track.min) || max_track_sizing_uses_calc(&track.max)
+}
+
+fn min_track_sizing_uses_calc(track: &MinTrackSizing) -> bool {
+    matches!(track, MinTrackSizing::Length(Length::Calc(_)))
+}
+
+fn max_track_sizing_uses_calc(track: &MaxTrackSizing) -> bool {
+    matches!(
+        track,
+        MaxTrackSizing::Length(Length::Calc(_)) | MaxTrackSizing::FitContent(Length::Calc(_))
+    )
 }
 ```
 
 Move the existing `lower` body into:
 
 ```rust
-fn lower_into_store(
+fn lower_node_with_session(
     resolved: &Resolved,
-    calc_store: &mut layout::LayoutCalcStore,
+    session: &mut LayoutLoweringSession,
 ) -> Result<layout::NodeInput> {
     Ok(layout::NodeInput {
         // keep the current field list from `lower`, changing only length-bearing calls
@@ -567,37 +855,54 @@ During that move, preserve every existing field assignment from `lower` and make
 
 ```rust
 size: layout::Size::new(
-    lower_dimension_into_store(resolved.width(), calc_store)?,
-    lower_dimension_into_store(resolved.height(), calc_store)?,
+    lower_dimension_with_session(resolved.width(), session)?,
+    lower_dimension_with_session(resolved.height(), session)?,
 ),
 min_size: layout::Size::new(
-    lower_dimension_into_store(length(resolved, Property::MinWidth), calc_store)?,
-    lower_dimension_into_store(length(resolved, Property::MinHeight), calc_store)?,
+    lower_dimension_with_session(length(resolved, Property::MinWidth), session)?,
+    lower_dimension_with_session(length(resolved, Property::MinHeight), session)?,
 ),
 max_size: layout::Size::new(
-    lower_dimension_into_store(length(resolved, Property::MaxWidth), calc_store)?,
-    lower_dimension_into_store(length(resolved, Property::MaxHeight), calc_store)?,
+    lower_dimension_with_session(length(resolved, Property::MaxWidth), session)?,
+    lower_dimension_with_session(length(resolved, Property::MaxHeight), session)?,
 ),
-margin: lower_edges_auto_into_store(resolved.margin_edges(), calc_store)?,
-padding: lower_edges_into_store(resolved.padding_edges(), calc_store)?,
-border: lower_edges_into_store(resolved.border_width_edges(), calc_store)?,
+inset: lower_edges_auto_with_session(edges(resolved, Property::Inset), session)?,
+margin: lower_edges_auto_with_session(resolved.margin_edges(), session)?,
+padding: lower_edges_with_session(resolved.padding_edges(), session)?,
+border: lower_edges_with_session(resolved.border_width_edges(), session)?,
 gap: layout::Size::new(
-    lower_gap_length_into_store(length(resolved, Property::ColumnGap), calc_store)?,
-    lower_gap_length_into_store(length(resolved, Property::RowGap), calc_store)?,
+    lower_gap_length_with_session(length(resolved, Property::ColumnGap), session)?,
+    lower_gap_length_with_session(length(resolved, Property::RowGap), session)?,
 ),
-flex_basis: lower_dimension_into_store(length(resolved, Property::FlexBasis), calc_store)?,
+flex_basis: lower_dimension_with_session(length(resolved, Property::FlexBasis), session)?,
+grid_template_columns: lower_track_list_with_session(
+    track_list(resolved, Property::GridTemplateColumns),
+    session,
+)?,
+grid_template_rows: lower_track_list_with_session(
+    track_list(resolved, Property::GridTemplateRows),
+    session,
+)?,
+grid_auto_columns: lower_track_list_with_session(
+    track_list(resolved, Property::GridAutoColumns),
+    session,
+)?,
+grid_auto_rows: lower_track_list_with_session(
+    track_list(resolved, Property::GridAutoRows),
+    session,
+)?,
 ```
 
 Add helpers:
 
 ```rust
-fn lower_dimension_into_store(
+fn lower_dimension_with_session(
     length: Length,
-    calc_store: &mut layout::LayoutCalcStore,
+    session: &mut LayoutLoweringSession,
 ) -> Result<layout::Dimension> {
     Ok(match length {
         Length::Calc(calc) => {
-            let id = calc_store.push_length_calc(lower_calc_length(calc)?);
+            let id = session.push_calc_length(&calc);
             layout::Dimension::calc(id)
         }
         length => lower_dimension(length)?,
@@ -607,21 +912,130 @@ fn lower_dimension_into_store(
 
 Repeat the same pattern for `layout::Length` and `layout::LengthAuto`; keep the existing non-calc helper behavior intact.
 
+Update grid track lowering to borrow style track structures and route length-bearing track values through the same session:
+
+```rust
+fn lower_track_list_with_session(
+    list: &GridTrackList,
+    session: &mut LayoutLoweringSession,
+) -> Result<Vec<layout::TrackComponent>> {
+    let mut lowered = Vec::new();
+    for component in &list.components {
+        match component {
+            GridTrackComponent::Track(track) => {
+                lowered.push(layout::TrackComponent::Track(
+                    lower_track_sizing_with_session(track, session)?,
+                ));
+            }
+            GridTrackComponent::Repeat(repeat) => {
+                lowered.push(layout::TrackComponent::Repeat(
+                    lower_track_repeat_with_session(repeat, session)?,
+                ));
+            }
+            GridTrackComponent::LineNames(names) => {
+                lowered.push(layout::TrackComponent::LineNames(names.clone()));
+            }
+            GridTrackComponent::Subgrid(subgrid) => {
+                lowered.push(layout::TrackComponent::Subgrid(layout::SubgridTrack {
+                    name_components: lower_subgrid_line_name_components(&subgrid.name_components),
+                }));
+            }
+        }
+    }
+    Ok(lowered)
+}
+
+fn lower_track_sizing_with_session(
+    track: &TrackSizing,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::TrackSizing> {
+    Ok(layout::TrackSizing::new(
+        lower_min_track_sizing_with_session(&track.min, session)?,
+        lower_max_track_sizing_with_session(&track.max, session)?,
+    ))
+}
+
+fn lower_min_track_sizing_with_session(
+    track: &MinTrackSizing,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::MinTrackSizing> {
+    Ok(match track {
+        MinTrackSizing::Length(length) => {
+            layout::MinTrackSizing::Length(lower_length_with_session(length.clone(), session)?)
+        }
+        MinTrackSizing::Auto => layout::MinTrackSizing::AUTO,
+        MinTrackSizing::MinContent => layout::MinTrackSizing::MIN_CONTENT,
+        MinTrackSizing::MaxContent => layout::MinTrackSizing::MAX_CONTENT,
+    })
+}
+
+fn lower_max_track_sizing_with_session(
+    track: &MaxTrackSizing,
+    session: &mut LayoutLoweringSession,
+) -> Result<layout::MaxTrackSizing> {
+    Ok(match track {
+        MaxTrackSizing::Length(length) => {
+            layout::MaxTrackSizing::Length(lower_length_with_session(length.clone(), session)?)
+        }
+        MaxTrackSizing::Flex(value) => layout::MaxTrackSizing::fr(*value),
+        MaxTrackSizing::Auto => layout::MaxTrackSizing::AUTO,
+        MaxTrackSizing::MinContent => layout::MaxTrackSizing::MIN_CONTENT,
+        MaxTrackSizing::MaxContent => layout::MaxTrackSizing::MAX_CONTENT,
+        MaxTrackSizing::FitContent(limit) => {
+            layout::MaxTrackSizing::fit_content(lower_length_with_session(limit.clone(), session)?)
+        }
+    })
+}
+```
+
+Update repeat lowering the same way: iterate `&repeat.components`, call `lower_track_sizing_with_session(track, session)` for track components, and clone line-name vectors instead of copying track values.
+
 - [ ] **Step 5: Normalize percentages only in the adapter**
 
 In the calc lowering helper, convert style percentages to layout factors:
 
 ```rust
-fn lower_calc_length(calc: CalcLength) -> Result<layout::LayoutCalc> {
+impl LayoutLoweringSession {
+    fn push_calc_length(&mut self, calc: &CalcLength) -> layout::CalcId {
+        let expression = lower_calc_expression(calc);
+        self.calc_store.push(expression)
+    }
+}
+
+fn lower_calc_expression(calc: &CalcLength) -> layout::CalcExpression {
     match calc {
-        CalcLength::Px(value) => Ok(layout::LayoutCalc::px(value)),
-        CalcLength::Percent(value) => Ok(layout::LayoutCalc::percent(percent(value))),
+        CalcLength::Px(value) => layout::CalcExpression::sum([layout::CalcTerm::px(*value)]),
+        CalcLength::Percent(value) => {
+            layout::CalcExpression::sum([layout::CalcTerm::percent(percent(*value))])
+        }
         CalcLength::Sum(terms) => {
-            let lowered = terms
-                .into_iter()
-                .map(lower_calc_term)
-                .collect::<Result<Vec<_>>>()?;
-            Ok(layout::LayoutCalc::sum(lowered))
+            let mut lowered = Vec::new();
+            for term in terms {
+                let sign = match term.operator {
+                    CalcOperator::Add => 1.0,
+                    CalcOperator::Sub => -1.0,
+                };
+                collect_calc_terms(&term.value, sign, &mut lowered);
+            }
+            layout::CalcExpression::sum(lowered)
+        }
+    }
+}
+
+fn collect_calc_terms(calc: &CalcLength, sign: f32, output: &mut Vec<layout::CalcTerm>) {
+    match calc {
+        CalcLength::Px(value) => output.push(layout::CalcTerm::px(sign * *value)),
+        CalcLength::Percent(value) => {
+            output.push(layout::CalcTerm::percent(sign * percent(*value)));
+        }
+        CalcLength::Sum(terms) => {
+            for term in terms {
+                let term_sign = match term.operator {
+                    CalcOperator::Add => sign,
+                    CalcOperator::Sub => -sign,
+                };
+                collect_calc_terms(&term.value, term_sign, output);
+            }
         }
     }
 }
@@ -657,7 +1071,7 @@ git commit -m "style: lower calc lengths into layout store"
 Run the crate's existing API generator command from its README or current crate convention. If no command is documented, run:
 
 ```sh
-cargo run --manifest-path api/generator/Cargo.toml > api/public-api.txt
+cargo run --manifest-path api/generator/Cargo.toml
 ```
 
 Expected: `api/public-api.txt` includes the new calc front-door types and any intentional layout-lowering result type.
