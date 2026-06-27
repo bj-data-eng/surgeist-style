@@ -1,5 +1,6 @@
 use super::{Error, ErrorCode, Result, Traversal, Tree};
-use surgeist_retained::{AttributeName, Class, Key, StateFlag, Tag, Value as AttributeValue};
+use crate::StateFlag;
+use surgeist_retained::{AttributeName, Class, Key, Tag, Value as AttributeValue};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PrimaryKey {

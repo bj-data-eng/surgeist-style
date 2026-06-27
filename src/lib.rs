@@ -14,6 +14,7 @@ mod property;
 mod resolver;
 mod selector;
 mod sheet;
+mod state;
 mod tree;
 mod value;
 
@@ -28,7 +29,7 @@ pub use selector::{
     AttributeSelector, Combinator, Compound, Nth, Part, Position, PositionSelector, Selector,
 };
 pub use sheet::{Rule, Sheet, Version};
-pub use surgeist_retained::StateFlag;
+pub use state::StateFlag;
 pub use surgeist_text::{
     Alignment as TextAlign, Decoration, Direction as TextDirection, OverflowWrap,
     Slant as TextSlant, Weight as TextWeight, WhiteSpace, WordBreak, Wrap as TextWrap,

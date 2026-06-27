@@ -1,6 +1,7 @@
 use super::Result;
+use crate::StateFlag;
 use std::hash::Hash;
-use surgeist_retained::{Attribute, Class, Key, Role, State, StateFlag, Tag};
+use surgeist_retained::{Attribute, Class, Key, Role, State, Tag};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Traversal {
@@ -48,7 +49,6 @@ impl<'a, Id> Node<'a, Id> {
             StateFlag::Pressed => self.state.pressed(),
             StateFlag::Checked => self.state.checked() == Some(true),
             StateFlag::Expanded => self.state.expanded() == Some(true),
-            _ => false,
         }
     }
 }
