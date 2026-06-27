@@ -153,7 +153,7 @@ fn lower_node_with_session(
             lower_dimension_with_session(length(resolved, Property::MaxWidth), session)?,
             lower_dimension_with_session(length(resolved, Property::MaxHeight), session)?,
         ),
-        aspect_ratio: aspect_ratio(resolved),
+        aspect_ratio: aspect_ratio(resolved)?,
         margin: lower_edges_auto_with_session(resolved.margin_edges(), session)?,
         padding: lower_edges_with_session(resolved.padding_edges(), session)?,
         border: lower_edges_with_session(resolved.border_width_edges(), session)?,
@@ -537,13 +537,22 @@ fn lower_track_repeat_with_session(
     }
 
     match repeat.count {
-        TrackRepeatCount::Count(count) => Ok(layout::TrackRepetition::count_components(
-            usize::from(count),
-            components,
-        )),
-        TrackRepeatCount::AutoFill => Ok(layout::TrackRepetition::auto_fill_components(components)),
-        TrackRepeatCount::AutoFit => Ok(layout::TrackRepetition::auto_fit_components(components)),
+        TrackRepeatCount::Count(count) => {
+            layout::TrackRepetition::count_components(usize::from(count), components)
+                .map_err(map_track_repetition_error)
+        }
+        TrackRepeatCount::AutoFill => layout::TrackRepetition::auto_fill_components(components)
+            .map_err(map_track_repetition_error),
+        TrackRepeatCount::AutoFit => layout::TrackRepetition::auto_fit_components(components)
+            .map_err(map_track_repetition_error),
     }
+}
+
+fn map_track_repetition_error(error: layout::TrackRepetitionError) -> Error {
+    Error::new(
+        ErrorCode::InvalidValue,
+        format!("layout track repeat cannot be lowered: {error}"),
+    )
 }
 
 fn lower_subgrid_line_name_components(
@@ -657,21 +666,25 @@ fn font_size_scalar(length: Length) -> Result<f32> {
 fn lower_grid_placement(start: GridLine, end: GridLine) -> Result<layout::GridPlacement> {
     Ok(match (start, end) {
         (GridLine::Auto, GridLine::Auto) => layout::GridPlacement::AUTO,
-        (GridLine::Line(line), GridLine::Auto) => layout::GridPlacement::line(isize::from(line)),
+        (GridLine::Line(line), GridLine::Auto) => {
+            layout::GridPlacement::line(layout_grid_line(line)?)
+        }
         (GridLine::Auto, GridLine::Line(line)) => {
-            layout::GridPlacement::end_line(isize::from(line))
+            layout::GridPlacement::end_line(layout_grid_line(line)?)
         }
         (GridLine::Line(start), GridLine::Line(end)) => {
-            layout::GridPlacement::lines(isize::from(start), isize::from(end))
+            layout::GridPlacement::lines(layout_grid_line(start)?, layout_grid_line(end)?)
         }
         (GridLine::Line(line), GridLine::Span(span)) => {
-            layout::GridPlacement::line_span(isize::from(line), usize::from(span))
+            layout::GridPlacement::line_span(layout_grid_line(line)?, layout_grid_span(span)?)
         }
         (GridLine::Span(span), GridLine::Line(line)) => {
-            layout::GridPlacement::span_line(usize::from(span), isize::from(line))
+            layout::GridPlacement::span_line(layout_grid_span(span)?, layout_grid_line(line)?)
         }
         (GridLine::Span(span), GridLine::Auto) | (GridLine::Auto, GridLine::Span(span)) => {
-            layout::GridPlacement::span(usize::from(span))
+            layout::GridPlacement::try_span(usize::from(span)).ok_or_else(|| {
+                Error::new(ErrorCode::InvalidValue, "grid span count cannot be zero")
+            })?
         }
         (GridLine::Span(_), GridLine::Span(_)) => {
             return Err(unsupported("span-to-span grid placement"));
@@ -681,6 +694,18 @@ fn lower_grid_placement(start: GridLine, end: GridLine) -> Result<layout::GridPl
             layout::GridPlacement::AUTO
         }
     })
+}
+
+fn layout_grid_line(line: i16) -> Result<layout::GridLine> {
+    let line = isize::from(line);
+    layout::GridLine::new(line)
+        .ok_or_else(|| Error::new(ErrorCode::InvalidValue, "grid line index cannot be zero"))
+}
+
+fn layout_grid_span(span: u16) -> Result<layout::GridSpan> {
+    let span = usize::from(span);
+    layout::GridSpan::new(span)
+        .ok_or_else(|| Error::new(ErrorCode::InvalidValue, "grid span count cannot be zero"))
 }
 
 fn lower_raw_grid_line(line: GridLine) -> Result<layout::RawGridLine> {
@@ -728,11 +753,21 @@ fn number(resolved: &Resolved, property: Property) -> f32 {
     }
 }
 
-fn aspect_ratio(resolved: &Resolved) -> Option<f32> {
-    match number(resolved, Property::AspectRatio) {
-        value if value > 0.0 => Some(value),
-        _ => None,
+fn layout_aspect_ratio(value: f32) -> Result<Option<layout::AspectRatio>> {
+    if value == 0.0 {
+        return Ok(None);
     }
+
+    layout::AspectRatio::new(value).map(Some).ok_or_else(|| {
+        Error::new(
+            ErrorCode::InvalidValue,
+            "aspect ratio must be finite and greater than zero",
+        )
+    })
+}
+
+fn aspect_ratio(resolved: &Resolved) -> Result<Option<layout::AspectRatio>> {
+    layout_aspect_ratio(number(resolved, Property::AspectRatio))
 }
 
 fn track_list(resolved: &Resolved, property: Property) -> &GridTrackList {
@@ -842,6 +877,162 @@ mod tests {
         let error = font_size_scalar(Length::Calc(CalcLength::px(12.0))).unwrap_err();
 
         assert!(error.to_string().contains("calc font size"));
+    }
+
+    #[test]
+    fn lower_node_converts_positive_aspect_ratio_to_layout_type() {
+        let declarations = crate::Declarations::new()
+            .try_set(crate::Property::AspectRatio, crate::Value::Number(1.5))
+            .unwrap();
+        let mut model = Model::empty();
+        let root = model.root();
+        let panel = model
+            .apply(Patch::Insert {
+                parent: root,
+                index: 0,
+                element: Element::tagged(Tag::new("panel").unwrap()),
+            })
+            .unwrap()
+            .changes()
+            .inserted()[0];
+        let tree = model.snapshot();
+        let resolved = crate::Resolver::new(crate::Sheet::new())
+            .resolve(crate::Context::new(&tree, panel).local(&declarations))
+            .unwrap();
+
+        let lowered = lower(&resolved).unwrap();
+
+        assert_eq!(
+            lowered.aspect_ratio.map(layout::AspectRatio::get),
+            Some(1.5)
+        );
+    }
+
+    #[test]
+    fn default_zero_aspect_ratio_lowers_to_none() {
+        let mut model = Model::empty();
+        let root = model.root();
+        let panel = model
+            .apply(Patch::Insert {
+                parent: root,
+                index: 0,
+                element: Element::tagged(Tag::new("panel").unwrap()),
+            })
+            .unwrap()
+            .changes()
+            .inserted()[0];
+        let tree = model.snapshot();
+        let resolved = crate::Resolver::new(crate::Sheet::new())
+            .resolve(crate::Context::new(&tree, panel))
+            .unwrap();
+
+        let lowered = lower(&resolved).unwrap();
+
+        assert_eq!(lowered.aspect_ratio, None);
+    }
+
+    #[test]
+    fn adapter_rejects_non_finite_positive_aspect_ratio() {
+        let error = layout_aspect_ratio(f32::INFINITY).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert!(error.message().contains("aspect ratio"));
+    }
+
+    #[test]
+    fn adapter_rejects_negative_aspect_ratio_if_validation_is_bypassed() {
+        let error = layout_aspect_ratio(-1.0).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert!(error.message().contains("aspect ratio"));
+    }
+
+    #[test]
+    fn lower_grid_placement_uses_layout_validated_line() {
+        let placement = lower_grid_placement(GridLine::Line(2), GridLine::Auto).unwrap();
+
+        assert_eq!(placement.start().map(layout::GridLine::get), Some(2));
+        assert_eq!(placement.end(), None);
+        assert_eq!(placement.span(), None);
+    }
+
+    #[test]
+    fn lower_grid_placement_uses_layout_validated_line_span() {
+        let placement = lower_grid_placement(GridLine::Line(2), GridLine::Span(3)).unwrap();
+
+        assert_eq!(placement.start().map(layout::GridLine::get), Some(2));
+        assert_eq!(placement.end(), None);
+        assert_eq!(placement.span().map(layout::GridSpan::get), Some(3));
+    }
+
+    #[test]
+    fn lower_grid_placement_rejects_invalid_zero_line_if_validation_is_bypassed() {
+        let error = lower_grid_placement(GridLine::Line(0), GridLine::Auto).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert!(error.message().contains("grid line"));
+    }
+
+    #[test]
+    fn lower_grid_placement_rejects_invalid_zero_span_if_validation_is_bypassed() {
+        let error = lower_grid_placement(GridLine::Span(0), GridLine::Auto).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert!(error.message().contains("grid span"));
+    }
+
+    #[test]
+    fn lower_grid_placement_keeps_named_numeric_placement_auto() {
+        let placement = lower_grid_placement(
+            GridLine::NamedLine {
+                name: "content".to_owned(),
+                index: 1,
+            },
+            GridLine::Auto,
+        )
+        .unwrap();
+
+        assert!(placement.is_auto());
+    }
+
+    fn simple_track_component() -> GridTrackComponent {
+        GridTrackComponent::Track(TrackSizing::AUTO)
+    }
+
+    #[test]
+    fn lower_track_repeat_count_uses_layout_fallible_constructor() {
+        let repeat = TrackRepeat::count(2, vec![simple_track_component()]);
+        let mut session = LayoutLoweringSession::new();
+
+        let lowered = lower_track_repeat_with_session(&repeat, &mut session).unwrap();
+
+        assert_eq!(
+            lowered.repeat(),
+            layout::TrackRepeat::Count(layout::TrackRepeatCount::new(2).unwrap())
+        );
+        assert_eq!(lowered.components().len(), 1);
+    }
+
+    #[test]
+    fn lower_track_repeat_rejects_zero_count_if_validation_is_bypassed() {
+        let repeat = TrackRepeat::count(0, vec![simple_track_component()]);
+        let mut session = LayoutLoweringSession::new();
+
+        let error = lower_track_repeat_with_session(&repeat, &mut session).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert!(error.message().contains("track repeat"));
+    }
+
+    #[test]
+    fn lower_track_repeat_rejects_empty_components_if_validation_is_bypassed() {
+        let repeat = TrackRepeat::auto_fit(Vec::new());
+        let mut session = LayoutLoweringSession::new();
+
+        let error = lower_track_repeat_with_session(&repeat, &mut session).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert!(error.message().contains("track repeat"));
     }
 
     #[test]
