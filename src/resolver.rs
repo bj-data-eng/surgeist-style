@@ -457,16 +457,16 @@ struct CacheEntry {
 }
 
 fn hash_state(state: &surgeist_retained::State, hasher: &mut impl Hasher) {
-    state.disabled.hash(hasher);
-    state.hovered.hash(hasher);
-    state.active.hash(hasher);
-    state.focused.hash(hasher);
-    state.focus_within.hash(hasher);
-    state.pointer_captured.hash(hasher);
-    state.selected.hash(hasher);
-    state.pressed.hash(hasher);
-    state.checked.hash(hasher);
-    state.expanded.hash(hasher);
+    state.disabled().hash(hasher);
+    state.hovered().hash(hasher);
+    state.active().hash(hasher);
+    state.focused().hash(hasher);
+    state.focus_within().hash(hasher);
+    state.pointer_captured().hash(hasher);
+    state.selected().hash(hasher);
+    state.pressed().hash(hasher);
+    state.checked().hash(hasher);
+    state.expanded().hash(hasher);
 }
 
 fn hash_node<T: Hash>(node: &T) -> u64 {

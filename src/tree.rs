@@ -38,16 +38,16 @@ impl<'a, Id> Node<'a, Id> {
     #[must_use]
     pub fn has_state(&self, flag: StateFlag) -> bool {
         match flag {
-            StateFlag::Hovered => self.state.hovered,
-            StateFlag::Active => self.state.active,
-            StateFlag::Focused => self.state.focused,
-            StateFlag::FocusWithin => self.state.focus_within,
-            StateFlag::PointerCaptured => self.state.pointer_captured,
-            StateFlag::Disabled => self.state.disabled,
-            StateFlag::Selected => self.state.selected,
-            StateFlag::Pressed => self.state.pressed,
-            StateFlag::Checked => self.state.checked == Some(true),
-            StateFlag::Expanded => self.state.expanded == Some(true),
+            StateFlag::Hovered => self.state.hovered(),
+            StateFlag::Active => self.state.active(),
+            StateFlag::Focused => self.state.focused(),
+            StateFlag::FocusWithin => self.state.focus_within(),
+            StateFlag::PointerCaptured => self.state.pointer_captured(),
+            StateFlag::Disabled => self.state.disabled(),
+            StateFlag::Selected => self.state.selected(),
+            StateFlag::Pressed => self.state.pressed(),
+            StateFlag::Checked => self.state.checked() == Some(true),
+            StateFlag::Expanded => self.state.expanded() == Some(true),
             _ => false,
         }
     }
