@@ -7,7 +7,7 @@ impl<'a> Tree for Snapshot<'a> {
     type Id = Id;
 
     fn version_hint(&self) -> Option<u64> {
-        Some(self.revision())
+        Some(self.revision().get())
     }
 
     fn node(&self, id: Self::Id) -> Result<Node<'_, Self::Id>> {
