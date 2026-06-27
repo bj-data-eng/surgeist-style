@@ -816,8 +816,12 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             hash_length(&value.bottom_right, state);
             hash_length(&value.bottom_left, state);
         }
-        Value::StringList(value) => {
+        Value::FontFamilyList(value) => {
             7u8.hash(state);
+            value.hash(state);
+        }
+        Value::AnimationNameList(value) => {
+            40u8.hash(state);
             value.hash(state);
         }
         Value::PropertyList(value) => {

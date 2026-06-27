@@ -244,6 +244,125 @@ impl Default for Corners {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+struct StyleStringList(Vec<String>);
+
+impl StyleStringList {
+    #[must_use]
+    const fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    fn new(
+        values: impl IntoIterator<Item = impl Into<String>>,
+        item_field: &'static str,
+    ) -> Result<Self> {
+        let list = Self(values.into_iter().map(Into::into).collect());
+        list.validate(item_field)?;
+        Ok(list)
+    }
+
+    fn validate(&self, item_field: &str) -> Result<()> {
+        self.0
+            .iter()
+            .try_for_each(|value| validate_style_string(value, item_field))
+    }
+
+    #[must_use]
+    fn as_slice(&self) -> &[String] {
+        &self.0
+    }
+
+    #[must_use]
+    fn into_vec(self) -> Vec<String> {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct FontFamilyList(StyleStringList);
+
+impl FontFamilyList {
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self(StyleStringList::empty())
+    }
+
+    pub fn new(values: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
+        Ok(Self(StyleStringList::new(values, "font family")?))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.0.validate("font family")
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[String] {
+        self.0.as_slice()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &str> {
+        self.0.as_slice().iter().map(String::as_str)
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.as_slice().is_empty()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    #[must_use]
+    pub fn into_vec(self) -> Vec<String> {
+        self.0.into_vec()
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct AnimationNameList(StyleStringList);
+
+impl AnimationNameList {
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self(StyleStringList::empty())
+    }
+
+    pub fn new(values: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
+        Ok(Self(StyleStringList::new(values, "animation name")?))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.0.validate("animation name")
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[String] {
+        self.0.as_slice()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &str> {
+        self.0.as_slice().iter().map(String::as_str)
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.as_slice().is_empty()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    #[must_use]
+    pub fn into_vec(self) -> Vec<String> {
+        self.0.into_vec()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Keyword(Keyword),
@@ -276,7 +395,8 @@ pub enum Value {
     GridFlowTolerance(GridFlowTolerance),
     Color(Color),
     Corners(Corners),
-    StringList(Vec<String>),
+    FontFamilyList(FontFamilyList),
+    AnimationNameList(AnimationNameList),
     PropertyList(Vec<Property>),
     ShadowList(Vec<Shadow>),
     Stroke(Stroke),
@@ -324,7 +444,8 @@ impl Value {
             | Self::GridAreaPlacement(_)
             | Self::GridAutoFlow(_)
             | Self::GridFlowTolerance(_)
-            | Self::StringList(_)
+            | Self::FontFamilyList(_)
+            | Self::AnimationNameList(_)
             | Self::PropertyList(_)
             | Self::Text(_)
             | Self::Cursor(_)
@@ -365,9 +486,8 @@ impl Value {
             Self::GridFlowTolerance(value) => value.validate(),
             Self::Color(value) => value.validate(),
             Self::Corners(value) => value.validate(),
-            Self::StringList(values) => values
-                .iter()
-                .try_for_each(|value| validate_style_string(value, "string list item")),
+            Self::FontFamilyList(values) => values.validate(),
+            Self::AnimationNameList(values) => values.validate(),
             Self::PropertyList(_) => Ok(()),
             Self::ShadowList(shadows) => shadows.iter().try_for_each(|shadow| shadow.validate()),
             Self::Stroke(stroke) => stroke.validate(),
@@ -2000,7 +2120,7 @@ fn validate_decoration(value: surgeist_text::Decoration) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CssPx, DimensionLength, ErrorCode};
+    use super::{AnimationNameList, CssPx, DimensionLength, ErrorCode, FontFamilyList, Value};
 
     #[test]
     fn dimension_length_px_rejects_negative_css_px() {
@@ -2009,5 +2129,27 @@ mod tests {
 
         assert_eq!(err.code(), ErrorCode::InvalidValue);
         assert_eq!(err.message(), "dimension length px must be non-negative");
+    }
+
+    #[test]
+    fn string_list_wrappers_preserve_empty_defaults() {
+        let font_families = FontFamilyList::empty();
+        let animation_names = AnimationNameList::empty();
+
+        assert!(font_families.is_empty());
+        assert!(animation_names.is_empty());
+        Value::FontFamilyList(font_families).validate().unwrap();
+        Value::AnimationNameList(animation_names)
+            .validate()
+            .unwrap();
+    }
+
+    #[test]
+    fn string_list_wrappers_reject_empty_items_at_construction() {
+        let font_error = FontFamilyList::new([""]).unwrap_err();
+        let animation_error = AnimationNameList::new(["fade-in", " "]).unwrap_err();
+
+        assert_eq!(font_error.code(), ErrorCode::InvalidString);
+        assert_eq!(animation_error.code(), ErrorCode::InvalidString);
     }
 }

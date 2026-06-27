@@ -1,7 +1,8 @@
 use super::{
-    AlignContent, AlignItems, BoxSizing, CalcLength, CalcOperator, Clear, Color, Corners,
-    Direction, Edges, Error, ErrorCode, FlexDirection, FlexWrap, Float, GridFlowTolerance,
-    LayoutPosition, Length, Overflow, Result, StyleTextAlign, Value, Visibility, WritingMode,
+    AlignContent, AlignItems, AnimationNameList, BoxSizing, CalcLength, CalcOperator, Clear, Color,
+    Corners, Direction, Edges, Error, ErrorCode, FlexDirection, FlexWrap, Float, FontFamilyList,
+    GridFlowTolerance, LayoutPosition, Length, Overflow, Result, StyleTextAlign, Value, Visibility,
+    WritingMode,
 };
 
 #[non_exhaustive]
@@ -324,7 +325,7 @@ impl Property {
                 .inherited(true)
                 .impact(Impact::empty().text().layout())
                 .interpolation(Interpolation::Length),
-            Self::FontFamily => Metadata::new(Value::StringList(Vec::new()))
+            Self::FontFamily => Metadata::new(Value::FontFamilyList(FontFamilyList::empty()))
                 .inherited(true)
                 .impact(Impact::empty().text().layout()),
             Self::FontWeight
@@ -365,8 +366,10 @@ impl Property {
             Self::TransitionDuration | Self::TransitionDelay => Metadata::new(Value::Number(0.0))
                 .impact(Impact::empty().animation())
                 .interpolation(Interpolation::Number),
-            Self::TransitionTiming | Self::AnimationName => {
-                Metadata::new(Value::Keyword(super::value::Keyword::Initial))
+            Self::TransitionTiming => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
+                .impact(Impact::empty().animation()),
+            Self::AnimationName => {
+                Metadata::new(Value::AnimationNameList(AnimationNameList::empty()))
                     .impact(Impact::empty().animation())
             }
             Self::Display => Metadata::new(Value::Display(super::Display::default()))
@@ -509,7 +512,8 @@ impl Property {
             Self::Radius => matches!(value, Value::Corners(_)),
             Self::Shadow => matches!(value, Value::ShadowList(_)),
             Self::Visibility => matches!(value, Value::Visibility(_)),
-            Self::FontFamily | Self::AnimationName => matches!(value, Value::StringList(_)),
+            Self::FontFamily => matches!(value, Value::FontFamilyList(_)),
+            Self::AnimationName => matches!(value, Value::AnimationNameList(_)),
             Self::Cursor => matches!(value, Value::Cursor(_)),
             Self::PointerEvents => matches!(value, Value::PointerEvents(_)),
             Self::FocusOutline | Self::SelectionPaint => matches!(value, Value::Stroke(_)),
@@ -738,7 +742,8 @@ fn value_kind(value: &Value) -> &'static str {
         Value::GridFlowTolerance(_) => "grid flow tolerance",
         Value::Color(_) => "color",
         Value::Corners(_) => "corners",
-        Value::StringList(_) => "string list",
+        Value::FontFamilyList(_) => "font family list",
+        Value::AnimationNameList(_) => "animation name list",
         Value::PropertyList(_) => "property list",
         Value::ShadowList(_) => "shadow list",
         Value::Stroke(_) => "stroke",
