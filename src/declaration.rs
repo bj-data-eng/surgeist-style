@@ -1190,14 +1190,14 @@ mod tests {
 
     #[test]
     fn value_hash_distinguishes_calc_lengths() {
-        let calc_a = CalcLength::sum([
+        let calc_a = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(20.0)),
-            CalcLengthTerm::add(CalcLength::percent(10.0)),
-        ]);
-        let calc_b = CalcLength::sum([
+            [CalcLengthTerm::add(CalcLength::percent(10.0))],
+        );
+        let calc_b = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(21.0)),
-            CalcLengthTerm::add(CalcLength::percent(10.0)),
-        ]);
+            [CalcLengthTerm::add(CalcLength::percent(10.0))],
+        );
 
         assert_ne!(
             value_hash(&Value::Length(Length::Calc(calc_a))),
@@ -1207,20 +1207,20 @@ mod tests {
 
     #[test]
     fn calc_lengths_validate_through_length_properties() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(20.0)),
-            CalcLengthTerm::add(CalcLength::percent(10.0)),
-        ]);
+            [CalcLengthTerm::add(CalcLength::percent(10.0))],
+        );
 
         Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap();
     }
 
     #[test]
     fn calc_px_only_negative_results_are_rejected_for_non_negative_properties() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(0.0)),
-            CalcLengthTerm::sub(CalcLength::px(1.0)),
-        ]);
+            [CalcLengthTerm::sub(CalcLength::px(1.0))],
+        );
 
         let error =
             Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap_err();
@@ -1229,10 +1229,10 @@ mod tests {
 
     #[test]
     fn calc_percent_only_negative_results_are_rejected_for_non_negative_properties() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::percent(0.0)),
-            CalcLengthTerm::sub(CalcLength::percent(1.0)),
-        ]);
+            [CalcLengthTerm::sub(CalcLength::percent(1.0))],
+        );
 
         let error =
             Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap_err();
@@ -1241,10 +1241,10 @@ mod tests {
 
     #[test]
     fn mixed_all_nonpositive_calc_lengths_are_rejected_for_non_negative_properties() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::sub(CalcLength::px(1.0)),
-            CalcLengthTerm::sub(CalcLength::percent(1.0)),
-        ]);
+            [CalcLengthTerm::sub(CalcLength::percent(1.0))],
+        );
 
         let error =
             Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap_err();
@@ -1253,20 +1253,20 @@ mod tests {
 
     #[test]
     fn indefinite_mixed_calc_lengths_remain_valid_for_non_negative_properties() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::sub(CalcLength::px(1.0)),
-            CalcLengthTerm::add(CalcLength::percent(10.0)),
-        ]);
+            [CalcLengthTerm::add(CalcLength::percent(10.0))],
+        );
 
         Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap();
     }
 
     #[test]
     fn grid_flow_tolerance_calc_reaches_property_domain_validation() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(8.0)),
-            CalcLengthTerm::add(CalcLength::percent(2.0)),
-        ]);
+            [CalcLengthTerm::add(CalcLength::percent(2.0))],
+        );
 
         let error = Declaration::try_new(
             Property::GridFlowTolerance,

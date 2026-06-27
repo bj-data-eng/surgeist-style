@@ -1037,10 +1037,10 @@ mod tests {
 
     #[test]
     fn lowers_calc_dimension_into_layout_calc_store() {
-        let calc = crate::CalcLength::sum([
+        let calc = crate::CalcLength::sum(
             crate::CalcLengthTerm::add(crate::CalcLength::px(20.0)),
-            crate::CalcLengthTerm::add(crate::CalcLength::percent(10.0)),
-        ]);
+            [crate::CalcLengthTerm::add(crate::CalcLength::percent(10.0))],
+        );
         let declarations = crate::Declarations::new()
             .try_set(
                 crate::Property::Width,

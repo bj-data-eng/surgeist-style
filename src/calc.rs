@@ -4,13 +4,18 @@ use crate::{Error, ErrorCode, Result, error::validate_finite};
 pub enum CalcLength {
     Px(f32),
     Percent(f32),
-    Sum(Vec<CalcLengthTerm>),
+    Sum(CalcLengthSum),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalcLengthSum {
+    terms: Vec<CalcLengthTerm>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CalcLengthTerm {
-    pub operator: CalcOperator,
-    pub value: Box<CalcLength>,
+    pub(crate) operator: CalcOperator,
+    pub(crate) value: Box<CalcLength>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -41,8 +46,12 @@ impl CalcLength {
     }
 
     #[must_use]
-    pub fn sum(terms: impl IntoIterator<Item = CalcLengthTerm>) -> Self {
-        Self::Sum(terms.into_iter().collect())
+    pub fn sum(first: CalcLengthTerm, rest: impl IntoIterator<Item = CalcLengthTerm>) -> Self {
+        Self::Sum(CalcLengthSum::new(first, rest))
+    }
+
+    pub fn try_sum(terms: impl IntoIterator<Item = CalcLengthTerm>) -> Result<Self> {
+        CalcLengthSum::try_from_terms(terms).map(Self::Sum)
     }
 
     #[must_use]
@@ -50,7 +59,10 @@ impl CalcLength {
         match self {
             Self::Px(_) => false,
             Self::Percent(_) => true,
-            Self::Sum(terms) => terms.iter().any(|term| term.value.uses_percentage()),
+            Self::Sum(sum) => sum
+                .terms()
+                .iter()
+                .any(|term| term.value().uses_percentage()),
         }
     }
 
@@ -58,11 +70,10 @@ impl CalcLength {
         match self {
             Self::Px(value) => validate_finite(*value, "calc px term"),
             Self::Percent(value) => validate_finite(*value, "calc percent term"),
-            Self::Sum(terms) if terms.is_empty() => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "calc sum must contain at least one term",
-            )),
-            Self::Sum(terms) => terms.iter().try_for_each(|term| term.value.validate()),
+            Self::Sum(sum) => sum
+                .terms()
+                .iter()
+                .try_for_each(|term| term.value().validate()),
         }
     }
 
@@ -71,29 +82,71 @@ impl CalcLength {
         match self {
             Self::Px(value) => format_number(*value, "px"),
             Self::Percent(value) => format_number(*value, "%"),
-            Self::Sum(terms) => {
+            Self::Sum(sum) => {
                 let mut output = String::from("calc(");
-                for (index, term) in terms.iter().enumerate() {
+                for (index, term) in sum.terms().iter().enumerate() {
                     if index == 0 {
-                        match term.operator {
-                            CalcOperator::Add => output.push_str(&term.value.to_css_string()),
+                        match term.operator() {
+                            CalcOperator::Add => output.push_str(&term.value().to_css_string()),
                             CalcOperator::Sub => {
                                 output.push('-');
-                                output.push_str(&term.value.to_css_string());
+                                output.push_str(&term.value().to_css_string());
                             }
                         }
                     } else {
-                        match term.operator {
+                        match term.operator() {
                             CalcOperator::Add => output.push_str(" + "),
                             CalcOperator::Sub => output.push_str(" - "),
                         }
-                        output.push_str(&term.value.to_css_string());
+                        output.push_str(&term.value().to_css_string());
                     }
                 }
                 output.push(')');
                 output
             }
         }
+    }
+}
+
+impl CalcLengthSum {
+    #[must_use]
+    pub fn new(first: CalcLengthTerm, rest: impl IntoIterator<Item = CalcLengthTerm>) -> Self {
+        let mut terms = vec![first];
+        terms.extend(rest);
+        Self { terms }
+    }
+
+    pub fn try_from_terms(terms: impl IntoIterator<Item = CalcLengthTerm>) -> Result<Self> {
+        let terms: Vec<_> = terms.into_iter().collect();
+        if terms.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "calc sum must contain at least one term",
+            ));
+        }
+        Ok(Self { terms })
+    }
+
+    #[must_use]
+    pub fn terms(&self) -> &[CalcLengthTerm] {
+        &self.terms
+    }
+}
+
+impl<'a> IntoIterator for &'a CalcLengthSum {
+    type Item = &'a CalcLengthTerm;
+    type IntoIter = std::slice::Iter<'a, CalcLengthTerm>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.terms.iter()
+    }
+}
+
+impl std::ops::Deref for CalcLengthSum {
+    type Target = [CalcLengthTerm];
+
+    fn deref(&self) -> &Self::Target {
+        self.terms()
     }
 }
 
@@ -113,6 +166,16 @@ impl CalcLengthTerm {
             value: Box::new(value),
         }
     }
+
+    #[must_use]
+    pub const fn operator(&self) -> CalcOperator {
+        self.operator
+    }
+
+    #[must_use]
+    pub fn value(&self) -> &CalcLength {
+        &self.value
+    }
 }
 
 fn format_number(value: f32, suffix: &str) -> String {
@@ -126,10 +189,10 @@ mod tests {
 
     #[test]
     fn calc_length_reports_percentage_use() {
-        let calc = CalcLength::sum([
+        let calc = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(20.0)),
-            CalcLengthTerm::add(CalcLength::percent(10.0)),
-        ]);
+            [CalcLengthTerm::add(CalcLength::percent(10.0))],
+        );
 
         assert!(calc.uses_percentage());
         assert_eq!(calc.to_css_string(), "calc(20px + 10%)");
@@ -142,15 +205,21 @@ mod tests {
     }
 
     #[test]
+    fn calc_length_rejects_empty_sum_construction() {
+        let error = CalcLength::try_sum([]).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+    }
+
+    #[test]
     fn nested_calc_serializes_stably() {
-        let inner = CalcLength::sum([
+        let inner = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::px(12.0)),
-            CalcLengthTerm::add(CalcLength::percent(3.0)),
-        ]);
-        let outer = CalcLength::sum([
+            [CalcLengthTerm::add(CalcLength::percent(3.0))],
+        );
+        let outer = CalcLength::sum(
             CalcLengthTerm::add(CalcLength::percent(100.0)),
-            CalcLengthTerm::sub(inner),
-        ]);
+            [CalcLengthTerm::sub(inner)],
+        );
 
         assert_eq!(outer.to_css_string(), "calc(100% - calc(12px + 3%))");
     }
