@@ -504,11 +504,11 @@ fn lower_track_list_with_session(
                 ));
             }
             GridTrackComponent::LineNames(names) => {
-                lowered.push(layout::TrackComponent::LineNames(names.clone()));
+                lowered.push(layout::TrackComponent::LineNames(names.to_strings()));
             }
             GridTrackComponent::Subgrid(subgrid) => {
                 lowered.push(layout::TrackComponent::Subgrid(layout::SubgridTrack {
-                    name_components: lower_subgrid_line_name_components(&subgrid.name_components),
+                    name_components: lower_subgrid_line_name_components(subgrid.name_components()),
                 }));
             }
         }
@@ -529,7 +529,7 @@ fn lower_track_repeat_with_session(
                 ));
             }
             GridTrackComponent::LineNames(names) => {
-                components.push(layout::TrackComponent::LineNames(names.clone()));
+                components.push(layout::TrackComponent::LineNames(names.to_strings()));
             }
             GridTrackComponent::Repeat(_) => return Err(unsupported("nested grid track repeat")),
             GridTrackComponent::Subgrid(_) => return Err(unsupported("subgrid track repeat")),
@@ -538,7 +538,7 @@ fn lower_track_repeat_with_session(
 
     match repeat.count {
         TrackRepeatCount::Count(count) => {
-            layout::TrackRepetition::count_components(usize::from(count), components)
+            layout::TrackRepetition::count_components(usize::from(count.get()), components)
                 .map_err(map_track_repetition_error)
         }
         TrackRepeatCount::AutoFill => layout::TrackRepetition::auto_fill_components(components)
@@ -562,7 +562,7 @@ fn lower_subgrid_line_name_components(
         .iter()
         .map(|component| match component {
             crate::SubgridLineNameComponent::LineNames(names) => {
-                layout::SubgridLineNameComponent::LineNames(names.clone())
+                layout::SubgridLineNameComponent::LineNames(names.to_strings())
             }
             crate::SubgridLineNameComponent::Repeat {
                 count,
@@ -570,13 +570,13 @@ fn lower_subgrid_line_name_components(
             } => layout::SubgridLineNameComponent::Repeat {
                 count: match count {
                     crate::SubgridLineNameRepeatCount::Count(count) => {
-                        layout::SubgridLineNameRepeatCount::Count(*count)
+                        layout::SubgridLineNameRepeatCount::Count(count.get())
                     }
                     crate::SubgridLineNameRepeatCount::AutoFill => {
                         layout::SubgridLineNameRepeatCount::AutoFill
                     }
                 },
-                line_name_sets: line_name_sets.clone(),
+                line_name_sets: line_name_sets.to_string_sets(),
             },
         })
         .collect()
@@ -667,22 +667,25 @@ fn lower_grid_placement(start: GridLine, end: GridLine) -> Result<layout::GridPl
     Ok(match (start, end) {
         (GridLine::Auto, GridLine::Auto) => layout::GridPlacement::AUTO,
         (GridLine::Line(line), GridLine::Auto) => {
-            layout::GridPlacement::line(layout_grid_line(line)?)
+            layout::GridPlacement::line(layout_grid_line(line.get())?)
         }
         (GridLine::Auto, GridLine::Line(line)) => {
-            layout::GridPlacement::end_line(layout_grid_line(line)?)
+            layout::GridPlacement::end_line(layout_grid_line(line.get())?)
         }
-        (GridLine::Line(start), GridLine::Line(end)) => {
-            layout::GridPlacement::lines(layout_grid_line(start)?, layout_grid_line(end)?)
-        }
-        (GridLine::Line(line), GridLine::Span(span)) => {
-            layout::GridPlacement::line_span(layout_grid_line(line)?, layout_grid_span(span)?)
-        }
-        (GridLine::Span(span), GridLine::Line(line)) => {
-            layout::GridPlacement::span_line(layout_grid_span(span)?, layout_grid_line(line)?)
-        }
+        (GridLine::Line(start), GridLine::Line(end)) => layout::GridPlacement::lines(
+            layout_grid_line(start.get())?,
+            layout_grid_line(end.get())?,
+        ),
+        (GridLine::Line(line), GridLine::Span(span)) => layout::GridPlacement::line_span(
+            layout_grid_line(line.get())?,
+            layout_grid_span(span.get())?,
+        ),
+        (GridLine::Span(span), GridLine::Line(line)) => layout::GridPlacement::span_line(
+            layout_grid_span(span.get())?,
+            layout_grid_line(line.get())?,
+        ),
         (GridLine::Span(span), GridLine::Auto) | (GridLine::Auto, GridLine::Span(span)) => {
-            layout::GridPlacement::try_span(usize::from(span)).ok_or_else(|| {
+            layout::GridPlacement::try_span(usize::from(span.get())).ok_or_else(|| {
                 Error::new(ErrorCode::InvalidValue, "grid span count cannot be zero")
             })?
         }
@@ -711,16 +714,16 @@ fn layout_grid_span(span: u16) -> Result<layout::GridSpan> {
 fn lower_raw_grid_line(line: GridLine) -> Result<layout::RawGridLine> {
     Ok(match line {
         GridLine::Auto => layout::RawGridLine::Auto,
-        GridLine::Line(line) => layout::RawGridLine::Line(isize::from(line)),
-        GridLine::Span(span) => layout::RawGridLine::Span(usize::from(span)),
-        GridLine::BareIdent(name) => layout::RawGridLine::BareIdent(name),
+        GridLine::Line(line) => layout::RawGridLine::Line(isize::from(line.get())),
+        GridLine::Span(span) => layout::RawGridLine::Span(usize::from(span.get())),
+        GridLine::BareIdent(name) => layout::RawGridLine::BareIdent(name.into_string()),
         GridLine::NamedLine { name, index } => layout::RawGridLine::NamedLine {
-            name,
-            index: isize::from(index),
+            name: name.into_string(),
+            index: isize::from(index.get()),
         },
         GridLine::NamedSpan { name, index } => layout::RawGridLine::NamedSpan {
-            name,
-            index: usize::from(index),
+            name: name.into_string(),
+            index: usize::from(index.get()),
         },
     })
 }
@@ -949,7 +952,7 @@ mod tests {
 
     #[test]
     fn lower_grid_placement_uses_layout_validated_line() {
-        let placement = lower_grid_placement(GridLine::Line(2), GridLine::Auto).unwrap();
+        let placement = lower_grid_placement(GridLine::line(2).unwrap(), GridLine::Auto).unwrap();
 
         assert_eq!(placement.start().map(layout::GridLine::get), Some(2));
         assert_eq!(placement.end(), None);
@@ -958,7 +961,8 @@ mod tests {
 
     #[test]
     fn lower_grid_placement_uses_layout_validated_line_span() {
-        let placement = lower_grid_placement(GridLine::Line(2), GridLine::Span(3)).unwrap();
+        let placement =
+            lower_grid_placement(GridLine::line(2).unwrap(), GridLine::span(3).unwrap()).unwrap();
 
         assert_eq!(placement.start().map(layout::GridLine::get), Some(2));
         assert_eq!(placement.end(), None);
@@ -967,7 +971,7 @@ mod tests {
 
     #[test]
     fn lower_grid_placement_rejects_invalid_zero_line_if_validation_is_bypassed() {
-        let error = lower_grid_placement(GridLine::Line(0), GridLine::Auto).unwrap_err();
+        let error = lower_grid_placement(GridLine::line_unchecked(0), GridLine::Auto).unwrap_err();
 
         assert_eq!(error.code(), ErrorCode::InvalidValue);
         assert!(error.message().contains("grid line"));
@@ -975,7 +979,7 @@ mod tests {
 
     #[test]
     fn lower_grid_placement_rejects_invalid_zero_span_if_validation_is_bypassed() {
-        let error = lower_grid_placement(GridLine::Span(0), GridLine::Auto).unwrap_err();
+        let error = lower_grid_placement(GridLine::span_unchecked(0), GridLine::Auto).unwrap_err();
 
         assert_eq!(error.code(), ErrorCode::InvalidValue);
         assert!(error.message().contains("grid span"));
@@ -983,14 +987,9 @@ mod tests {
 
     #[test]
     fn lower_grid_placement_keeps_named_numeric_placement_auto() {
-        let placement = lower_grid_placement(
-            GridLine::NamedLine {
-                name: "content".to_owned(),
-                index: 1,
-            },
-            GridLine::Auto,
-        )
-        .unwrap();
+        let placement =
+            lower_grid_placement(GridLine::named_line("content", 1).unwrap(), GridLine::Auto)
+                .unwrap();
 
         assert!(placement.is_auto());
     }
@@ -1001,7 +1000,7 @@ mod tests {
 
     #[test]
     fn lower_track_repeat_count_uses_layout_fallible_constructor() {
-        let repeat = TrackRepeat::count(2, vec![simple_track_component()]);
+        let repeat = TrackRepeat::count(2, vec![simple_track_component()]).unwrap();
         let mut session = LayoutLoweringSession::new();
 
         let lowered = lower_track_repeat_with_session(&repeat, &mut session).unwrap();
@@ -1015,7 +1014,10 @@ mod tests {
 
     #[test]
     fn lower_track_repeat_rejects_zero_count_if_validation_is_bypassed() {
-        let repeat = TrackRepeat::count(0, vec![simple_track_component()]);
+        let repeat = TrackRepeat::new_unchecked(
+            TrackRepeatCount::count_unchecked(0),
+            vec![simple_track_component()],
+        );
         let mut session = LayoutLoweringSession::new();
 
         let error = lower_track_repeat_with_session(&repeat, &mut session).unwrap_err();
@@ -1026,7 +1028,7 @@ mod tests {
 
     #[test]
     fn lower_track_repeat_rejects_empty_components_if_validation_is_bypassed() {
-        let repeat = TrackRepeat::auto_fit(Vec::new());
+        let repeat = TrackRepeat::new_unchecked(TrackRepeatCount::AutoFit, Vec::new());
         let mut session = LayoutLoweringSession::new();
 
         let error = lower_track_repeat_with_session(&repeat, &mut session).unwrap_err();

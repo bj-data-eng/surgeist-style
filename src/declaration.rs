@@ -952,8 +952,8 @@ fn hash_grid_track_component(component: &GridTrackComponent, state: &mut Default
         }
         GridTrackComponent::Subgrid(subgrid) => {
             3u8.hash(state);
-            subgrid.name_components.len().hash(state);
-            for component in &subgrid.name_components {
+            subgrid.name_components().len().hash(state);
+            for component in subgrid.name_components() {
                 match component {
                     SubgridLineNameComponent::LineNames(names) => {
                         0u8.hash(state);

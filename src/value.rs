@@ -554,25 +554,119 @@ impl GridTrackList {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct GridLineName(String);
+
+impl GridLineName {
+    pub fn new(name: impl Into<String>) -> Result<Self> {
+        let name = name.into();
+        validate_grid_line_name(&name)?;
+        Ok(Self(name))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct GridLineNameSet(Vec<GridLineName>);
+
+impl GridLineNameSet {
+    pub fn new(names: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
+        let names = names
+            .into_iter()
+            .map(|name| GridLineName::new(name.into()))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Self(names))
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[GridLineName] {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn to_strings(&self) -> Vec<String> {
+        self.0.iter().map(|name| name.as_str().to_owned()).collect()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        for name in &self.0 {
+            validate_grid_line_name(name.as_str())?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct SubgridLineNameSets(Vec<GridLineNameSet>);
+
+impl SubgridLineNameSets {
+    pub fn new(
+        line_name_sets: impl IntoIterator<Item = impl IntoIterator<Item = impl Into<String>>>,
+    ) -> Result<Self> {
+        let line_name_sets = line_name_sets
+            .into_iter()
+            .map(GridLineNameSet::new)
+            .collect::<Result<Vec<_>>>()?;
+        if line_name_sets.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "subgrid line-name repeat must contain at least one line-name set",
+            ));
+        }
+        Ok(Self(line_name_sets))
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[GridLineNameSet] {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn to_string_sets(&self) -> Vec<Vec<String>> {
+        self.0.iter().map(GridLineNameSet::to_strings).collect()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.0.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "subgrid line-name repeat must contain at least one line-name set",
+            ));
+        }
+        for names in &self.0 {
+            names.validate()?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum GridTrackComponent {
     Track(TrackSizing),
     Repeat(TrackRepeat),
-    LineNames(Vec<String>),
+    LineNames(GridLineNameSet),
     Subgrid(SubgridTrack),
 }
 
 impl GridTrackComponent {
-    #[must_use]
-    pub fn line_names(names: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        Self::LineNames(names.into_iter().map(Into::into).collect())
+    pub fn line_names(names: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
+        Ok(Self::LineNames(GridLineNameSet::new(names)?))
     }
 
     pub fn validate(&self) -> Result<()> {
         match self {
             Self::Track(track) => track.validate(),
             Self::Repeat(repeat) => repeat.validate(),
-            Self::LineNames(names) => validate_grid_line_names(names),
+            Self::LineNames(names) => names.validate(),
             Self::Subgrid(subgrid) => subgrid.validate(),
         }
     }
@@ -589,42 +683,56 @@ impl GridTrackComponent {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrackRepeat {
-    pub count: TrackRepeatCount,
-    pub components: Vec<GridTrackComponent>,
+    pub(crate) count: TrackRepeatCount,
+    pub(crate) components: Vec<GridTrackComponent>,
 }
 
 impl TrackRepeat {
-    #[must_use]
-    pub fn count(count: u16, components: Vec<GridTrackComponent>) -> Self {
-        Self {
-            count: TrackRepeatCount::Count(count),
-            components,
+    pub fn count(count: u16, components: Vec<GridTrackComponent>) -> Result<Self> {
+        Self::new(TrackRepeatCount::count(count)?, components)
+    }
+
+    pub fn auto_fill(components: Vec<GridTrackComponent>) -> Result<Self> {
+        Self::new(TrackRepeatCount::AutoFill, components)
+    }
+
+    pub fn auto_fit(components: Vec<GridTrackComponent>) -> Result<Self> {
+        Self::new(TrackRepeatCount::AutoFit, components)
+    }
+
+    pub fn new(count: TrackRepeatCount, components: Vec<GridTrackComponent>) -> Result<Self> {
+        if components.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "grid track repeat must contain at least one component",
+            ));
         }
+        let repeat = Self { count, components };
+        repeat.validate()?;
+        Ok(repeat)
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn new_unchecked(
+        count: TrackRepeatCount,
+        components: Vec<GridTrackComponent>,
+    ) -> Self {
+        Self { count, components }
     }
 
     #[must_use]
-    pub fn auto_fill(components: Vec<GridTrackComponent>) -> Self {
-        Self {
-            count: TrackRepeatCount::AutoFill,
-            components,
-        }
+    pub const fn count_value(&self) -> TrackRepeatCount {
+        self.count
     }
 
     #[must_use]
-    pub fn auto_fit(components: Vec<GridTrackComponent>) -> Self {
-        Self {
-            count: TrackRepeatCount::AutoFit,
-            components,
-        }
+    pub fn components(&self) -> &[GridTrackComponent] {
+        &self.components
     }
 
     pub fn validate(&self) -> Result<()> {
-        if matches!(self.count, TrackRepeatCount::Count(0)) {
-            return Err(Error::new(
-                ErrorCode::InvalidValue,
-                "grid track repeat count must be greater than zero",
-            ));
-        }
+        self.count.validate()?;
         if self.components.is_empty() {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
@@ -640,30 +748,88 @@ impl TrackRepeat {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum TrackRepeatCount {
-    Count(u16),
+    Count(TrackRepeatCountValue),
     AutoFill,
     AutoFit,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct SubgridTrack {
-    pub name_components: Vec<SubgridLineNameComponent>,
+impl TrackRepeatCount {
+    pub fn count(count: u16) -> Result<Self> {
+        Ok(Self::Count(TrackRepeatCountValue::new(count)?))
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn count_unchecked(count: u16) -> Self {
+        Self::Count(TrackRepeatCountValue::new_unchecked(count))
+    }
+
+    pub fn validate(self) -> Result<()> {
+        match self {
+            Self::Count(count) => count.validate(),
+            Self::AutoFill | Self::AutoFit => Ok(()),
+        }
+    }
 }
 
-impl SubgridTrack {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TrackRepeatCountValue(u16);
+
+impl TrackRepeatCountValue {
+    pub fn new(count: u16) -> Result<Self> {
+        let value = Self(count);
+        value.validate()?;
+        Ok(value)
+    }
+
+    #[cfg(test)]
     #[must_use]
-    pub fn new(line_names: Vec<Vec<String>>) -> Self {
-        Self {
-            name_components: line_names
-                .into_iter()
-                .map(SubgridLineNameComponent::LineNames)
-                .collect(),
-        }
+    pub(crate) const fn new_unchecked(count: u16) -> Self {
+        Self(count)
     }
 
     #[must_use]
-    pub fn from_components(name_components: Vec<SubgridLineNameComponent>) -> Self {
-        Self { name_components }
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+
+    pub fn validate(self) -> Result<()> {
+        if self.0 == 0 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "grid track repeat count must be greater than zero",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubgridTrack {
+    name_components: Vec<SubgridLineNameComponent>,
+}
+
+impl SubgridTrack {
+    pub fn new(line_names: Vec<Vec<String>>) -> Result<Self> {
+        let name_components = line_names
+            .into_iter()
+            .map(GridLineNameSet::new)
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .map(SubgridLineNameComponent::LineNames)
+            .collect();
+        Self::from_components(name_components)
+    }
+
+    pub fn from_components(name_components: Vec<SubgridLineNameComponent>) -> Result<Self> {
+        let subgrid = Self { name_components };
+        subgrid.validate()?;
+        Ok(subgrid)
+    }
+
+    #[must_use]
+    pub fn name_components(&self) -> &[SubgridLineNameComponent] {
+        &self.name_components
     }
 
     #[must_use]
@@ -671,19 +837,21 @@ impl SubgridTrack {
         let mut line_names = Vec::new();
         for component in &self.name_components {
             match component {
-                SubgridLineNameComponent::LineNames(names) => line_names.push(names.clone()),
+                SubgridLineNameComponent::LineNames(names) => {
+                    line_names.push(names.to_strings());
+                }
                 SubgridLineNameComponent::Repeat {
                     count: SubgridLineNameRepeatCount::Count(count),
                     line_name_sets,
                 } => {
-                    for _ in 0..*count {
-                        line_names.extend(line_name_sets.iter().cloned());
+                    for _ in 0..count.get() {
+                        line_names.extend(line_name_sets.to_string_sets());
                     }
                 }
                 SubgridLineNameComponent::Repeat {
                     count: SubgridLineNameRepeatCount::AutoFill,
                     line_name_sets,
-                } => line_names.extend(line_name_sets.iter().cloned()),
+                } => line_names.extend(line_name_sets.to_string_sets()),
             }
         }
         line_names
@@ -715,35 +883,37 @@ impl SubgridTrack {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SubgridLineNameComponent {
-    LineNames(Vec<String>),
+    LineNames(GridLineNameSet),
     Repeat {
         count: SubgridLineNameRepeatCount,
-        line_name_sets: Vec<Vec<String>>,
+        line_name_sets: SubgridLineNameSets,
     },
 }
 
 impl SubgridLineNameComponent {
+    pub fn line_names(names: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
+        Ok(Self::LineNames(GridLineNameSet::new(names)?))
+    }
+
+    pub fn repeat(
+        count: SubgridLineNameRepeatCount,
+        line_name_sets: impl IntoIterator<Item = impl IntoIterator<Item = impl Into<String>>>,
+    ) -> Result<Self> {
+        Ok(Self::Repeat {
+            count,
+            line_name_sets: SubgridLineNameSets::new(line_name_sets)?,
+        })
+    }
+
     pub fn validate(&self) -> Result<()> {
         match self {
-            Self::LineNames(names) => validate_grid_line_names(names),
+            Self::LineNames(names) => names.validate(),
             Self::Repeat {
-                count: SubgridLineNameRepeatCount::Count(0),
-                ..
-            } => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "subgrid line-name repeat count must be greater than zero",
-            )),
-            Self::Repeat { line_name_sets, .. } => {
-                if line_name_sets.is_empty() {
-                    return Err(Error::new(
-                        ErrorCode::InvalidValue,
-                        "subgrid line-name repeat must contain at least one line-name set",
-                    ));
-                }
-                for names in line_name_sets {
-                    validate_grid_line_names(names)?;
-                }
-                Ok(())
+                count,
+                line_name_sets,
+            } => {
+                count.validate()?;
+                line_name_sets.validate()
             }
         }
     }
@@ -751,8 +921,47 @@ impl SubgridLineNameComponent {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SubgridLineNameRepeatCount {
-    Count(usize),
+    Count(SubgridLineNameRepeatCountValue),
     AutoFill,
+}
+
+impl SubgridLineNameRepeatCount {
+    pub fn count(count: usize) -> Result<Self> {
+        Ok(Self::Count(SubgridLineNameRepeatCountValue::new(count)?))
+    }
+
+    pub fn validate(self) -> Result<()> {
+        match self {
+            Self::Count(count) => count.validate(),
+            Self::AutoFill => Ok(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SubgridLineNameRepeatCountValue(usize);
+
+impl SubgridLineNameRepeatCountValue {
+    pub fn new(count: usize) -> Result<Self> {
+        let value = Self(count);
+        value.validate()?;
+        Ok(value)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> usize {
+        self.0
+    }
+
+    pub fn validate(self) -> Result<()> {
+        if self.0 == 0 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "subgrid line-name repeat count must be greater than zero",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -999,14 +1208,12 @@ impl GridPlacement {
         Self { start, end }
     }
 
-    #[must_use]
-    pub const fn line(line: i16) -> Self {
-        Self::new(GridLine::Line(line), GridLine::Auto)
+    pub fn line(line: i16) -> Result<Self> {
+        Ok(Self::new(GridLine::line(line)?, GridLine::Auto))
     }
 
-    #[must_use]
-    pub const fn span_line(span: u16, line: i16) -> Self {
-        Self::new(GridLine::Span(span), GridLine::Line(line))
+    pub fn span_line(span: u16, line: i16) -> Result<Self> {
+        Ok(Self::new(GridLine::span(span)?, GridLine::line(line)?))
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -1069,37 +1276,143 @@ impl Default for GridAreaPlacement {
 #[derive(Clone, Debug, PartialEq)]
 pub enum GridLine {
     Auto,
-    Line(i16),
-    Span(u16),
-    BareIdent(String),
-    NamedLine { name: String, index: i16 },
-    NamedSpan { name: String, index: u16 },
+    Line(GridLineIndex),
+    Span(GridSpanCount),
+    BareIdent(GridLineName),
+    NamedLine {
+        name: GridLineName,
+        index: GridLineIndex,
+    },
+    NamedSpan {
+        name: GridLineName,
+        index: GridSpanCount,
+    },
 }
 
 impl GridLine {
+    pub fn line(line: i16) -> Result<Self> {
+        Ok(Self::Line(GridLineIndex::new(line)?))
+    }
+
+    pub fn span(span: u16) -> Result<Self> {
+        Ok(Self::Span(GridSpanCount::new(span)?))
+    }
+
+    pub fn bare_ident(name: impl Into<String>) -> Result<Self> {
+        Ok(Self::BareIdent(GridLineName::new(name)?))
+    }
+
+    pub fn named_line(name: impl Into<String>, index: i16) -> Result<Self> {
+        Ok(Self::NamedLine {
+            name: GridLineName::new(name)?,
+            index: GridLineIndex::new(index)?,
+        })
+    }
+
+    pub fn named_span(name: impl Into<String>, index: u16) -> Result<Self> {
+        Ok(Self::NamedSpan {
+            name: GridLineName::new(name)?,
+            index: GridSpanCount::new(index)?,
+        })
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn line_unchecked(line: i16) -> Self {
+        Self::Line(GridLineIndex::new_unchecked(line))
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn span_unchecked(span: u16) -> Self {
+        Self::Span(GridSpanCount::new_unchecked(span))
+    }
+
     pub fn validate(&self) -> Result<()> {
         match self {
-            Self::Line(0) => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "grid line index cannot be zero",
-            )),
-            Self::Span(0) => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "grid span count cannot be zero",
-            )),
-            Self::NamedLine { index: 0, .. } => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "named grid line index cannot be zero",
-            )),
-            Self::NamedSpan { index: 0, .. } => Err(Error::new(
-                ErrorCode::InvalidValue,
-                "named grid span count cannot be zero",
-            )),
-            Self::BareIdent(name) | Self::NamedLine { name, .. } | Self::NamedSpan { name, .. } => {
-                validate_grid_line_name(name)
+            Self::Line(line) => line.validate("grid line index"),
+            Self::Span(span) => span.validate("grid span count"),
+            Self::BareIdent(name) => name.validate(),
+            Self::NamedLine { name, index } => {
+                name.validate()?;
+                index.validate("named grid line index")
             }
-            Self::Auto | Self::Line(_) | Self::Span(_) => Ok(()),
+            Self::NamedSpan { name, index } => {
+                name.validate()?;
+                index.validate("named grid span count")
+            }
+            Self::Auto => Ok(()),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct GridLineIndex(i16);
+
+impl GridLineIndex {
+    pub fn new(index: i16) -> Result<Self> {
+        let value = Self(index);
+        value.validate("grid line index")?;
+        Ok(value)
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn new_unchecked(index: i16) -> Self {
+        Self(index)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> i16 {
+        self.0
+    }
+
+    pub fn validate(self, label: &str) -> Result<()> {
+        if self.0 == 0 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                format!("{label} cannot be zero"),
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct GridSpanCount(u16);
+
+impl GridSpanCount {
+    pub fn new(span: u16) -> Result<Self> {
+        let value = Self(span);
+        value.validate("grid span count")?;
+        Ok(value)
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) const fn new_unchecked(span: u16) -> Self {
+        Self(span)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+
+    pub fn validate(self, label: &str) -> Result<()> {
+        if self.0 == 0 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                format!("{label} cannot be zero"),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl GridLineName {
+    pub fn validate(&self) -> Result<()> {
+        validate_grid_line_name(self.as_str())
     }
 }
 
@@ -1641,13 +1954,6 @@ fn validate_style_string(value: &str, field: &str) -> Result<()> {
             ErrorCode::InvalidString,
             format!("{field} contains unsupported control character"),
         ));
-    }
-    Ok(())
-}
-
-fn validate_grid_line_names(names: &[String]) -> Result<()> {
-    for name in names {
-        validate_grid_line_name(name)?;
     }
     Ok(())
 }
