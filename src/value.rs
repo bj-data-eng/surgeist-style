@@ -46,6 +46,57 @@ impl From<Color> for peniko::Color {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssPx(f32);
+
+impl CssPx {
+    pub fn new(value: f32) -> Result<Self> {
+        validate_finite(value, "css px")?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DimensionLength(Length);
+
+impl DimensionLength {
+    pub fn px(value: CssPx) -> Result<Self> {
+        validate_non_negative(value.get(), "dimension length px")?;
+        Ok(Self(Length::Px(value.get())))
+    }
+
+    pub(crate) fn into_length(self) -> Length {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Opacity(f32);
+
+impl Opacity {
+    pub fn new(value: f32) -> Result<Self> {
+        validate_finite(value, "opacity")?;
+        if (0.0..=1.0).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "opacity must be between 0 and 1",
+            ))
+        }
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Length {
     Normal,
@@ -1639,4 +1690,18 @@ fn validate_decoration(value: surgeist_text::Decoration) -> Result<()> {
         validate_finite(brush.a, "text decoration brush a")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CssPx, DimensionLength, ErrorCode};
+
+    #[test]
+    fn dimension_length_px_rejects_negative_css_px() {
+        let err = DimensionLength::px(CssPx::new(-1.0).expect("finite css px"))
+            .expect_err("negative dimensions are invalid");
+
+        assert_eq!(err.code(), ErrorCode::InvalidValue);
+        assert_eq!(err.message(), "dimension length px must be non-negative");
+    }
 }

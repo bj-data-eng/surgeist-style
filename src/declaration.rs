@@ -4,28 +4,68 @@ use std::{
 };
 
 use super::{
-    CalcLength, CalcLengthTerm, Color, Corners, Cursor, Display, Edges, GridAreaPlacement,
-    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
-    GridTemplateAreas, GridTrackComponent, GridTrackList, Length, MaxTrackSizing, MinTrackSizing,
-    PointerEvents, Property, Result, Shadow, Size, SubgridLineNameComponent, TrackRepeatCount,
-    TrackSizing, Transform, Value, Visibility,
+    CalcLength, CalcLengthTerm, Color, Corners, Cursor, DimensionLength, Display, Edges,
+    GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement,
+    GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, Length, MaxTrackSizing,
+    MinTrackSizing, Opacity, PointerEvents, Property, Result, Shadow, Size,
+    SubgridLineNameComponent, TrackRepeatCount, TrackSizing, Transform, Value, Visibility,
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Declaration {
-    pub property: Property,
-    pub value: Value,
+    pub(crate) property: Property,
+    pub(crate) value: Value,
 }
 
 impl Declaration {
     #[must_use]
-    pub fn new(property: Property, value: Value) -> Self {
+    pub(crate) fn new(property: Property, value: Value) -> Self {
         Self { property, value }
     }
 
     pub fn try_new(property: Property, value: Value) -> Result<Self> {
         property.validate_value(&value)?;
         Ok(Self::new(property, value))
+    }
+
+    #[must_use]
+    pub const fn property(&self) -> Property {
+        self.property
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &Value {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedDeclaration(Declaration);
+
+impl TypedDeclaration {
+    #[must_use]
+    pub fn width(width: DimensionLength) -> Self {
+        Self(Declaration::new(
+            Property::Width,
+            Value::Length(width.into_length()),
+        ))
+    }
+
+    #[must_use]
+    pub fn opacity(opacity: Opacity) -> Self {
+        Self(Declaration::new(
+            Property::Opacity,
+            Value::Number(opacity.get()),
+        ))
+    }
+
+    #[must_use]
+    pub fn text_color(color: Color) -> Self {
+        Self(Declaration::new(Property::Color, Value::Color(color)))
+    }
+
+    fn into_declaration(self) -> Declaration {
+        self.0
     }
 }
 
@@ -50,8 +90,16 @@ impl Declarations {
         Self::default()
     }
 
-    #[must_use]
-    pub fn set(mut self, property: Property, value: Value) -> Self {
+    pub fn from_typed(declarations: impl IntoIterator<Item = TypedDeclaration>) -> Result<Self> {
+        let mut values = Self::new();
+        for declaration in declarations {
+            let Declaration { property, value } = declaration.into_declaration();
+            values.try_insert(property, value)?;
+        }
+        Ok(values)
+    }
+
+    fn set(mut self, property: Property, value: Value) -> Self {
         self.insert(property, value);
         self
     }
@@ -61,7 +109,7 @@ impl Declarations {
         Ok(self)
     }
 
-    pub fn insert(&mut self, property: Property, value: Value) -> &mut Self {
+    fn insert(&mut self, property: Property, value: Value) -> &mut Self {
         for declaration in canonical_declarations(property, value) {
             self.insert_canonical(declaration.property, declaration.value);
         }

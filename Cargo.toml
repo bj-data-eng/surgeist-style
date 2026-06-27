@@ -16,3 +16,6 @@ peniko = "=0.6.1"
 surgeist-layout = { path = "../surgeist-layout", version = "=0.1.0" }
 surgeist-retained = { path = "../surgeist-retained", version = "=0.1.0" }
 surgeist-text = { path = "../surgeist-text", version = "=0.1.0" }
+
+[dev-dependencies]
+trybuild = "1"
