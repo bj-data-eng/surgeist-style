@@ -37,14 +37,14 @@ pub use surgeist_text::{
 pub use tree::{Node, Traversal, Tree};
 pub use value::{
     AlignContent, AlignItems, AnimationNameList, BoxSizing, Clear, Color, Corners, CssPx, Cursor,
-    Dash, DimensionLength, Direction, Display, Edges, FlexDirection, FlexWrap, Float,
-    FontFamilyList, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
-    GridPlacement, GridTemplate, GridTemplateAreaRow, GridTemplateAreas, GridTrackComponent,
-    GridTrackList, Keyword, LayoutPosition, Length, LineStyle, MaxTrackSizing, MinTrackSizing,
-    Opacity, Overflow, OverflowAxes, PointerEvents, Shadow, SideSet, Size, Stroke, StrokeAlign,
-    StyleTextAlign, SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextValue,
-    TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp, Value, Visibility,
-    WritingMode,
+    Dash, DimensionLength, Direction, Display, DurationSeconds, Edges, FlexDirection, FlexWrap,
+    Float, FontFamilyList, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance,
+    GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow, GridTemplateAreas,
+    GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length, LineStyle, MaxTrackSizing,
+    MinTrackSizing, Opacity, Overflow, OverflowAxes, PointerEvents, Shadow, SideSet, Size, Stroke,
+    StrokeAlign, StyleTextAlign, SubgridLineNameComponent, SubgridLineNameRepeatCount,
+    SubgridTrack, TextValue, TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp,
+    Value, Visibility, WritingMode,
 };
 
 #[must_use]

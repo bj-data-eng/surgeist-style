@@ -20,7 +20,7 @@ impl Resolved {
         let mut values = BTreeMap::new();
         for property in Property::ALL {
             if property.is_canonical() {
-                values.insert(*property, property.metadata().default);
+                values.insert(*property, property.metadata().default().clone());
             }
         }
         Self { values }
@@ -199,7 +199,7 @@ impl Resolved {
 
     fn inherit_from(&mut self, parent: &Self) {
         for property in Property::ALL {
-            if property.is_canonical() && property.metadata().inherited {
+            if property.is_canonical() && property.metadata().is_inherited() {
                 self.values.insert(*property, parent.get(*property).clone());
             }
         }
@@ -428,17 +428,17 @@ impl Resolver {
 
 fn resolve_keyword(property: Property, value: &Value, parent: Option<&Resolved>) -> Value {
     match value {
-        Value::Keyword(super::Keyword::Initial) => property.metadata().default,
+        Value::Keyword(super::Keyword::Initial) => property.metadata().default().clone(),
         Value::Keyword(super::Keyword::Inherit) => parent
             .map(|parent| parent.get(property).clone())
-            .unwrap_or_else(|| property.metadata().default),
+            .unwrap_or_else(|| property.metadata().default().clone()),
         Value::Keyword(super::Keyword::Unset) => {
-            if property.metadata().inherited {
+            if property.metadata().is_inherited() {
                 parent
                     .map(|parent| parent.get(property).clone())
-                    .unwrap_or_else(|| property.metadata().default)
+                    .unwrap_or_else(|| property.metadata().default().clone())
             } else {
-                property.metadata().default
+                property.metadata().default().clone()
             }
         }
         _ => value.clone(),
@@ -502,8 +502,12 @@ mod tests {
             .unwrap()
             .changes()
             .inserted()[0];
-        let local_one = Declarations::new().text_color(super::super::Color::BLACK);
-        let local_two = Declarations::new().bg(super::super::Color::BLACK);
+        let local_one = Declarations::new()
+            .try_text_color(super::super::Color::BLACK)
+            .unwrap();
+        let local_two = Declarations::new()
+            .try_bg(super::super::Color::BLACK)
+            .unwrap();
         let mut resolver = Resolver::new(Sheet::new());
 
         let tree = model.snapshot();

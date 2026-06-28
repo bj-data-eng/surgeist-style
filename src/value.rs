@@ -97,6 +97,21 @@ impl Opacity {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DurationSeconds(f32);
+
+impl DurationSeconds {
+    pub fn new(value: f32) -> Result<Self> {
+        validate_non_negative(value, "duration seconds")?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Length {
     Normal,

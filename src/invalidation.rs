@@ -31,12 +31,12 @@ impl Invalidation {
     }
 
     pub fn include_property(&mut self, property: Property) {
-        let impact = property.metadata().impact;
-        self.layout |= impact.layout;
-        self.paint |= impact.paint;
-        self.text |= impact.text;
-        self.effect |= impact.effect;
-        self.animation |= impact.animation;
+        let impact = property.metadata().impact_flags();
+        self.layout |= impact.affects_layout();
+        self.paint |= impact.affects_paint();
+        self.text |= impact.affects_text();
+        self.effect |= impact.affects_effect();
+        self.animation |= impact.affects_animation();
     }
 
     #[must_use]
@@ -109,7 +109,7 @@ impl Change {
         for property in properties {
             change.scope.include_node();
             change.invalidation.include_property(property);
-            if property.metadata().inherited {
+            if property.metadata().is_inherited() {
                 change.scope.include_descendants();
             }
         }

@@ -4,10 +4,10 @@ use std::{
 };
 
 use super::{
-    CalcLength, CalcLengthTerm, Color, Corners, Cursor, DimensionLength, Display, Edges,
-    GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement,
-    GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, Length, MaxTrackSizing,
-    MinTrackSizing, Opacity, PointerEvents, Property, Result, Shadow, Size,
+    CalcLength, CalcLengthTerm, Color, Corners, Cursor, DimensionLength, Display, DurationSeconds,
+    Edges, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
+    GridPlacement, GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, Length,
+    MaxTrackSizing, MinTrackSizing, Opacity, PointerEvents, Property, Result, Shadow, Size,
     SubgridLineNameComponent, TrackRepeatCount, TrackSizing, Transform, Value, Visibility,
 };
 
@@ -59,9 +59,19 @@ impl TypedDeclaration {
         ))
     }
 
+    pub fn try_text_color(color: Color) -> Result<Self> {
+        Ok(Self(Declaration::try_new(
+            Property::Color,
+            Value::Color(color),
+        )?))
+    }
+
     #[must_use]
-    pub fn text_color(color: Color) -> Self {
-        Self(Declaration::new(Property::Color, Value::Color(color)))
+    pub fn transition_duration(duration: DurationSeconds) -> Self {
+        Self(Declaration::new(
+            Property::TransitionDuration,
+            Value::Number(duration.get()),
+        ))
     }
 
     fn into_declaration(self) -> Declaration {
@@ -165,64 +175,55 @@ impl Declarations {
         Fingerprint(hasher.finish())
     }
 
-    #[must_use]
-    pub fn bg(self, color: Color) -> Self {
-        self.set(Property::Background, Value::Color(color))
+    pub fn try_bg(self, color: Color) -> Result<Self> {
+        self.try_set(Property::Background, Value::Color(color))
+    }
+
+    pub fn try_text_color(self, color: Color) -> Result<Self> {
+        self.try_set(Property::Color, Value::Color(color))
     }
 
     #[must_use]
-    pub fn text_color(self, color: Color) -> Self {
-        self.set(Property::Color, Value::Color(color))
+    pub fn width(self, width: DimensionLength) -> Self {
+        self.set(Property::Width, Value::Length(width.into_length()))
     }
 
     #[must_use]
-    pub fn width(self, width: Length) -> Self {
-        self.set(Property::Width, Value::Length(width))
+    pub fn height(self, height: DimensionLength) -> Self {
+        self.set(Property::Height, Value::Length(height.into_length()))
+    }
+
+    pub fn try_padding(self, edges: Edges) -> Result<Self> {
+        self.try_set(Property::Padding, Value::Edges(edges))
+    }
+
+    pub fn try_margin(self, edges: Edges) -> Result<Self> {
+        self.try_set(Property::Margin, Value::Edges(edges))
+    }
+
+    pub fn try_radius(self, corners: Corners) -> Result<Self> {
+        self.try_set(Property::Radius, Value::Corners(corners))
+    }
+
+    pub fn try_shadow(self, shadow: Shadow) -> Result<Self> {
+        self.try_set(Property::Shadow, Value::ShadowList(vec![shadow]))
+    }
+
+    pub fn try_border_width(self, edges: Edges) -> Result<Self> {
+        self.try_set(Property::BorderWidth, Value::Edges(edges))
+    }
+
+    pub fn try_border_color(self, color: Color) -> Result<Self> {
+        self.try_set(Property::BorderColor, Value::Color(color))
     }
 
     #[must_use]
-    pub fn height(self, height: Length) -> Self {
-        self.set(Property::Height, Value::Length(height))
+    pub fn opacity(self, opacity: Opacity) -> Self {
+        self.set(Property::Opacity, Value::Number(opacity.get()))
     }
 
-    #[must_use]
-    pub fn padding(self, edges: Edges) -> Self {
-        self.set(Property::Padding, Value::Edges(edges))
-    }
-
-    #[must_use]
-    pub fn margin(self, edges: Edges) -> Self {
-        self.set(Property::Margin, Value::Edges(edges))
-    }
-
-    #[must_use]
-    pub fn radius(self, corners: Corners) -> Self {
-        self.set(Property::Radius, Value::Corners(corners))
-    }
-
-    #[must_use]
-    pub fn shadow(self, shadow: Shadow) -> Self {
-        self.set(Property::Shadow, Value::ShadowList(vec![shadow]))
-    }
-
-    #[must_use]
-    pub fn border_width(self, edges: Edges) -> Self {
-        self.set(Property::BorderWidth, Value::Edges(edges))
-    }
-
-    #[must_use]
-    pub fn border_color(self, color: Color) -> Self {
-        self.set(Property::BorderColor, Value::Color(color))
-    }
-
-    #[must_use]
-    pub fn opacity(self, opacity: f32) -> Self {
-        self.set(Property::Opacity, Value::Number(opacity))
-    }
-
-    #[must_use]
-    pub fn font_size(self, size: Length) -> Self {
-        self.set(Property::FontSize, Value::Length(size))
+    pub fn try_font_size(self, size: Length) -> Result<Self> {
+        self.try_set(Property::FontSize, Value::Length(size))
     }
 
     #[must_use]
@@ -243,32 +244,29 @@ impl Declarations {
         self.set(Property::Visibility, Value::Visibility(visibility))
     }
 
-    #[must_use]
-    pub fn transform(self, transform: Transform) -> Self {
-        self.set(Property::Transform, Value::Transform(transform))
+    pub fn try_transform(self, transform: Transform) -> Result<Self> {
+        self.try_set(Property::Transform, Value::Transform(transform))
     }
 
-    #[must_use]
-    pub fn transform_origin(self, origin: Size) -> Self {
-        self.set(Property::TransformOrigin, Value::Size(origin))
+    pub fn try_transform_origin(self, origin: Size) -> Result<Self> {
+        self.try_set(Property::TransformOrigin, Value::Size(origin))
     }
 
-    #[must_use]
-    pub fn transition_properties(self, properties: Vec<Property>) -> Self {
-        self.set(
+    pub fn try_transition_properties(self, properties: Vec<Property>) -> Result<Self> {
+        self.try_set(
             Property::TransitionProperty,
             Value::PropertyList(properties),
         )
     }
 
     #[must_use]
-    pub fn transition_duration(self, duration: f32) -> Self {
-        self.set(Property::TransitionDuration, Value::Number(duration))
+    pub fn transition_duration(self, duration: DurationSeconds) -> Self {
+        self.set(Property::TransitionDuration, Value::Number(duration.get()))
     }
 
     #[must_use]
-    pub fn transition_delay(self, delay: f32) -> Self {
-        self.set(Property::TransitionDelay, Value::Number(delay))
+    pub fn transition_delay(self, delay: DurationSeconds) -> Self {
+        self.set(Property::TransitionDelay, Value::Number(delay.get()))
     }
 
     #[must_use]
@@ -276,34 +274,28 @@ impl Declarations {
         self.set(Property::Display, Value::Display(display))
     }
 
-    #[must_use]
-    pub fn grid_template_rows(self, tracks: GridTrackList) -> Self {
-        self.set(Property::GridTemplateRows, Value::GridTrackList(tracks))
+    pub fn try_grid_template_rows(self, tracks: GridTrackList) -> Result<Self> {
+        self.try_set(Property::GridTemplateRows, Value::GridTrackList(tracks))
     }
 
-    #[must_use]
-    pub fn grid_template_columns(self, tracks: GridTrackList) -> Self {
-        self.set(Property::GridTemplateColumns, Value::GridTrackList(tracks))
+    pub fn try_grid_template_columns(self, tracks: GridTrackList) -> Result<Self> {
+        self.try_set(Property::GridTemplateColumns, Value::GridTrackList(tracks))
     }
 
-    #[must_use]
-    pub fn grid_template_areas(self, areas: GridTemplateAreas) -> Self {
-        self.set(Property::GridTemplateAreas, Value::GridTemplateAreas(areas))
+    pub fn try_grid_template_areas(self, areas: GridTemplateAreas) -> Result<Self> {
+        self.try_set(Property::GridTemplateAreas, Value::GridTemplateAreas(areas))
     }
 
-    #[must_use]
-    pub fn grid_template(self, template: GridTemplate) -> Self {
-        self.set(Property::GridTemplate, Value::GridTemplate(template))
+    pub fn try_grid_template(self, template: GridTemplate) -> Result<Self> {
+        self.try_set(Property::GridTemplate, Value::GridTemplate(template))
     }
 
-    #[must_use]
-    pub fn grid_auto_rows(self, tracks: GridTrackList) -> Self {
-        self.set(Property::GridAutoRows, Value::GridTrackList(tracks))
+    pub fn try_grid_auto_rows(self, tracks: GridTrackList) -> Result<Self> {
+        self.try_set(Property::GridAutoRows, Value::GridTrackList(tracks))
     }
 
-    #[must_use]
-    pub fn grid_auto_columns(self, tracks: GridTrackList) -> Self {
-        self.set(Property::GridAutoColumns, Value::GridTrackList(tracks))
+    pub fn try_grid_auto_columns(self, tracks: GridTrackList) -> Result<Self> {
+        self.try_set(Property::GridAutoColumns, Value::GridTrackList(tracks))
     }
 
     #[must_use]
@@ -311,52 +303,43 @@ impl Declarations {
         self.set(Property::GridAutoFlow, Value::GridAutoFlow(flow))
     }
 
-    #[must_use]
-    pub fn grid_flow_tolerance(self, tolerance: GridFlowTolerance) -> Self {
-        self.set(
+    pub fn try_grid_flow_tolerance(self, tolerance: GridFlowTolerance) -> Result<Self> {
+        self.try_set(
             Property::GridFlowTolerance,
             Value::GridFlowTolerance(tolerance),
         )
     }
 
-    #[must_use]
-    pub fn grid(self, grid: GridDefinition) -> Self {
-        self.set(Property::Grid, Value::GridDefinition(grid))
+    pub fn try_grid(self, grid: GridDefinition) -> Result<Self> {
+        self.try_set(Property::Grid, Value::GridDefinition(grid))
     }
 
-    #[must_use]
-    pub fn grid_row_start(self, line: GridLine) -> Self {
-        self.set(Property::GridRowStart, Value::GridLine(line))
+    pub fn try_grid_row_start(self, line: GridLine) -> Result<Self> {
+        self.try_set(Property::GridRowStart, Value::GridLine(line))
     }
 
-    #[must_use]
-    pub fn grid_row_end(self, line: GridLine) -> Self {
-        self.set(Property::GridRowEnd, Value::GridLine(line))
+    pub fn try_grid_row_end(self, line: GridLine) -> Result<Self> {
+        self.try_set(Property::GridRowEnd, Value::GridLine(line))
     }
 
-    #[must_use]
-    pub fn grid_column_start(self, line: GridLine) -> Self {
-        self.set(Property::GridColumnStart, Value::GridLine(line))
+    pub fn try_grid_column_start(self, line: GridLine) -> Result<Self> {
+        self.try_set(Property::GridColumnStart, Value::GridLine(line))
     }
 
-    #[must_use]
-    pub fn grid_column_end(self, line: GridLine) -> Self {
-        self.set(Property::GridColumnEnd, Value::GridLine(line))
+    pub fn try_grid_column_end(self, line: GridLine) -> Result<Self> {
+        self.try_set(Property::GridColumnEnd, Value::GridLine(line))
     }
 
-    #[must_use]
-    pub fn grid_row(self, placement: GridPlacement) -> Self {
-        self.set(Property::GridRow, Value::GridPlacement(placement))
+    pub fn try_grid_row(self, placement: GridPlacement) -> Result<Self> {
+        self.try_set(Property::GridRow, Value::GridPlacement(placement))
     }
 
-    #[must_use]
-    pub fn grid_column(self, placement: GridPlacement) -> Self {
-        self.set(Property::GridColumn, Value::GridPlacement(placement))
+    pub fn try_grid_column(self, placement: GridPlacement) -> Result<Self> {
+        self.try_set(Property::GridColumn, Value::GridPlacement(placement))
     }
 
-    #[must_use]
-    pub fn grid_area(self, area: GridAreaPlacement) -> Self {
-        self.set(Property::GridArea, Value::GridAreaPlacement(area))
+    pub fn try_grid_area(self, area: GridAreaPlacement) -> Result<Self> {
+        self.try_set(Property::GridArea, Value::GridAreaPlacement(area))
     }
 
     #[must_use]

@@ -757,16 +757,16 @@ fn value_kind(value: &Value) -> &'static str {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Metadata {
-    pub default: Value,
-    pub inherited: bool,
-    pub impact: Impact,
-    pub animatable: bool,
-    pub interpolation: Interpolation,
+    default: Value,
+    inherited: bool,
+    impact: Impact,
+    animatable: bool,
+    interpolation: Interpolation,
 }
 
 impl Metadata {
     #[must_use]
-    pub fn new(default: Value) -> Self {
+    pub(crate) fn new(default: Value) -> Self {
         Self {
             default,
             inherited: false,
@@ -777,25 +777,50 @@ impl Metadata {
     }
 
     #[must_use]
-    pub const fn inherited(mut self, inherited: bool) -> Self {
+    pub fn default(&self) -> &Value {
+        &self.default
+    }
+
+    #[must_use]
+    pub const fn is_inherited(&self) -> bool {
+        self.inherited
+    }
+
+    #[must_use]
+    pub const fn impact_flags(&self) -> Impact {
+        self.impact
+    }
+
+    #[must_use]
+    pub const fn is_animatable(&self) -> bool {
+        self.animatable
+    }
+
+    #[must_use]
+    pub const fn interpolation_kind(&self) -> Interpolation {
+        self.interpolation
+    }
+
+    #[must_use]
+    pub(crate) const fn inherited(mut self, inherited: bool) -> Self {
         self.inherited = inherited;
         self
     }
 
     #[must_use]
-    pub const fn impact(mut self, impact: Impact) -> Self {
+    pub(crate) const fn impact(mut self, impact: Impact) -> Self {
         self.impact = impact;
         self
     }
 
     #[must_use]
-    pub const fn animatable(mut self, animatable: bool) -> Self {
+    pub(crate) const fn animatable(mut self, animatable: bool) -> Self {
         self.animatable = animatable;
         self
     }
 
     #[must_use]
-    pub const fn interpolation(mut self, interpolation: Interpolation) -> Self {
+    pub(crate) const fn interpolation(mut self, interpolation: Interpolation) -> Self {
         self.interpolation = interpolation;
         self
     }
@@ -817,11 +842,11 @@ pub enum Interpolation {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Impact {
-    pub layout: bool,
-    pub paint: bool,
-    pub text: bool,
-    pub effect: bool,
-    pub animation: bool,
+    layout: bool,
+    paint: bool,
+    text: bool,
+    effect: bool,
+    animation: bool,
 }
 
 impl Impact {
@@ -837,31 +862,56 @@ impl Impact {
     }
 
     #[must_use]
-    pub const fn layout(mut self) -> Self {
+    pub const fn affects_layout(self) -> bool {
+        self.layout
+    }
+
+    #[must_use]
+    pub const fn affects_paint(self) -> bool {
+        self.paint
+    }
+
+    #[must_use]
+    pub const fn affects_text(self) -> bool {
+        self.text
+    }
+
+    #[must_use]
+    pub const fn affects_effect(self) -> bool {
+        self.effect
+    }
+
+    #[must_use]
+    pub const fn affects_animation(self) -> bool {
+        self.animation
+    }
+
+    #[must_use]
+    pub(crate) const fn layout(mut self) -> Self {
         self.layout = true;
         self
     }
 
     #[must_use]
-    pub const fn paint(mut self) -> Self {
+    pub(crate) const fn paint(mut self) -> Self {
         self.paint = true;
         self
     }
 
     #[must_use]
-    pub const fn text(mut self) -> Self {
+    pub(crate) const fn text(mut self) -> Self {
         self.text = true;
         self
     }
 
     #[must_use]
-    pub const fn effect(mut self) -> Self {
+    pub(crate) const fn effect(mut self) -> Self {
         self.effect = true;
         self
     }
 
     #[must_use]
-    pub const fn animation(mut self) -> Self {
+    pub(crate) const fn animation(mut self) -> Self {
         self.animation = true;
         self
     }
