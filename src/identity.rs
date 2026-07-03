@@ -345,7 +345,7 @@ mod tests {
     use crate::{ErrorCode, StateFlag};
 
     #[test]
-    fn selector_tokens_trim_and_reject_retained_invalid_idents() {
+    fn selector_tokens_trim_and_reject_invalid_idents() {
         assert_eq!(StyleTag::new(" button ").unwrap().as_str(), "button");
         assert_eq!(
             StyleClass::new("primary_action").unwrap().as_str(),
@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn style_key_allows_retained_key_separators() {
+    fn style_key_allows_path_key_separators() {
         let key = StyleKey::new(" route:/primary.card ").unwrap();
 
         assert_eq!(key.as_str(), "route:/primary.card");

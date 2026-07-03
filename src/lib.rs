@@ -4,7 +4,6 @@
 //! metadata, selector matching, sheets, resolution, and invalidation facts. CSS
 //! parsing is specified separately and does not live in this first contract.
 
-pub mod adapters;
 mod calc;
 mod condition;
 mod declaration;
