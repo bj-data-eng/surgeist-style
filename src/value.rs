@@ -598,6 +598,12 @@ pub enum Clear {
 pub enum StyleTextAlign {
     #[default]
     Auto,
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
     LegacyLeft,
     LegacyRight,
     LegacyCenter,
@@ -1819,21 +1825,179 @@ pub enum StrokeAlign {
     Outside,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TextWeight {
+    Thin,
+    ExtraLight,
+    Light,
+    #[default]
+    Normal,
+    Medium,
+    SemiBold,
+    Bold,
+    ExtraBold,
+    Black,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum TextSlant {
+    #[default]
+    Normal,
+    Italic,
+    Oblique(Option<f32>),
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TextWrap {
+    None,
+    #[default]
+    Word,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum WhiteSpace {
+    Collapse,
+    #[default]
+    Preserve,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum WordBreak {
+    #[default]
+    Normal,
+    BreakAll,
+    KeepAll,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum OverflowWrap {
+    #[default]
+    Normal,
+    Anywhere,
+    BreakWord,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Decoration {
+    enabled: bool,
+    offset: Option<f32>,
+    size: Option<f32>,
+    brush: Option<Color>,
+}
+
+impl Decoration {
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            enabled: false,
+            offset: None,
+            size: None,
+            brush: None,
+        }
+    }
+
+    pub fn solid(brush: Option<Color>) -> Result<Self> {
+        let decoration = Self {
+            enabled: true,
+            offset: None,
+            size: None,
+            brush,
+        };
+        decoration.validate()?;
+        Ok(decoration)
+    }
+
+    #[must_use]
+    pub const fn enabled(self) -> bool {
+        self.enabled
+    }
+
+    #[must_use]
+    pub const fn offset(self) -> Option<f32> {
+        self.offset
+    }
+
+    #[must_use]
+    pub const fn size(self) -> Option<f32> {
+        self.size
+    }
+
+    #[must_use]
+    pub const fn brush(self) -> Option<Color> {
+        self.brush
+    }
+
+    pub fn with_offset(mut self, offset: f32) -> Result<Self> {
+        validate_finite(offset, "text decoration offset")?;
+        self.offset = Some(offset);
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn without_offset(mut self) -> Self {
+        self.offset = None;
+        self
+    }
+
+    pub fn with_size(mut self, size: f32) -> Result<Self> {
+        validate_non_negative(size, "text decoration size")?;
+        self.size = Some(size);
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn without_size(mut self) -> Self {
+        self.size = None;
+        self
+    }
+
+    pub fn with_brush(mut self, brush: Color) -> Result<Self> {
+        validate_decoration_brush(brush)?;
+        self.brush = Some(brush);
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn without_brush(mut self) -> Self {
+        self.brush = None;
+        self
+    }
+
+    pub fn validate(self) -> Result<()> {
+        if let Some(offset) = self.offset {
+            validate_finite(offset, "text decoration offset")?;
+        }
+        if let Some(size) = self.size {
+            validate_non_negative(size, "text decoration size")?;
+        }
+        if let Some(brush) = self.brush {
+            validate_decoration_brush(brush)?;
+        }
+        Ok(())
+    }
+}
+
+impl Default for Decoration {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextValue {
     pub font_family: Vec<String>,
     pub font_size: Length,
-    pub font_weight: surgeist_text::Weight,
-    pub font_style: surgeist_text::Slant,
+    pub font_weight: TextWeight,
+    pub font_style: TextSlant,
     pub line_height: Length,
     pub color: Color,
-    pub alignment: surgeist_text::Alignment,
-    pub wrap: surgeist_text::Wrap,
-    pub white_space: surgeist_text::WhiteSpace,
-    pub word_break: surgeist_text::WordBreak,
-    pub overflow_wrap: surgeist_text::OverflowWrap,
-    pub underline: surgeist_text::Decoration,
-    pub strikethrough: surgeist_text::Decoration,
+    pub alignment: StyleTextAlign,
+    pub wrap: TextWrap,
+    pub white_space: WhiteSpace,
+    pub word_break: WordBreak,
+    pub overflow_wrap: OverflowWrap,
+    pub underline: Decoration,
+    pub strikethrough: Decoration,
     pub selection_color: Color,
 }
 
@@ -1856,13 +2020,13 @@ impl TextValue {
     }
 
     #[must_use]
-    pub const fn weight(mut self, weight: surgeist_text::Weight) -> Self {
+    pub const fn weight(mut self, weight: TextWeight) -> Self {
         self.font_weight = weight;
         self
     }
 
     #[must_use]
-    pub const fn style(mut self, style: surgeist_text::Slant) -> Self {
+    pub const fn style(mut self, style: TextSlant) -> Self {
         self.font_style = style;
         self
     }
@@ -1880,43 +2044,43 @@ impl TextValue {
     }
 
     #[must_use]
-    pub const fn align(mut self, alignment: surgeist_text::Alignment) -> Self {
+    pub const fn align(mut self, alignment: StyleTextAlign) -> Self {
         self.alignment = alignment;
         self
     }
 
     #[must_use]
-    pub const fn wrap(mut self, wrap: surgeist_text::Wrap) -> Self {
+    pub const fn wrap(mut self, wrap: TextWrap) -> Self {
         self.wrap = wrap;
         self
     }
 
     #[must_use]
-    pub const fn white_space(mut self, white_space: surgeist_text::WhiteSpace) -> Self {
+    pub const fn white_space(mut self, white_space: WhiteSpace) -> Self {
         self.white_space = white_space;
         self
     }
 
     #[must_use]
-    pub const fn word_break(mut self, word_break: surgeist_text::WordBreak) -> Self {
+    pub const fn word_break(mut self, word_break: WordBreak) -> Self {
         self.word_break = word_break;
         self
     }
 
     #[must_use]
-    pub const fn overflow_wrap(mut self, overflow_wrap: surgeist_text::OverflowWrap) -> Self {
+    pub const fn overflow_wrap(mut self, overflow_wrap: OverflowWrap) -> Self {
         self.overflow_wrap = overflow_wrap;
         self
     }
 
     #[must_use]
-    pub const fn underline(mut self, underline: surgeist_text::Decoration) -> Self {
+    pub const fn underline(mut self, underline: Decoration) -> Self {
         self.underline = underline;
         self
     }
 
     #[must_use]
-    pub const fn strikethrough(mut self, strikethrough: surgeist_text::Decoration) -> Self {
+    pub const fn strikethrough(mut self, strikethrough: Decoration) -> Self {
         self.strikethrough = strikethrough;
         self
     }
@@ -1946,17 +2110,17 @@ impl Default for TextValue {
         Self {
             font_family: Vec::new(),
             font_size: Length::Px(16.0),
-            font_weight: surgeist_text::Weight::Normal,
-            font_style: surgeist_text::Slant::Normal,
+            font_weight: TextWeight::Normal,
+            font_style: TextSlant::Normal,
             line_height: Length::Percent(100.0),
             color: Color::BLACK,
-            alignment: surgeist_text::Alignment::Start,
-            wrap: surgeist_text::Wrap::Word,
-            white_space: surgeist_text::WhiteSpace::Preserve,
-            word_break: surgeist_text::WordBreak::Normal,
-            overflow_wrap: surgeist_text::OverflowWrap::Normal,
-            underline: surgeist_text::Decoration::none(),
-            strikethrough: surgeist_text::Decoration::none(),
+            alignment: StyleTextAlign::Start,
+            wrap: TextWrap::Word,
+            white_space: WhiteSpace::Preserve,
+            word_break: WordBreak::Normal,
+            overflow_wrap: OverflowWrap::Normal,
+            underline: Decoration::none(),
+            strikethrough: Decoration::none(),
             selection_color: Color::TRANSPARENT,
         }
     }
@@ -2063,34 +2227,31 @@ fn validate_grid_area_name(name: &str) -> Result<()> {
     validate_style_string(name, "grid area name")
 }
 
-fn validate_slant(value: surgeist_text::Slant) -> Result<()> {
+fn validate_slant(value: TextSlant) -> Result<()> {
     match value {
-        surgeist_text::Slant::Oblique(Some(angle)) => validate_finite(angle, "font oblique angle"),
-        surgeist_text::Slant::Normal
-        | surgeist_text::Slant::Italic
-        | surgeist_text::Slant::Oblique(None) => Ok(()),
+        TextSlant::Oblique(Some(angle)) => validate_finite(angle, "font oblique angle"),
+        TextSlant::Normal | TextSlant::Italic | TextSlant::Oblique(None) => Ok(()),
     }
 }
 
-fn validate_decoration(value: surgeist_text::Decoration) -> Result<()> {
-    if let Some(offset) = value.offset {
-        validate_finite(offset, "text decoration offset")?;
-    }
-    if let Some(size) = value.size {
-        validate_non_negative(size, "text decoration size")?;
-    }
-    if let Some(brush) = value.brush {
-        validate_finite(brush.r, "text decoration brush r")?;
-        validate_finite(brush.g, "text decoration brush g")?;
-        validate_finite(brush.b, "text decoration brush b")?;
-        validate_finite(brush.a, "text decoration brush a")?;
-    }
-    Ok(())
+fn validate_decoration(value: Decoration) -> Result<()> {
+    value.validate()
+}
+
+fn validate_decoration_brush(brush: Color) -> Result<()> {
+    validate_finite(brush.r, "text decoration brush r")?;
+    validate_finite(brush.g, "text decoration brush g")?;
+    validate_finite(brush.b, "text decoration brush b")?;
+    validate_finite(brush.a, "text decoration brush a")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AnimationNameList, CssPx, DimensionLength, ErrorCode, FontFamilyList, Value};
+    use super::{
+        AnimationNameList, Color, CssPx, Decoration, DimensionLength, ErrorCode, FontFamilyList,
+        Length, OverflowWrap, StyleTextAlign, TextSlant, TextValue, TextWeight, TextWrap, Value,
+        WhiteSpace, WordBreak,
+    };
 
     #[test]
     fn dimension_length_px_rejects_negative_css_px() {
@@ -2121,5 +2282,67 @@ mod tests {
 
         assert_eq!(font_error.code(), ErrorCode::InvalidString);
         assert_eq!(animation_error.code(), ErrorCode::InvalidString);
+    }
+
+    #[test]
+    fn text_value_defaults_preserve_style_text_contract() {
+        let text = TextValue::default();
+
+        assert!(text.font_family.is_empty());
+        assert_eq!(text.font_size, Length::Px(16.0));
+        assert_eq!(text.font_weight, TextWeight::Normal);
+        assert_eq!(text.font_style, TextSlant::Normal);
+        assert_eq!(text.line_height, Length::Percent(100.0));
+        assert_eq!(text.color, Color::BLACK);
+        assert_eq!(text.alignment, StyleTextAlign::Start);
+        assert_eq!(text.wrap, TextWrap::Word);
+        assert_eq!(text.white_space, WhiteSpace::Preserve);
+        assert_eq!(text.word_break, WordBreak::Normal);
+        assert_eq!(text.overflow_wrap, OverflowWrap::Normal);
+        assert_eq!(text.underline, Decoration::none());
+        assert_eq!(text.strikethrough, Decoration::none());
+        assert_eq!(text.selection_color, Color::TRANSPARENT);
+        text.validate().unwrap();
+    }
+
+    #[test]
+    fn text_slant_oblique_rejects_non_finite_angle() {
+        let error = TextValue::new()
+            .style(TextSlant::Oblique(Some(f32::NAN)))
+            .validate()
+            .unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert_eq!(error.message(), "font oblique angle must be finite");
+    }
+
+    #[test]
+    fn decoration_rejects_non_finite_offset() {
+        let error = Decoration::none().with_offset(f32::INFINITY).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert_eq!(error.message(), "text decoration offset must be finite");
+    }
+
+    #[test]
+    fn decoration_rejects_negative_and_non_finite_size() {
+        let negative = Decoration::none().with_size(-1.0).unwrap_err();
+        let non_finite = Decoration::none().with_size(f32::NAN).unwrap_err();
+
+        assert_eq!(negative.code(), ErrorCode::InvalidValue);
+        assert_eq!(
+            negative.message(),
+            "text decoration size must be non-negative"
+        );
+        assert_eq!(non_finite.code(), ErrorCode::InvalidValue);
+        assert_eq!(non_finite.message(), "text decoration size must be finite");
+    }
+
+    #[test]
+    fn decoration_rejects_non_finite_brush_channels() {
+        let error = Decoration::solid(Some(Color::rgba(0.0, f32::NAN, 0.0, 1.0))).unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidValue);
+        assert_eq!(error.message(), "text decoration brush g must be finite");
     }
 }

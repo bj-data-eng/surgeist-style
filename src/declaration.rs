@@ -8,7 +8,8 @@ use super::{
     Edges, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
     GridPlacement, GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, Length,
     MaxTrackSizing, MinTrackSizing, Opacity, PointerEvents, Property, Result, Shadow, Size,
-    SubgridLineNameComponent, TrackRepeatCount, TrackSizing, Transform, Value, Visibility,
+    SubgridLineNameComponent, TextSlant, TrackRepeatCount, TrackSizing, Transform, Value,
+    Visibility,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1126,22 +1127,22 @@ fn hash_color(value: Color, state: &mut DefaultHasher) {
     hash_f32(value.a, state);
 }
 
-fn hash_slant(value: surgeist_text::Slant, state: &mut DefaultHasher) {
+fn hash_slant(value: TextSlant, state: &mut DefaultHasher) {
     match value {
-        surgeist_text::Slant::Normal => 0u8.hash(state),
-        surgeist_text::Slant::Italic => 1u8.hash(state),
-        surgeist_text::Slant::Oblique(angle) => {
+        TextSlant::Normal => 0u8.hash(state),
+        TextSlant::Italic => 1u8.hash(state),
+        TextSlant::Oblique(angle) => {
             2u8.hash(state);
             angle.map(f32::to_bits).hash(state);
         }
     }
 }
 
-fn hash_decoration(value: surgeist_text::Decoration, state: &mut DefaultHasher) {
-    value.enabled.hash(state);
-    value.offset.map(f32::to_bits).hash(state);
-    value.size.map(f32::to_bits).hash(state);
-    if let Some(brush) = value.brush {
+fn hash_decoration(value: super::Decoration, state: &mut DefaultHasher) {
+    value.enabled().hash(state);
+    value.offset().map(f32::to_bits).hash(state);
+    value.size().map(f32::to_bits).hash(state);
+    if let Some(brush) = value.brush() {
         true.hash(state);
         hash_f32(brush.r, state);
         hash_f32(brush.g, state);

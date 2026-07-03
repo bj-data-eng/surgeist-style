@@ -34,21 +34,18 @@ pub use selector::{
 };
 pub use sheet::{Rule, Sheet, Version};
 pub use state::StateFlag;
-pub use surgeist_text::{
-    Alignment as TextAlign, Decoration, Direction as TextDirection, OverflowWrap,
-    Slant as TextSlant, Weight as TextWeight, WhiteSpace, WordBreak, Wrap as TextWrap,
-};
 pub use tree::{Node, Traversal, Tree};
 pub use value::{
     AlignContent, AlignItems, AnimationNameList, BoxSizing, Clear, Color, Corners, CssPx, Cursor,
-    Dash, DimensionLength, Direction, Display, DurationSeconds, Edges, FlexDirection, FlexWrap,
-    Float, FontFamilyList, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance,
-    GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow, GridTemplateAreas,
-    GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length, LineStyle, MaxTrackSizing,
-    MinTrackSizing, Opacity, Overflow, OverflowAxes, PointerEvents, Shadow, SideSet, Size, Stroke,
-    StrokeAlign, StyleTextAlign, SubgridLineNameComponent, SubgridLineNameRepeatCount,
-    SubgridTrack, TextValue, TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp,
-    Value, Visibility, WritingMode,
+    Dash, Decoration, DimensionLength, Direction, Display, DurationSeconds, Edges, FlexDirection,
+    FlexWrap, Float, FontFamilyList, GridAreaPlacement, GridAutoFlow, GridDefinition,
+    GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow,
+    GridTemplateAreas, GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length,
+    LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Overflow, OverflowAxes, OverflowWrap,
+    PointerEvents, Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign,
+    SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextSlant, TextValue,
+    TextWeight, TextWrap, TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp,
+    Value, Visibility, WhiteSpace, WordBreak, WritingMode,
 };
 
 #[must_use]
