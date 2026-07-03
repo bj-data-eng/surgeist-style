@@ -847,15 +847,6 @@ impl TrackRepeat {
         Ok(repeat)
     }
 
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) fn new_unchecked(
-        count: TrackRepeatCount,
-        components: Vec<GridTrackComponent>,
-    ) -> Self {
-        Self { count, components }
-    }
-
     #[must_use]
     pub const fn count_value(&self) -> TrackRepeatCount {
         self.count
@@ -893,12 +884,6 @@ impl TrackRepeatCount {
         Ok(Self::Count(TrackRepeatCountValue::new(count)?))
     }
 
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) const fn count_unchecked(count: u16) -> Self {
-        Self::Count(TrackRepeatCountValue::new_unchecked(count))
-    }
-
     pub fn validate(self) -> Result<()> {
         match self {
             Self::Count(count) => count.validate(),
@@ -915,12 +900,6 @@ impl TrackRepeatCountValue {
         let value = Self(count);
         value.validate()?;
         Ok(value)
-    }
-
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) const fn new_unchecked(count: u16) -> Self {
-        Self(count)
     }
 
     #[must_use]
@@ -1451,18 +1430,6 @@ impl GridLine {
         })
     }
 
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) const fn line_unchecked(line: i16) -> Self {
-        Self::Line(GridLineIndex::new_unchecked(line))
-    }
-
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) const fn span_unchecked(span: u16) -> Self {
-        Self::Span(GridSpanCount::new_unchecked(span))
-    }
-
     pub fn validate(&self) -> Result<()> {
         match self {
             Self::Line(line) => line.validate("grid line index"),
@@ -1491,12 +1458,6 @@ impl GridLineIndex {
         Ok(value)
     }
 
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) const fn new_unchecked(index: i16) -> Self {
-        Self(index)
-    }
-
     #[must_use]
     pub const fn get(self) -> i16 {
         self.0
@@ -1521,12 +1482,6 @@ impl GridSpanCount {
         let value = Self(span);
         value.validate("grid span count")?;
         Ok(value)
-    }
-
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) const fn new_unchecked(span: u16) -> Self {
-        Self(span)
     }
 
     #[must_use]
