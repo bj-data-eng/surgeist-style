@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::{Change, Condition, Declarations, Result, Selector, Tree, selector::PrimaryKey};
-use surgeist_retained::{Class, Key, Tag};
+use crate::{StyleClass, StyleKey, StyleTag};
 
 static NEXT_VERSION: AtomicU64 = AtomicU64::new(1);
 
@@ -167,7 +167,10 @@ impl Sheet {
             .filter(move |rule| rule.selector() == selector)
     }
 
-    pub fn rules_for_class<'a>(&'a self, class: &'a Class) -> impl Iterator<Item = &'a Rule> + 'a {
+    pub fn rules_for_class<'a>(
+        &'a self,
+        class: &'a StyleClass,
+    ) -> impl Iterator<Item = &'a Rule> + 'a {
         self.index
             .by_class
             .get(class)
@@ -175,7 +178,7 @@ impl Sheet {
             .flat_map(|indices| indices.iter().map(|index| &self.rules[*index]))
     }
 
-    pub fn rules_for_tag<'a>(&'a self, tag: &'a Tag) -> impl Iterator<Item = &'a Rule> + 'a {
+    pub fn rules_for_tag<'a>(&'a self, tag: &'a StyleTag) -> impl Iterator<Item = &'a Rule> + 'a {
         self.index
             .by_tag
             .get(tag)
@@ -183,7 +186,7 @@ impl Sheet {
             .flat_map(|indices| indices.iter().map(|index| &self.rules[*index]))
     }
 
-    pub fn rules_for_key<'a>(&'a self, key: &'a Key) -> impl Iterator<Item = &'a Rule> + 'a {
+    pub fn rules_for_key<'a>(&'a self, key: &'a StyleKey) -> impl Iterator<Item = &'a Rule> + 'a {
         self.index
             .by_key
             .get(key)
@@ -251,17 +254,17 @@ impl Sheet {
         let node = tree.node(id)?;
         let mut candidates = BTreeSet::new();
         candidates.extend(self.index.universal.iter().copied());
-        if let Some(key) = node.key
+        if let Some(key) = node.key.as_ref()
             && let Some(indices) = self.index.by_key.get(key)
         {
             candidates.extend(indices.iter().copied());
         }
-        if let Some(tag) = node.tag
+        if let Some(tag) = node.tag.as_ref()
             && let Some(indices) = self.index.by_tag.get(tag)
         {
             candidates.extend(indices.iter().copied());
         }
-        for class in node.classes {
+        for class in &node.classes {
             if let Some(indices) = self.index.by_class.get(class) {
                 candidates.extend(indices.iter().copied());
             }
@@ -273,9 +276,9 @@ impl Sheet {
 #[derive(Clone, Debug, Default, PartialEq)]
 struct RuleIndex {
     universal: Vec<usize>,
-    by_key: BTreeMap<Key, Vec<usize>>,
-    by_class: BTreeMap<Class, Vec<usize>>,
-    by_tag: BTreeMap<Tag, Vec<usize>>,
+    by_key: BTreeMap<StyleKey, Vec<usize>>,
+    by_class: BTreeMap<StyleClass, Vec<usize>>,
+    by_tag: BTreeMap<StyleTag, Vec<usize>>,
 }
 
 impl RuleIndex {

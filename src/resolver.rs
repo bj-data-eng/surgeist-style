@@ -404,7 +404,7 @@ impl Resolver {
         tree_version.hash(&mut hasher);
         node_hash.hash(&mut hasher);
         context.traversal.hash(&mut hasher);
-        hash_state(node.state, &mut hasher);
+        hash_state(&node.state, &mut hasher);
         context.viewport.cache_values().hash(&mut hasher);
         context
             .container
@@ -456,7 +456,7 @@ struct CacheEntry {
     resolved: Resolved,
 }
 
-fn hash_state(state: &surgeist_retained::State, hasher: &mut impl Hasher) {
+fn hash_state(state: &super::StyleState, hasher: &mut impl Hasher) {
     state.disabled().hash(hasher);
     state.hovered().hash(hasher);
     state.active().hash(hasher);
@@ -473,99 +473,4 @@ fn hash_node<T: Hash>(node: &T) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     node.hash(&mut hasher);
     hasher.finish()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use surgeist_retained::{Class, Element, Model, Patch, Tag, Text};
-
-    #[test]
-    fn clear_cache_for_changes_distinguishes_local_and_broad_style_scopes() {
-        let mut model = Model::empty();
-        let root = model.root();
-        let id_one = model
-            .apply(Patch::Insert {
-                parent: root,
-                index: 0,
-                element: element("one"),
-            })
-            .unwrap()
-            .changes()
-            .inserted()[0];
-        let id_two = model
-            .apply(Patch::Insert {
-                parent: root,
-                index: 1,
-                element: element("two"),
-            })
-            .unwrap()
-            .changes()
-            .inserted()[0];
-        let local_one = Declarations::new()
-            .try_text_color(super::super::Color::BLACK)
-            .unwrap();
-        let local_two = Declarations::new()
-            .try_bg(super::super::Color::BLACK)
-            .unwrap();
-        let mut resolver = Resolver::new(Sheet::new());
-
-        let tree = model.snapshot();
-        resolver
-            .resolve(Context::new(&tree, id_one).local(&local_one))
-            .unwrap();
-        resolver
-            .resolve(Context::new(&tree, id_two).local(&local_two))
-            .unwrap();
-        resolver
-            .resolve(Context::new(&tree, id_one).local(&local_one))
-            .unwrap();
-        resolver
-            .resolve(Context::new(&tree, id_two).local(&local_two))
-            .unwrap();
-        assert_eq!(resolver.cache_hits(), 2);
-
-        let local_change = model
-            .apply(Patch::SetLabel {
-                id: id_one,
-                label: Some(Text::new("updated label").unwrap()),
-            })
-            .unwrap();
-        resolver.clear_cache_for_changes(local_change.changes());
-        let tree = model.snapshot();
-        resolver
-            .resolve(Context::new(&tree, id_two).local(&local_two))
-            .unwrap();
-        assert_eq!(resolver.cache_hits(), 2);
-        resolver
-            .resolve(Context::new(&tree, id_one).local(&local_one))
-            .unwrap();
-        assert_eq!(resolver.cache_hits(), 2);
-
-        resolver
-            .resolve(Context::new(&tree, id_one).local(&local_one))
-            .unwrap();
-        assert_eq!(resolver.cache_hits(), 3);
-        let broad_change = model
-            .apply(Patch::SetClasses {
-                id: id_one,
-                classes: vec![Class::new("featured").unwrap()],
-            })
-            .unwrap();
-        resolver.clear_cache_for_changes(broad_change.changes());
-        assert_eq!(resolver.cache_hits(), 0);
-        let tree = model.snapshot();
-        resolver
-            .resolve(Context::new(&tree, id_two).local(&local_two))
-            .unwrap();
-        assert_eq!(resolver.cache_hits(), 0);
-        resolver
-            .resolve(Context::new(&tree, id_two).local(&local_two))
-            .unwrap();
-        assert_eq!(resolver.cache_hits(), 1);
-    }
-
-    fn element(name: &str) -> Element {
-        Element::tagged(Tag::new(name).unwrap())
-    }
 }

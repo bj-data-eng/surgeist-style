@@ -9,6 +9,7 @@ mod calc;
 mod condition;
 mod declaration;
 mod error;
+mod identity;
 mod invalidation;
 mod property;
 mod resolver;
@@ -22,6 +23,10 @@ pub use calc::{CalcLength, CalcLengthTerm, CalcOperator};
 pub use condition::{Condition, Container, Viewport};
 pub use declaration::{Declaration, Declarations, Fingerprint, TypedDeclaration};
 pub use error::{Error, ErrorCode, Result};
+pub use identity::{
+    StyleAttribute, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey, StyleRole,
+    StyleState, StyleTag,
+};
 pub use invalidation::{Change, Invalidation, Scope};
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};

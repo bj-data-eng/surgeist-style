@@ -1,21 +1,20 @@
 use super::{Error, ErrorCode, Result, Traversal, Tree};
-use crate::StateFlag;
-use surgeist_retained::{AttributeName, Class, Key, Tag, Value as AttributeValue};
+use crate::{StateFlag, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey, StyleTag};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum PrimaryKey {
     Universal,
-    Key(Key),
-    Class(Class),
-    Tag(Tag),
+    Key(StyleKey),
+    Class(StyleClass),
+    Tag(StyleTag),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Selector {
     Any,
-    Tag(Tag),
-    Class(Class),
-    Key(Key),
+    Tag(StyleTag),
+    Class(StyleClass),
+    Key(StyleKey),
     State(StateFlag),
     Attribute(AttributeSelector),
     Position(PositionSelector),
@@ -77,9 +76,9 @@ impl Selector {
     pub fn matches<T: Tree>(&self, tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
         match self {
             Self::Any => Ok(true),
-            Self::Tag(tag) => Ok(tree.node(id)?.tag == Some(tag)),
+            Self::Tag(tag) => Ok(tree.node(id)?.tag.as_ref() == Some(tag)),
             Self::Class(class) => Ok(tree.node(id)?.classes.contains(class)),
-            Self::Key(key) => Ok(tree.node(id)?.key == Some(key)),
+            Self::Key(key) => Ok(tree.node(id)?.key.as_ref() == Some(key)),
             Self::State(state) => Ok(tree.node(id)?.has_state(*state)),
             Self::Attribute(attribute) => attribute.matches(tree, id),
             Self::Position(position) => position.matches(tree, id, traversal),
@@ -134,9 +133,9 @@ fn validate_complex_parts(parts: &[Part]) -> Result<()> {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Compound {
-    tag: Option<Tag>,
-    key: Option<Key>,
-    classes: Vec<Class>,
+    tag: Option<StyleTag>,
+    key: Option<StyleKey>,
+    classes: Vec<StyleClass>,
     states: Vec<StateFlag>,
     attributes: Vec<AttributeSelector>,
     position: Option<PositionSelector>,
@@ -197,10 +196,18 @@ impl Compound {
 
     pub fn matches<T: Tree>(&self, tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
         let node = tree.node(id)?;
-        if self.tag.as_ref().is_some_and(|tag| node.tag != Some(tag)) {
+        if self
+            .tag
+            .as_ref()
+            .is_some_and(|tag| node.tag.as_ref() != Some(tag))
+        {
             return Ok(false);
         }
-        if self.key.as_ref().is_some_and(|key| node.key != Some(key)) {
+        if self
+            .key
+            .as_ref()
+            .is_some_and(|key| node.key.as_ref() != Some(key))
+        {
             return Ok(false);
         }
         if !self
@@ -273,8 +280,8 @@ pub enum Combinator {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AttributeSelector {
-    Exists(AttributeName),
-    Equals(AttributeName, AttributeValue),
+    Exists(StyleAttributeName),
+    Equals(StyleAttributeName, StyleAttributeValue),
 }
 
 impl AttributeSelector {
@@ -295,11 +302,11 @@ impl AttributeSelector {
             Self::Exists(name) => node
                 .attributes
                 .iter()
-                .any(|attribute| attribute.name == *name),
+                .any(|attribute| attribute.name() == name),
             Self::Equals(name, value) => node
                 .attributes
                 .iter()
-                .any(|attribute| attribute.name == *name && attribute.value == *value),
+                .any(|attribute| attribute.name() == name && attribute.value() == value),
         })
     }
 }
@@ -501,24 +508,216 @@ fn related_candidates<T: Tree>(
     }
 }
 
-fn tag_from_str(value: &str) -> Result<Tag> {
-    Tag::new(value).map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
+fn tag_from_str(value: &str) -> Result<StyleTag> {
+    StyleTag::new(value).map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
 }
 
-fn class_from_str(value: &str) -> Result<Class> {
-    Class::new(value).map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
-}
-
-fn key_from_str(value: &str) -> Result<Key> {
-    Key::new(value).map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
-}
-
-fn attribute_name_from_str(value: &str) -> Result<AttributeName> {
-    AttributeName::new(value)
+fn class_from_str(value: &str) -> Result<StyleClass> {
+    StyleClass::new(value)
         .map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
 }
 
-fn attribute_value_from_str(value: &str) -> Result<AttributeValue> {
-    AttributeValue::new(value)
+fn key_from_str(value: &str) -> Result<StyleKey> {
+    StyleKey::new(value).map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
+}
+
+fn attribute_name_from_str(value: &str) -> Result<StyleAttributeName> {
+    StyleAttributeName::new(value)
         .map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
+}
+
+fn attribute_value_from_str(value: &str) -> Result<StyleAttributeValue> {
+    StyleAttributeValue::new(value)
+        .map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ErrorCode, Node, Result, Sheet, StyleAttribute, StyleAttributeName, StyleAttributeValue,
+        StyleClass, StyleKey, StyleRole, StyleState, StyleTag, Traversal, Tree,
+    };
+
+    #[test]
+    fn selector_matches_style_owned_tree_facts() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0)
+                .tag("window")
+                .children([1])
+                .state(StyleState::default().with_focus_within(true)),
+            TestNode::new(1)
+                .tag("button")
+                .key("primary")
+                .class("accent")
+                .attribute("data-mode", "submit")
+                .state(StyleState::default().with_hovered(true)),
+        ]);
+
+        let selector = Selector::compound()
+            .tag("button")
+            .unwrap()
+            .key("primary")
+            .unwrap()
+            .class("accent")
+            .unwrap()
+            .attribute_equals("data-mode", "submit")
+            .unwrap()
+            .state(crate::StateFlag::Hovered)
+            .selector();
+
+        assert!(
+            selector
+                .matches(&tree, 1, Traversal::Canonical)
+                .expect("selector should evaluate")
+        );
+        assert_eq!(
+            Selector::tag("bad name").unwrap_err().code(),
+            ErrorCode::InvalidSelector
+        );
+    }
+
+    #[test]
+    fn sheet_candidates_use_style_owned_index_keys() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0)
+                .tag("button")
+                .key("primary")
+                .class("accent"),
+        ]);
+        let sheet = Sheet::new()
+            .rule(Selector::tag("button").unwrap(), crate::Declarations::new())
+            .rule(
+                Selector::class("accent").unwrap(),
+                crate::Declarations::new(),
+            )
+            .rule(
+                Selector::key("primary").unwrap(),
+                crate::Declarations::new(),
+            );
+
+        assert_eq!(sheet.candidate_rule_count(&tree, 0).unwrap(), 3);
+    }
+
+    #[derive(Clone, Debug)]
+    struct TestNode {
+        id: usize,
+        tag: Option<StyleTag>,
+        key: Option<StyleKey>,
+        classes: Vec<StyleClass>,
+        attributes: Vec<StyleAttribute>,
+        role: StyleRole,
+        state: StyleState,
+        children: Vec<usize>,
+    }
+
+    impl TestNode {
+        fn new(id: usize) -> Self {
+            Self {
+                id,
+                tag: None,
+                key: None,
+                classes: Vec::new(),
+                attributes: Vec::new(),
+                role: StyleRole::default(),
+                state: StyleState::default(),
+                children: Vec::new(),
+            }
+        }
+
+        fn tag(mut self, tag: &str) -> Self {
+            self.tag = Some(StyleTag::new(tag).unwrap());
+            self
+        }
+
+        fn key(mut self, key: &str) -> Self {
+            self.key = Some(StyleKey::new(key).unwrap());
+            self
+        }
+
+        fn class(mut self, class: &str) -> Self {
+            self.classes.push(StyleClass::new(class).unwrap());
+            self
+        }
+
+        fn attribute(mut self, name: &str, value: &str) -> Self {
+            self.attributes.push(StyleAttribute::new(
+                StyleAttributeName::new(name).unwrap(),
+                StyleAttributeValue::new(value).unwrap(),
+            ));
+            self
+        }
+
+        fn state(mut self, state: StyleState) -> Self {
+            self.state = state;
+            self
+        }
+
+        fn children(mut self, children: impl IntoIterator<Item = usize>) -> Self {
+            self.children = children.into_iter().collect();
+            self
+        }
+    }
+
+    struct TestTree {
+        nodes: Vec<TestNode>,
+    }
+
+    impl TestTree {
+        fn new(nodes: Vec<TestNode>) -> Self {
+            Self { nodes }
+        }
+    }
+
+    impl Tree for TestTree {
+        type Id = usize;
+
+        fn version_hint(&self) -> Option<u64> {
+            Some(1)
+        }
+
+        fn node(&self, id: Self::Id) -> Result<Node<Self::Id>> {
+            let node = self.nodes.get(id).ok_or_else(|| {
+                crate::Error::new(crate::ErrorCode::MissingNode, "missing test node")
+            })?;
+            Ok(Node {
+                id: node.id,
+                tag: node.tag.clone(),
+                key: node.key.clone(),
+                classes: node.classes.clone(),
+                attributes: node.attributes.clone(),
+                role: node.role.clone(),
+                state: node.state.clone(),
+                text: false,
+            })
+        }
+
+        fn parent(&self, id: Self::Id, _traversal: Traversal) -> Result<Option<Self::Id>> {
+            Ok(self
+                .nodes
+                .iter()
+                .find(|node| node.children.contains(&id))
+                .map(|node| node.id))
+        }
+
+        fn children(
+            &self,
+            id: Self::Id,
+            _traversal: Traversal,
+        ) -> Result<impl Iterator<Item = Self::Id> + '_> {
+            Ok(self.nodes[id].children.iter().copied())
+        }
+
+        fn previous_sibling(&self, id: Self::Id, traversal: Traversal) -> Result<Option<Self::Id>> {
+            let Some(parent) = self.parent(id, traversal)? else {
+                return Ok(None);
+            };
+            let siblings = &self.nodes[parent].children;
+            Ok(siblings
+                .iter()
+                .position(|sibling| *sibling == id)
+                .and_then(|index| index.checked_sub(1))
+                .map(|index| siblings[index]))
+        }
+    }
 }
