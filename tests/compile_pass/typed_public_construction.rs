@@ -1,18 +1,20 @@
 use surgeist_style::{
     AlignContent, AlignItems, Alpha, AnimationNameList, AspectRatio, AttributeCaseSensitivity,
     AttributeMatcher, AttributeSelector, AuthoredDeclaration, AuthoredDeclarations,
-    AuthoredProperty, AuthoredTokens, AuthoredValue, Change, Color, ColorComponent, Combinator,
-    ContentVisibility, Context, CssPx, CssWideKeyword, CustomPropertyName,
+    AuthoredProperty, AuthoredTokens, AuthoredValue, Border, BorderLineStyle, BorderRadii,
+    BorderStyles, Change, Color, ColorComponent, Combinator, ContentVisibility, Context,
+    CornerRadius, CssPx, CssWideKeyword, CustomPropertyName,
     CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
     DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
     FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
     LayerOrder, LayoutPosition, Length, LetterSpacing, LetterSpacingLength, Node, NthPattern,
-    NthSelector, Opacity, Order, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Property,
-    PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
+    NthSelector, Opacity, Order, Outline, OutlineStyle, OutlineWidth, OutlineWidthLength,
+    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Property, PseudoClassSelector,
+    PseudoElement, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
     RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
-    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole, StyleState, StyleTag,
-    TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
+    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole, StyleState,
+    StyleTag, TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
     TextDecorationStyle, TextDecorationThickness, TextDecorationThicknessLength, TextIndent,
     TextOverflow, TextSlant, TextTransform, TextWrap, Traversal, Tree, TypedDeclaration, Value,
     VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
@@ -145,6 +147,35 @@ fn main() -> surgeist_style::Result<()> {
         .try_padding_right(Length::Px(8.0))?
         .try_border_bottom_width(Length::Px(2.0))?;
     assert_eq!(declarations.len(), 4);
+
+    let border = Border::try_new(
+        Some(Length::Px(2.0)),
+        Some(BorderLineStyle::Solid),
+        Some(StyleColor::current_color()),
+    )?;
+    let border_styles = BorderStyles::new(
+        BorderLineStyle::Solid,
+        BorderLineStyle::Dashed,
+        BorderLineStyle::Dotted,
+        BorderLineStyle::Double,
+    );
+    let corner = CornerRadius::new(Length::Px(4.0), Length::Percent(50.0))?;
+    let radii = BorderRadii::all(corner.clone());
+    let outline = Outline::try_new(
+        Some(OutlineWidth::Length(OutlineWidthLength::new(
+            Length::Px(3.0),
+        )?)),
+        Some(OutlineStyle::Border(BorderLineStyle::Dotted)),
+        Some(StyleColor::current_color()),
+    )?;
+    let declarations = Declarations::new()
+        .try_border(border)?
+        .border_style(border_styles)
+        .try_border_color(StyleColor::current_color())?
+        .try_border_top_left_radius(corner)?
+        .try_border_radius(radii)?
+        .try_outline(outline)?;
+    assert_eq!(declarations.len(), 19);
 
     let declarations = Declarations::new()
         .position(LayoutPosition::Fixed)

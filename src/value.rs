@@ -955,6 +955,328 @@ impl Default for Corners {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BorderLineStyle {
+    None,
+    Hidden,
+    Dotted,
+    Dashed,
+    Solid,
+    Double,
+    Groove,
+    Ridge,
+    Inset,
+    Outset,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BorderSide {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BorderStyles {
+    top: BorderLineStyle,
+    right: BorderLineStyle,
+    bottom: BorderLineStyle,
+    left: BorderLineStyle,
+}
+
+impl BorderStyles {
+    #[must_use]
+    pub const fn new(
+        top: BorderLineStyle,
+        right: BorderLineStyle,
+        bottom: BorderLineStyle,
+        left: BorderLineStyle,
+    ) -> Self {
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+
+    #[must_use]
+    pub const fn top(self) -> BorderLineStyle {
+        self.top
+    }
+
+    #[must_use]
+    pub const fn right(self) -> BorderLineStyle {
+        self.right
+    }
+
+    #[must_use]
+    pub const fn bottom(self) -> BorderLineStyle {
+        self.bottom
+    }
+
+    #[must_use]
+    pub const fn left(self) -> BorderLineStyle {
+        self.left
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Border {
+    width: Option<Length>,
+    style: Option<BorderLineStyle>,
+    color: Option<StyleColor>,
+}
+
+impl Border {
+    pub fn try_new(
+        width: Option<Length>,
+        style: Option<BorderLineStyle>,
+        color: Option<StyleColor>,
+    ) -> Result<Self> {
+        if width.is_none() && style.is_none() && color.is_none() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "border shorthand requires at least one component",
+            ));
+        }
+        if let Some(width) = &width {
+            validate_border_width_length(width)?;
+        }
+        if let Some(color) = &color {
+            color.validate()?;
+        }
+        Ok(Self {
+            width,
+            style,
+            color,
+        })
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> Option<&Length> {
+        self.width.as_ref()
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<BorderLineStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> Option<&StyleColor> {
+        self.color.as_ref()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if let Some(width) = &self.width {
+            validate_border_width_length(width)?;
+        }
+        if let Some(color) = &self.color {
+            color.validate()?;
+        }
+        if self.width.is_some() || self.style.is_some() || self.color.is_some() {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "border shorthand requires at least one component",
+            ))
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CornerRadius {
+    horizontal: Length,
+    vertical: Length,
+}
+
+impl CornerRadius {
+    pub fn new(horizontal: Length, vertical: Length) -> Result<Self> {
+        validate_radius_length(&horizontal)?;
+        validate_radius_length(&vertical)?;
+        Ok(Self {
+            horizontal,
+            vertical,
+        })
+    }
+
+    #[must_use]
+    pub const fn horizontal(&self) -> &Length {
+        &self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(&self) -> &Length {
+        &self.vertical
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        validate_radius_length(&self.horizontal)?;
+        validate_radius_length(&self.vertical)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BorderRadii {
+    top_left: CornerRadius,
+    top_right: CornerRadius,
+    bottom_right: CornerRadius,
+    bottom_left: CornerRadius,
+}
+
+impl BorderRadii {
+    #[must_use]
+    pub fn all(radius: CornerRadius) -> Self {
+        Self {
+            top_left: radius.clone(),
+            top_right: radius.clone(),
+            bottom_right: radius.clone(),
+            bottom_left: radius,
+        }
+    }
+
+    #[must_use]
+    pub const fn new(
+        top_left: CornerRadius,
+        top_right: CornerRadius,
+        bottom_right: CornerRadius,
+        bottom_left: CornerRadius,
+    ) -> Self {
+        Self {
+            top_left,
+            top_right,
+            bottom_right,
+            bottom_left,
+        }
+    }
+
+    #[must_use]
+    pub const fn top_left(&self) -> &CornerRadius {
+        &self.top_left
+    }
+
+    #[must_use]
+    pub const fn top_right(&self) -> &CornerRadius {
+        &self.top_right
+    }
+
+    #[must_use]
+    pub const fn bottom_right(&self) -> &CornerRadius {
+        &self.bottom_right
+    }
+
+    #[must_use]
+    pub const fn bottom_left(&self) -> &CornerRadius {
+        &self.bottom_left
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.top_left.validate()?;
+        self.top_right.validate()?;
+        self.bottom_right.validate()?;
+        self.bottom_left.validate()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum OutlineStyle {
+    Auto,
+    Border(BorderLineStyle),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum OutlineWidth {
+    Thin,
+    Medium,
+    Thick,
+    Length(OutlineWidthLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutlineWidthLength(Length);
+
+impl OutlineWidthLength {
+    pub fn new(length: Length) -> Result<Self> {
+        validate_border_width_length(&length)?;
+        Ok(Self(length))
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &Length {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Outline {
+    width: Option<OutlineWidth>,
+    style: Option<OutlineStyle>,
+    color: Option<StyleColor>,
+}
+
+impl Outline {
+    pub fn try_new(
+        width: Option<OutlineWidth>,
+        style: Option<OutlineStyle>,
+        color: Option<StyleColor>,
+    ) -> Result<Self> {
+        if width.is_none() && style.is_none() && color.is_none() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "outline shorthand requires at least one component",
+            ));
+        }
+        if let Some(color) = &color {
+            color.validate()?;
+        }
+        Ok(Self {
+            width,
+            style,
+            color,
+        })
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> Option<&OutlineWidth> {
+        self.width.as_ref()
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<OutlineStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> Option<&StyleColor> {
+        self.color.as_ref()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if let Some(width) = &self.width {
+            match width {
+                OutlineWidth::Thin | OutlineWidth::Medium | OutlineWidth::Thick => {}
+                OutlineWidth::Length(length) => {
+                    validate_border_width_length(length.length())?;
+                }
+            }
+        }
+        if let Some(color) = &self.color {
+            color.validate()?;
+        }
+        if self.width.is_some() || self.style.is_some() || self.color.is_some() {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "outline shorthand requires at least one component",
+            ))
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 struct StyleStringList(Vec<String>);
 
@@ -1397,6 +1719,14 @@ pub enum Value {
     StyleColor(StyleColor),
     Color(Color),
     Corners(Corners),
+    Border(Border),
+    BorderStyles(BorderStyles),
+    BorderLineStyle(BorderLineStyle),
+    CornerRadius(CornerRadius),
+    BorderRadii(BorderRadii),
+    Outline(Outline),
+    OutlineStyle(OutlineStyle),
+    OutlineWidth(OutlineWidth),
     FontFamilyList(FontFamilyList),
     FontWeight(FontWeight),
     TextSlant(TextSlant),
@@ -1426,6 +1756,9 @@ impl Value {
             Self::StyleColor(_) => Interpolation::Color,
             Self::Color(_) => Interpolation::Color,
             Self::Corners(_) => Interpolation::Corners,
+            Self::CornerRadius(_) => Interpolation::Corners,
+            Self::BorderRadii(_) => Interpolation::Corners,
+            Self::OutlineWidth(_) => Interpolation::Length,
             Self::ShadowList(_) => Interpolation::ShadowList,
             Self::Stroke(_) => Interpolation::Stroke,
             Self::Transform(_) => Interpolation::Transform,
@@ -1477,6 +1810,11 @@ impl Value {
             | Self::GridAreaPlacement(_)
             | Self::GridAutoFlow(_)
             | Self::GridFlowTolerance(_)
+            | Self::Border(_)
+            | Self::BorderStyles(_)
+            | Self::BorderLineStyle(_)
+            | Self::Outline(_)
+            | Self::OutlineStyle(_)
             | Self::FontFamilyList(_)
             | Self::TextSlant(_)
             | Self::FontStretch(_)
@@ -1548,6 +1886,12 @@ impl Value {
             Self::StyleColor(value) => value.validate(),
             Self::Color(value) => value.validate(),
             Self::Corners(value) => value.validate(),
+            Self::Border(value) => value.validate(),
+            Self::BorderStyles(_) | Self::BorderLineStyle(_) => Ok(()),
+            Self::CornerRadius(value) => value.validate(),
+            Self::BorderRadii(value) => value.validate(),
+            Self::Outline(value) => value.validate(),
+            Self::OutlineStyle(_) | Self::OutlineWidth(_) => Ok(()),
             Self::FontFamilyList(values) => values.validate(),
             Self::FontWeight(_)
             | Self::FontStretch(_)
@@ -1616,6 +1960,57 @@ fn validate_text_decoration_thickness_length(length: &Length) -> Result<()> {
             ErrorCode::InvalidValue,
             "text-decoration-thickness accepts only non-negative thickness lengths",
         )),
+    }
+}
+
+pub(crate) fn validate_border_width_length(length: &Length) -> Result<()> {
+    match length {
+        Length::Px(_) | Length::Calc(_) => {
+            length.validate()?;
+            validate_non_negative_style_length(length, "border width")
+        }
+        Length::Percent(_)
+        | Length::Auto
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "border width accepts only non-negative non-percentage lengths",
+        )),
+    }
+}
+
+pub(crate) fn validate_radius_length(length: &Length) -> Result<()> {
+    match length {
+        Length::Px(_) | Length::Percent(_) | Length::Calc(_) => {
+            length.validate()?;
+            validate_non_negative_style_length(length, "corner radius")
+        }
+        Length::Auto
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "corner radius accepts only non-negative length or percentage values",
+        )),
+    }
+}
+
+fn validate_non_negative_style_length(length: &Length, field: &'static str) -> Result<()> {
+    match length {
+        Length::Px(value) | Length::Percent(value) if *value < 0.0 => Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{field} must be non-negative"),
+        )),
+        Length::Calc(calc) if calc_is_definitely_negative(calc) => Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{field} must be non-negative"),
+        )),
+        _ => Ok(()),
     }
 }
 

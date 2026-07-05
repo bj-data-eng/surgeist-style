@@ -4,13 +4,14 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, CalcLength, CalcLengthTerm, Color, ColorFunction,
-    ColorInterpolationSpace, ColorMix, ContentVisibility, Corners, Cursor, DimensionLength,
-    Display, DurationSeconds, Edges, Flex, FlexFactor, Font, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, GridAreaPlacement, GridAutoFlow, GridDefinition,
-    GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreas,
-    GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing, MaxTrackSizing,
-    MinTrackSizing, Opacity, Order, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
+    AlignContent, AspectRatio, Border, BorderLineStyle, BorderRadii, BorderSide, BorderStyles,
+    CalcLength, CalcLengthTerm, Color, ColorFunction, ColorInterpolationSpace, ColorMix,
+    ContentVisibility, CornerRadius, Cursor, DimensionLength, Display, DurationSeconds, Edges,
+    Flex, FlexFactor, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant,
+    FontWeight, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
+    GridPlacement, GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList,
+    LayoutPosition, Length, LetterSpacing, MaxTrackSizing, MinTrackSizing, Opacity, Order, Outline,
+    OutlineStyle, OutlineWidth, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
     PointerEvents, Property, RelativeColor, Result, ScrollbarWidth, Shadow, Size, StyleColor,
     SubgridLineNameComponent, SymbolicComponentExpression, TextAlignLast, TextDecoration,
     TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
@@ -286,8 +287,8 @@ impl Declarations {
         self.try_set(Property::PaddingLeft, Value::Length(value))
     }
 
-    pub fn try_radius(self, corners: Corners) -> Result<Self> {
-        self.try_set(Property::Radius, Value::Corners(corners))
+    pub fn try_radius(self, radii: BorderRadii) -> Result<Self> {
+        self.try_set(Property::Radius, Value::BorderRadii(radii))
     }
 
     pub fn try_shadow(self, shadow: Shadow) -> Result<Self> {
@@ -314,8 +315,109 @@ impl Declarations {
         self.try_set(Property::BorderLeftWidth, Value::Length(value))
     }
 
-    pub fn try_border_color(self, color: Color) -> Result<Self> {
-        self.try_set(Property::BorderColor, Value::Color(color))
+    pub fn try_border(self, value: Border) -> Result<Self> {
+        self.try_set(Property::Border, Value::Border(value))
+    }
+
+    pub fn try_border_top(self, value: Border) -> Result<Self> {
+        self.try_set(Property::BorderTop, Value::Border(value))
+    }
+
+    pub fn try_border_right(self, value: Border) -> Result<Self> {
+        self.try_set(Property::BorderRight, Value::Border(value))
+    }
+
+    pub fn try_border_bottom(self, value: Border) -> Result<Self> {
+        self.try_set(Property::BorderBottom, Value::Border(value))
+    }
+
+    pub fn try_border_left(self, value: Border) -> Result<Self> {
+        self.try_set(Property::BorderLeft, Value::Border(value))
+    }
+
+    #[must_use]
+    pub fn border_style(self, value: BorderStyles) -> Self {
+        self.set(Property::BorderStyle, Value::BorderStyles(value))
+    }
+
+    #[must_use]
+    pub fn border_top_style(self, value: BorderLineStyle) -> Self {
+        self.set(Property::BorderTopStyle, Value::BorderLineStyle(value))
+    }
+
+    #[must_use]
+    pub fn border_right_style(self, value: BorderLineStyle) -> Self {
+        self.set(Property::BorderRightStyle, Value::BorderLineStyle(value))
+    }
+
+    #[must_use]
+    pub fn border_bottom_style(self, value: BorderLineStyle) -> Self {
+        self.set(Property::BorderBottomStyle, Value::BorderLineStyle(value))
+    }
+
+    #[must_use]
+    pub fn border_left_style(self, value: BorderLineStyle) -> Self {
+        self.set(Property::BorderLeftStyle, Value::BorderLineStyle(value))
+    }
+
+    pub fn try_border_color(self, value: StyleColor) -> Result<Self> {
+        self.try_set(Property::BorderColor, Value::StyleColor(value))
+    }
+
+    pub fn try_border_top_color(self, value: StyleColor) -> Result<Self> {
+        self.try_set(Property::BorderTopColor, Value::StyleColor(value))
+    }
+
+    pub fn try_border_right_color(self, value: StyleColor) -> Result<Self> {
+        self.try_set(Property::BorderRightColor, Value::StyleColor(value))
+    }
+
+    pub fn try_border_bottom_color(self, value: StyleColor) -> Result<Self> {
+        self.try_set(Property::BorderBottomColor, Value::StyleColor(value))
+    }
+
+    pub fn try_border_left_color(self, value: StyleColor) -> Result<Self> {
+        self.try_set(Property::BorderLeftColor, Value::StyleColor(value))
+    }
+
+    pub fn try_border_top_left_radius(self, value: CornerRadius) -> Result<Self> {
+        self.try_set(Property::BorderTopLeftRadius, Value::CornerRadius(value))
+    }
+
+    pub fn try_border_top_right_radius(self, value: CornerRadius) -> Result<Self> {
+        self.try_set(Property::BorderTopRightRadius, Value::CornerRadius(value))
+    }
+
+    pub fn try_border_bottom_right_radius(self, value: CornerRadius) -> Result<Self> {
+        self.try_set(
+            Property::BorderBottomRightRadius,
+            Value::CornerRadius(value),
+        )
+    }
+
+    pub fn try_border_bottom_left_radius(self, value: CornerRadius) -> Result<Self> {
+        self.try_set(Property::BorderBottomLeftRadius, Value::CornerRadius(value))
+    }
+
+    pub fn try_border_radius(self, value: BorderRadii) -> Result<Self> {
+        self.try_set(Property::Radius, Value::BorderRadii(value))
+    }
+
+    pub fn try_outline(self, value: Outline) -> Result<Self> {
+        self.try_set(Property::Outline, Value::Outline(value))
+    }
+
+    pub fn try_outline_color(self, value: StyleColor) -> Result<Self> {
+        self.try_set(Property::OutlineColor, Value::StyleColor(value))
+    }
+
+    #[must_use]
+    pub fn outline_style(self, value: OutlineStyle) -> Self {
+        self.set(Property::OutlineStyle, Value::OutlineStyle(value))
+    }
+
+    pub fn try_outline_width(self, value: OutlineWidth) -> Result<Self> {
+        self.try_set(Property::OutlineWidth, Value::OutlineWidth(value))
     }
 
     #[must_use]
@@ -787,11 +889,68 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::PaddingBottom,
             Property::PaddingLeft,
         ],
+        Property::Border => vec![
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+            Property::BorderTopStyle,
+            Property::BorderRightStyle,
+            Property::BorderBottomStyle,
+            Property::BorderLeftStyle,
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ],
+        Property::BorderColor => vec![
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ],
         Property::BorderWidth => vec![
             Property::BorderTopWidth,
             Property::BorderRightWidth,
             Property::BorderBottomWidth,
             Property::BorderLeftWidth,
+        ],
+        Property::BorderStyle => vec![
+            Property::BorderTopStyle,
+            Property::BorderRightStyle,
+            Property::BorderBottomStyle,
+            Property::BorderLeftStyle,
+        ],
+        Property::BorderTop => vec![
+            Property::BorderTopWidth,
+            Property::BorderTopStyle,
+            Property::BorderTopColor,
+        ],
+        Property::BorderRight => vec![
+            Property::BorderRightWidth,
+            Property::BorderRightStyle,
+            Property::BorderRightColor,
+        ],
+        Property::BorderBottom => vec![
+            Property::BorderBottomWidth,
+            Property::BorderBottomStyle,
+            Property::BorderBottomColor,
+        ],
+        Property::BorderLeft => vec![
+            Property::BorderLeftWidth,
+            Property::BorderLeftStyle,
+            Property::BorderLeftColor,
+        ],
+        Property::Radius => vec![
+            Property::BorderTopLeftRadius,
+            Property::BorderTopRightRadius,
+            Property::BorderBottomRightRadius,
+            Property::BorderBottomLeftRadius,
+        ],
+        Property::Outline => vec![
+            Property::OutlineWidth,
+            Property::OutlineStyle,
+            Property::OutlineColor,
         ],
         Property::MinSize => vec![Property::MinWidth, Property::MinHeight],
         Property::MaxSize => vec![Property::MaxWidth, Property::MaxHeight],
@@ -882,6 +1041,24 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Property::PaddingBottom,
             Property::PaddingLeft,
         ),
+        (Property::Border, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Border),
+            Value::Keyword(keyword),
+        ),
+        (Property::Border, Value::Border(border)) => border_declarations(border),
+        (Property::BorderColor, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderColor),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderColor, Value::StyleColor(color)) => vec![
+            Declaration::new(Property::BorderTopColor, Value::StyleColor(color.clone())),
+            Declaration::new(Property::BorderRightColor, Value::StyleColor(color.clone())),
+            Declaration::new(
+                Property::BorderBottomColor,
+                Value::StyleColor(color.clone()),
+            ),
+            Declaration::new(Property::BorderLeftColor, Value::StyleColor(color)),
+        ],
         (Property::BorderWidth, Value::Keyword(keyword)) => same_value_declarations(
             canonical_properties(Property::BorderWidth),
             Value::Keyword(keyword),
@@ -893,6 +1070,83 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Property::BorderBottomWidth,
             Property::BorderLeftWidth,
         ),
+        (Property::BorderStyle, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderStyle),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderStyle, Value::BorderStyles(styles)) => vec![
+            Declaration::new(
+                Property::BorderTopStyle,
+                Value::BorderLineStyle(styles.top()),
+            ),
+            Declaration::new(
+                Property::BorderRightStyle,
+                Value::BorderLineStyle(styles.right()),
+            ),
+            Declaration::new(
+                Property::BorderBottomStyle,
+                Value::BorderLineStyle(styles.bottom()),
+            ),
+            Declaration::new(
+                Property::BorderLeftStyle,
+                Value::BorderLineStyle(styles.left()),
+            ),
+        ],
+        (Property::BorderTop, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderTop),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderTop, Value::Border(border)) => {
+            border_side_declarations(BorderSide::Top, border)
+        }
+        (Property::BorderRight, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderRight),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderRight, Value::Border(border)) => {
+            border_side_declarations(BorderSide::Right, border)
+        }
+        (Property::BorderBottom, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderBottom),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderBottom, Value::Border(border)) => {
+            border_side_declarations(BorderSide::Bottom, border)
+        }
+        (Property::BorderLeft, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderLeft),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderLeft, Value::Border(border)) => {
+            border_side_declarations(BorderSide::Left, border)
+        }
+        (Property::Radius, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Radius),
+            Value::Keyword(keyword),
+        ),
+        (Property::Radius, Value::BorderRadii(radii)) => vec![
+            Declaration::new(
+                Property::BorderTopLeftRadius,
+                Value::CornerRadius(radii.top_left().clone()),
+            ),
+            Declaration::new(
+                Property::BorderTopRightRadius,
+                Value::CornerRadius(radii.top_right().clone()),
+            ),
+            Declaration::new(
+                Property::BorderBottomRightRadius,
+                Value::CornerRadius(radii.bottom_right().clone()),
+            ),
+            Declaration::new(
+                Property::BorderBottomLeftRadius,
+                Value::CornerRadius(radii.bottom_left().clone()),
+            ),
+        ],
+        (Property::Outline, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Outline),
+            Value::Keyword(keyword),
+        ),
+        (Property::Outline, Value::Outline(outline)) => outline_declarations(outline),
         (Property::MinSize, Value::Keyword(keyword)) => same_value_declarations(
             canonical_properties(Property::MinSize),
             Value::Keyword(keyword),
@@ -1218,6 +1472,91 @@ fn edge_declarations(
     ]
 }
 
+fn border_declarations(border: Border) -> Vec<Declaration> {
+    let width = border.width().cloned().unwrap_or_else(default_border_width);
+    let style = border.style().unwrap_or(BorderLineStyle::None);
+    let color = border
+        .color()
+        .cloned()
+        .unwrap_or_else(StyleColor::current_color);
+
+    vec![
+        Declaration::new(Property::BorderTopWidth, Value::Length(width.clone())),
+        Declaration::new(Property::BorderRightWidth, Value::Length(width.clone())),
+        Declaration::new(Property::BorderBottomWidth, Value::Length(width.clone())),
+        Declaration::new(Property::BorderLeftWidth, Value::Length(width)),
+        Declaration::new(Property::BorderTopStyle, Value::BorderLineStyle(style)),
+        Declaration::new(Property::BorderRightStyle, Value::BorderLineStyle(style)),
+        Declaration::new(Property::BorderBottomStyle, Value::BorderLineStyle(style)),
+        Declaration::new(Property::BorderLeftStyle, Value::BorderLineStyle(style)),
+        Declaration::new(Property::BorderTopColor, Value::StyleColor(color.clone())),
+        Declaration::new(Property::BorderRightColor, Value::StyleColor(color.clone())),
+        Declaration::new(
+            Property::BorderBottomColor,
+            Value::StyleColor(color.clone()),
+        ),
+        Declaration::new(Property::BorderLeftColor, Value::StyleColor(color)),
+    ]
+}
+
+fn border_side_declarations(side: BorderSide, border: Border) -> Vec<Declaration> {
+    let width = border.width().cloned().unwrap_or_else(default_border_width);
+    let style = border.style().unwrap_or(BorderLineStyle::None);
+    let color = border
+        .color()
+        .cloned()
+        .unwrap_or_else(StyleColor::current_color);
+    let (width_property, style_property, color_property) = match side {
+        BorderSide::Top => (
+            Property::BorderTopWidth,
+            Property::BorderTopStyle,
+            Property::BorderTopColor,
+        ),
+        BorderSide::Right => (
+            Property::BorderRightWidth,
+            Property::BorderRightStyle,
+            Property::BorderRightColor,
+        ),
+        BorderSide::Bottom => (
+            Property::BorderBottomWidth,
+            Property::BorderBottomStyle,
+            Property::BorderBottomColor,
+        ),
+        BorderSide::Left => (
+            Property::BorderLeftWidth,
+            Property::BorderLeftStyle,
+            Property::BorderLeftColor,
+        ),
+    };
+
+    vec![
+        Declaration::new(width_property, Value::Length(width)),
+        Declaration::new(style_property, Value::BorderLineStyle(style)),
+        Declaration::new(color_property, Value::StyleColor(color)),
+    ]
+}
+
+fn outline_declarations(outline: Outline) -> Vec<Declaration> {
+    let width = outline.width().cloned().unwrap_or(OutlineWidth::Medium);
+    let style = outline
+        .style()
+        .unwrap_or(OutlineStyle::Border(BorderLineStyle::None));
+    let color = outline
+        .color()
+        .cloned()
+        .unwrap_or_else(StyleColor::current_color);
+
+    vec![
+        Declaration::new(Property::OutlineWidth, Value::OutlineWidth(width)),
+        Declaration::new(Property::OutlineStyle, Value::OutlineStyle(style)),
+        Declaration::new(Property::OutlineColor, Value::StyleColor(color)),
+    ]
+}
+
+fn default_border_width() -> Length {
+    Length::Px(3.0)
+}
+
 fn edge_values(
     declarations: &Declarations,
     top: Property,
@@ -1387,6 +1726,38 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::StyleColor(value) => {
             70u8.hash(state);
             hash_style_color(value, state);
+        }
+        Value::Border(value) => {
+            71u8.hash(state);
+            hash_border(value, state);
+        }
+        Value::BorderStyles(value) => {
+            72u8.hash(state);
+            value.hash(state);
+        }
+        Value::BorderLineStyle(value) => {
+            73u8.hash(state);
+            value.hash(state);
+        }
+        Value::CornerRadius(value) => {
+            74u8.hash(state);
+            hash_corner_radius(value, state);
+        }
+        Value::BorderRadii(value) => {
+            75u8.hash(state);
+            hash_border_radii(value, state);
+        }
+        Value::Outline(value) => {
+            76u8.hash(state);
+            hash_outline(value, state);
+        }
+        Value::OutlineStyle(value) => {
+            77u8.hash(state);
+            value.hash(state);
+        }
+        Value::OutlineWidth(value) => {
+            78u8.hash(state);
+            hash_outline_width(value, state);
         }
         Value::WritingMode(value) => {
             33u8.hash(state);
@@ -1667,6 +2038,62 @@ fn hash_text_decoration_thickness(value: &TextDecorationThickness, state: &mut D
         TextDecorationThickness::FromFont => 1u8.hash(state),
         TextDecorationThickness::Length(length) => {
             2u8.hash(state);
+            hash_length(length.length(), state);
+        }
+    }
+}
+
+fn hash_border(value: &Border, state: &mut DefaultHasher) {
+    if let Some(width) = value.width() {
+        true.hash(state);
+        hash_length(width, state);
+    } else {
+        false.hash(state);
+    }
+    value.style().hash(state);
+    if let Some(color) = value.color() {
+        true.hash(state);
+        hash_style_color(color, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_corner_radius(value: &CornerRadius, state: &mut DefaultHasher) {
+    hash_length(value.horizontal(), state);
+    hash_length(value.vertical(), state);
+}
+
+fn hash_border_radii(value: &BorderRadii, state: &mut DefaultHasher) {
+    hash_corner_radius(value.top_left(), state);
+    hash_corner_radius(value.top_right(), state);
+    hash_corner_radius(value.bottom_right(), state);
+    hash_corner_radius(value.bottom_left(), state);
+}
+
+fn hash_outline(value: &Outline, state: &mut DefaultHasher) {
+    if let Some(width) = value.width() {
+        true.hash(state);
+        hash_outline_width(width, state);
+    } else {
+        false.hash(state);
+    }
+    value.style().hash(state);
+    if let Some(color) = value.color() {
+        true.hash(state);
+        hash_style_color(color, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_outline_width(value: &OutlineWidth, state: &mut DefaultHasher) {
+    match value {
+        OutlineWidth::Thin => 0u8.hash(state),
+        OutlineWidth::Medium => 1u8.hash(state),
+        OutlineWidth::Thick => 2u8.hash(state),
+        OutlineWidth::Length(length) => {
+            3u8.hash(state);
             hash_length(length.length(), state);
         }
     }
@@ -2164,11 +2591,12 @@ mod tests {
         ColorInterpolationMethod, ColorInterpolationSpace, ColorMix, ColorMixComponent,
         CssWideKeyword, CustomPropertyName, ErrorCode, Font, FontFeature, FontFeatureSettings,
         FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
-        GridFlowTolerance, LetterSpacing, OverflowWrap, StyleColor, SymbolicComponentExpression,
-        SystemColor, TextAlignLast, TextDecoration, TextDecorationLine,
-        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
-        TextOverflow, TextTransform, TextWrap, VariableExpression, VariableFallback,
-        VariableReference, VerticalAlign, WhiteSpace, WordBreak,
+        GridFlowTolerance, LetterSpacing, OutlineWidthLength, OverflowWrap, StyleColor,
+        SymbolicComponentExpression, SystemColor, TextAlignLast, TextDecoration,
+        TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+        TextDecorationThickness, TextIndent, TextOverflow, TextTransform, TextWrap,
+        VariableExpression, VariableFallback, VariableReference, VerticalAlign, WhiteSpace,
+        WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -2391,6 +2819,423 @@ mod tests {
                 ))
             );
         }
+    }
+
+    #[test]
+    fn border_shorthands_lower_to_side_longhands() {
+        let color = StyleColor::rgba(Color::BLACK);
+        let border = Border::try_new(
+            Some(Length::Px(2.0)),
+            Some(BorderLineStyle::Dashed),
+            Some(color.clone()),
+        )
+        .unwrap();
+
+        let declarations = Declarations::new().try_border(border).unwrap();
+
+        assert_eq!(declarations.get(Property::Border), None);
+        for property in [
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+        ] {
+            assert_eq!(
+                declarations.get(property),
+                Some(&Value::Length(Length::Px(2.0)))
+            );
+        }
+        for property in [
+            Property::BorderTopStyle,
+            Property::BorderRightStyle,
+            Property::BorderBottomStyle,
+            Property::BorderLeftStyle,
+        ] {
+            assert_eq!(
+                declarations.get(property),
+                Some(&Value::BorderLineStyle(BorderLineStyle::Dashed))
+            );
+        }
+        for property in [
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ] {
+            assert_eq!(
+                declarations.get(property),
+                Some(&Value::StyleColor(color.clone()))
+            );
+        }
+    }
+
+    #[test]
+    fn border_style_shorthand_lowers_to_side_styles() {
+        let styles = BorderStyles::new(
+            BorderLineStyle::Solid,
+            BorderLineStyle::Dashed,
+            BorderLineStyle::Dotted,
+            BorderLineStyle::Double,
+        );
+
+        let declarations = Declarations::new().border_style(styles);
+
+        assert_eq!(declarations.get(Property::BorderStyle), None);
+        assert_eq!(
+            declarations.get(Property::BorderTopStyle),
+            Some(&Value::BorderLineStyle(BorderLineStyle::Solid))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderRightStyle),
+            Some(&Value::BorderLineStyle(BorderLineStyle::Dashed))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderBottomStyle),
+            Some(&Value::BorderLineStyle(BorderLineStyle::Dotted))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderLeftStyle),
+            Some(&Value::BorderLineStyle(BorderLineStyle::Double))
+        );
+    }
+
+    #[test]
+    fn border_css_wide_expands_to_all_border_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Border),
+            CssWideKeyword::Unset,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::Border), None);
+        for property in [
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+            Property::BorderTopStyle,
+            Property::BorderRightStyle,
+            Property::BorderBottomStyle,
+            Property::BorderLeftStyle,
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+            );
+        }
+    }
+
+    #[test]
+    fn border_side_css_wide_expands_to_side_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::BorderTop),
+            CssWideKeyword::Inherit,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::BorderTop), None);
+        for property in [
+            Property::BorderTopWidth,
+            Property::BorderTopStyle,
+            Property::BorderTopColor,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Inherit
+                ))
+            );
+        }
+        assert_eq!(canonical.get(Property::BorderRightWidth), None);
+        assert_eq!(canonical.get(Property::BorderRightStyle), None);
+        assert_eq!(canonical.get(Property::BorderRightColor), None);
+    }
+
+    #[test]
+    fn border_style_css_wide_expands_to_side_styles() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::BorderStyle),
+            CssWideKeyword::Inherit,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::BorderStyle), None);
+        for property in [
+            Property::BorderTopStyle,
+            Property::BorderRightStyle,
+            Property::BorderBottomStyle,
+            Property::BorderLeftStyle,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Inherit
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn border_color_shorthand_lowers_to_side_colors() {
+        let color = StyleColor::system(SystemColor::CanvasText);
+
+        let declarations = Declarations::new().try_border_color(color.clone()).unwrap();
+
+        assert_eq!(declarations.get(Property::BorderColor), None);
+        for property in [
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ] {
+            assert_eq!(
+                declarations.get(property),
+                Some(&Value::StyleColor(color.clone()))
+            );
+        }
+    }
+
+    #[test]
+    fn border_color_css_wide_expands_to_side_colors() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::BorderColor),
+            CssWideKeyword::RevertLayer,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::BorderColor), None);
+        for property in [
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::RevertLayer
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn border_radius_shorthand_lowers_to_individual_corners() {
+        let top_left = CornerRadius::new(Length::Px(4.0), Length::Percent(40.0)).unwrap();
+        let top_right = CornerRadius::new(Length::Px(8.0), Length::Percent(50.0)).unwrap();
+        let bottom_right = CornerRadius::new(Length::Px(12.0), Length::Percent(60.0)).unwrap();
+        let bottom_left = CornerRadius::new(Length::Px(16.0), Length::Percent(70.0)).unwrap();
+        let radii = BorderRadii::new(
+            top_left.clone(),
+            top_right.clone(),
+            bottom_right.clone(),
+            bottom_left.clone(),
+        );
+
+        let declarations = Declarations::new().try_border_radius(radii).unwrap();
+
+        assert_eq!(declarations.get(Property::Radius), None);
+        assert_eq!(
+            declarations.get(Property::BorderTopLeftRadius),
+            Some(&Value::CornerRadius(top_left))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderTopRightRadius),
+            Some(&Value::CornerRadius(top_right))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderBottomRightRadius),
+            Some(&Value::CornerRadius(bottom_right))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderBottomLeftRadius),
+            Some(&Value::CornerRadius(bottom_left))
+        );
+    }
+
+    #[test]
+    fn border_radius_css_wide_expands_to_corner_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Radius),
+            CssWideKeyword::RevertLayer,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::Radius), None);
+        for property in [
+            Property::BorderTopLeftRadius,
+            Property::BorderTopRightRadius,
+            Property::BorderBottomRightRadius,
+            Property::BorderBottomLeftRadius,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::RevertLayer
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn outline_shorthand_lowers_to_longhands() {
+        let outline = Outline::try_new(
+            Some(OutlineWidth::Length(
+                OutlineWidthLength::new(Length::Px(3.0)).unwrap(),
+            )),
+            Some(OutlineStyle::Border(BorderLineStyle::Dotted)),
+            Some(StyleColor::current_color()),
+        )
+        .unwrap();
+
+        let declarations = Declarations::new().try_outline(outline).unwrap();
+
+        assert_eq!(declarations.get(Property::Outline), None);
+        assert!(matches!(
+            declarations.get(Property::OutlineWidth),
+            Some(Value::OutlineWidth(OutlineWidth::Length(_)))
+        ));
+        assert_eq!(
+            declarations.get(Property::OutlineStyle),
+            Some(&Value::OutlineStyle(OutlineStyle::Border(
+                BorderLineStyle::Dotted
+            )))
+        );
+        assert_eq!(
+            declarations.get(Property::OutlineColor),
+            Some(&Value::StyleColor(StyleColor::current_color()))
+        );
+    }
+
+    #[test]
+    fn outline_css_wide_expands_to_outline_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Outline),
+            CssWideKeyword::Initial,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::Outline), None);
+        for property in [
+            Property::OutlineWidth,
+            Property::OutlineStyle,
+            Property::OutlineColor,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Initial
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn border_radius_supports_individual_elliptical_corners() {
+        let radius = CornerRadius::new(Length::Px(4.0), Length::Percent(50.0)).unwrap();
+        let declarations = Declarations::new()
+            .try_border_top_left_radius(radius.clone())
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::BorderTopLeftRadius),
+            Some(&Value::CornerRadius(radius))
+        );
+    }
+
+    #[test]
+    fn border_side_shorthand_resets_omitted_components() {
+        let border = Border::try_new(Some(Length::Px(5.0)), None, None).unwrap();
+        let declarations = Declarations::new()
+            .try_border_top_width(Length::Px(9.0))
+            .unwrap()
+            .border_top_style(BorderLineStyle::Dashed)
+            .try_border_top_color(StyleColor::system(SystemColor::LinkText))
+            .unwrap()
+            .try_border_top(border)
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::BorderTopWidth),
+            Some(&Value::Length(Length::Px(5.0)))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderTopStyle),
+            Some(&Value::BorderLineStyle(BorderLineStyle::None))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderTopColor),
+            Some(&Value::StyleColor(StyleColor::current_color()))
+        );
+        assert_eq!(declarations.get(Property::BorderRightWidth), None);
+        assert_eq!(declarations.get(Property::BorderRightStyle), None);
+        assert_eq!(declarations.get(Property::BorderRightColor), None);
+    }
+
+    #[test]
+    fn border_shorthand_resets_omitted_components_to_defaults() {
+        let border = Border::try_new(Some(Length::Px(5.0)), None, None).unwrap();
+        let declarations = Declarations::new()
+            .border_top_style(BorderLineStyle::Dashed)
+            .try_border_top_color(StyleColor::system(SystemColor::LinkText))
+            .unwrap()
+            .try_border(border)
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::BorderTopWidth),
+            Some(&Value::Length(Length::Px(5.0)))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderTopStyle),
+            Some(&Value::BorderLineStyle(BorderLineStyle::None))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderTopColor),
+            Some(&Value::StyleColor(StyleColor::current_color()))
+        );
+    }
+
+    #[test]
+    fn outline_shorthand_resets_omitted_components_to_defaults() {
+        let outline = Outline::try_new(Some(OutlineWidth::Thick), None, None).unwrap();
+        let declarations = Declarations::new()
+            .outline_style(OutlineStyle::Auto)
+            .try_outline_color(StyleColor::system(SystemColor::LinkText))
+            .unwrap()
+            .try_outline(outline)
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::OutlineWidth),
+            Some(&Value::OutlineWidth(OutlineWidth::Thick))
+        );
+        assert_eq!(
+            declarations.get(Property::OutlineStyle),
+            Some(&Value::OutlineStyle(OutlineStyle::Border(
+                BorderLineStyle::None
+            )))
+        );
+        assert_eq!(
+            declarations.get(Property::OutlineColor),
+            Some(&Value::StyleColor(StyleColor::current_color()))
+        );
     }
 
     #[test]

@@ -4,14 +4,15 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword,
-    Cursor, Declarations, Display, Edges, FlexFactor, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
-    OverflowWrap, PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth,
-    SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine,
-    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, Transform, Traversal, Tree, Value, Version, VerticalAlign, Viewport,
-    Visibility, WhiteSpace, WordBreak, ZIndex, declaration::hash_value,
+    AlignContent, AspectRatio, BorderLineStyle, BorderRadii, Condition, Container,
+    ContentVisibility, CornerRadius, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges,
+    FlexFactor, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
+    LayoutPosition, Length, LetterSpacing, Order, OutlineStyle, OutlineWidth, OverflowWrap,
+    PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet,
+    Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine, TextDecorationStyle,
+    TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+    Transform, Traversal, Tree, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace,
+    WordBreak, ZIndex, declaration::hash_value,
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -138,10 +139,43 @@ impl Resolved {
 
     #[must_use]
     pub fn radius_corners(&self) -> Corners {
-        match self.get(Property::Radius) {
-            Value::Corners(corners) => corners.clone(),
-            _ => Corners::default(),
-        }
+        let radii = self.border_radii();
+        Corners::new(
+            radii.top_left().horizontal().clone(),
+            radii.top_right().horizontal().clone(),
+            radii.bottom_right().horizontal().clone(),
+            radii.bottom_left().horizontal().clone(),
+        )
+    }
+
+    #[must_use]
+    pub fn border_radii(&self) -> BorderRadii {
+        BorderRadii::new(
+            self.border_top_left_radius().clone(),
+            self.border_top_right_radius().clone(),
+            self.border_bottom_right_radius().clone(),
+            self.border_bottom_left_radius().clone(),
+        )
+    }
+
+    #[must_use]
+    pub fn border_top_left_radius(&self) -> &CornerRadius {
+        self.corner_radius_or(Property::BorderTopLeftRadius)
+    }
+
+    #[must_use]
+    pub fn border_top_right_radius(&self) -> &CornerRadius {
+        self.corner_radius_or(Property::BorderTopRightRadius)
+    }
+
+    #[must_use]
+    pub fn border_bottom_right_radius(&self) -> &CornerRadius {
+        self.corner_radius_or(Property::BorderBottomRightRadius)
+    }
+
+    #[must_use]
+    pub fn border_bottom_left_radius(&self) -> &CornerRadius {
+        self.corner_radius_or(Property::BorderBottomLeftRadius)
     }
 
     #[must_use]
@@ -351,19 +385,72 @@ impl Resolved {
     #[must_use]
     pub fn border_width_edges(&self) -> Edges {
         Edges::new(
-            self.length_or(Property::BorderTopWidth, Length::ZERO),
-            self.length_or(Property::BorderRightWidth, Length::ZERO),
-            self.length_or(Property::BorderBottomWidth, Length::ZERO),
-            self.length_or(Property::BorderLeftWidth, Length::ZERO),
+            self.length_or(Property::BorderTopWidth, Length::Px(3.0)),
+            self.length_or(Property::BorderRightWidth, Length::Px(3.0)),
+            self.length_or(Property::BorderBottomWidth, Length::Px(3.0)),
+            self.length_or(Property::BorderLeftWidth, Length::Px(3.0)),
         )
     }
 
     #[must_use]
-    pub fn border_color(&self) -> super::Color {
-        match self.get(Property::BorderColor) {
-            Value::Color(color) => *color,
-            _ => super::Color::TRANSPARENT,
+    pub fn border_top_color(&self) -> &StyleColor {
+        self.style_color_or(Property::BorderTopColor)
+    }
+
+    #[must_use]
+    pub fn border_right_color(&self) -> &StyleColor {
+        self.style_color_or(Property::BorderRightColor)
+    }
+
+    #[must_use]
+    pub fn border_bottom_color(&self) -> &StyleColor {
+        self.style_color_or(Property::BorderBottomColor)
+    }
+
+    #[must_use]
+    pub fn border_left_color(&self) -> &StyleColor {
+        self.style_color_or(Property::BorderLeftColor)
+    }
+
+    #[must_use]
+    pub fn border_top_style(&self) -> BorderLineStyle {
+        self.border_line_style_or(Property::BorderTopStyle)
+    }
+
+    #[must_use]
+    pub fn border_right_style(&self) -> BorderLineStyle {
+        self.border_line_style_or(Property::BorderRightStyle)
+    }
+
+    #[must_use]
+    pub fn border_bottom_style(&self) -> BorderLineStyle {
+        self.border_line_style_or(Property::BorderBottomStyle)
+    }
+
+    #[must_use]
+    pub fn border_left_style(&self) -> BorderLineStyle {
+        self.border_line_style_or(Property::BorderLeftStyle)
+    }
+
+    #[must_use]
+    pub fn outline_width(&self) -> &OutlineWidth {
+        match self.get(Property::OutlineWidth) {
+            Value::OutlineWidth(value) => value,
+            _ => unreachable!("resolved outline-width stores an outline width"),
         }
+    }
+
+    #[must_use]
+    pub fn outline_style(&self) -> OutlineStyle {
+        match self.get(Property::OutlineStyle) {
+            Value::OutlineStyle(value) => *value,
+            _ => OutlineStyle::Border(BorderLineStyle::None),
+        }
+    }
+
+    #[must_use]
+    pub fn outline_color(&self) -> &StyleColor {
+        self.style_color_or(Property::OutlineColor)
     }
 
     #[must_use]
@@ -506,6 +593,27 @@ impl Resolved {
         match self.get(property) {
             Value::Length(value) => value.clone(),
             _ => fallback,
+        }
+    }
+
+    fn style_color_or(&self, property: Property) -> &StyleColor {
+        match self.get(property) {
+            Value::StyleColor(value) => value,
+            _ => unreachable!("resolved style color property stores a style color"),
+        }
+    }
+
+    fn border_line_style_or(&self, property: Property) -> BorderLineStyle {
+        match self.get(property) {
+            Value::BorderLineStyle(value) => *value,
+            _ => BorderLineStyle::None,
+        }
+    }
+
+    fn corner_radius_or(&self, property: Property) -> &CornerRadius {
+        match self.get(property) {
+            Value::CornerRadius(value) => value,
+            _ => unreachable!("resolved corner radius property stores a corner radius"),
         }
     }
 

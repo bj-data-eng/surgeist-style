@@ -1,14 +1,15 @@
 use super::{
-    AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, CalcLength, CalcOperator,
-    Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, Flex,
-    FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
-    Order, Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result,
+    AlignContent, AlignItems, AnimationNameList, AspectRatio, Border, BorderLineStyle, BorderRadii,
+    BorderStyles, BoxSizing, CalcLength, CalcOperator, Clear, Color, ContentVisibility,
+    CornerRadius, Direction, Edges, Error, ErrorCode, Flex, FlexDirection, FlexFactor, FlexWrap,
+    Float, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
+    GridFlowTolerance, LayoutPosition, Length, LetterSpacing, Order, Outline, OutlineStyle,
+    OutlineWidth, Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result,
     ScrollbarWidth, StyleColor, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
     TextTransform, TextWrap, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
     ZIndex,
-    value::{validate_font_size_length, validate_line_height_length},
+    value::{validate_border_width_length, validate_font_size_length, validate_line_height_length},
 };
 
 #[non_exhaustive]
@@ -99,14 +100,35 @@ pub enum Property {
     Background,
     Foreground,
     Color,
+    Border,
     BorderColor,
     BorderWidth,
+    BorderStyle,
+    BorderTop,
+    BorderRight,
+    BorderBottom,
+    BorderLeft,
+    BorderTopColor,
+    BorderRightColor,
+    BorderBottomColor,
+    BorderLeftColor,
     BorderTopWidth,
     BorderRightWidth,
     BorderBottomWidth,
     BorderLeftWidth,
-    BorderStyle,
+    BorderTopStyle,
+    BorderRightStyle,
+    BorderBottomStyle,
+    BorderLeftStyle,
     Radius,
+    BorderTopLeftRadius,
+    BorderTopRightRadius,
+    BorderBottomRightRadius,
+    BorderBottomLeftRadius,
+    Outline,
+    OutlineColor,
+    OutlineStyle,
+    OutlineWidth,
     Shadow,
     Opacity,
     Visibility,
@@ -231,14 +253,35 @@ impl Property {
         Self::Background,
         Self::Foreground,
         Self::Color,
+        Self::Border,
         Self::BorderColor,
         Self::BorderWidth,
+        Self::BorderStyle,
+        Self::BorderTop,
+        Self::BorderRight,
+        Self::BorderBottom,
+        Self::BorderLeft,
+        Self::BorderTopColor,
+        Self::BorderRightColor,
+        Self::BorderBottomColor,
+        Self::BorderLeftColor,
         Self::BorderTopWidth,
         Self::BorderRightWidth,
         Self::BorderBottomWidth,
         Self::BorderLeftWidth,
-        Self::BorderStyle,
+        Self::BorderTopStyle,
+        Self::BorderRightStyle,
+        Self::BorderBottomStyle,
+        Self::BorderLeftStyle,
         Self::Radius,
+        Self::BorderTopLeftRadius,
+        Self::BorderTopRightRadius,
+        Self::BorderBottomRightRadius,
+        Self::BorderBottomLeftRadius,
+        Self::Outline,
+        Self::OutlineColor,
+        Self::OutlineStyle,
+        Self::OutlineWidth,
         Self::Shadow,
         Self::Opacity,
         Self::Visibility,
@@ -283,7 +326,16 @@ impl Property {
             Self::Inset
                 | Self::Margin
                 | Self::Padding
+                | Self::Border
+                | Self::BorderColor
                 | Self::BorderWidth
+                | Self::BorderStyle
+                | Self::BorderTop
+                | Self::BorderRight
+                | Self::BorderBottom
+                | Self::BorderLeft
+                | Self::Radius
+                | Self::Outline
                 | Self::Gap
                 | Self::MinSize
                 | Self::MaxSize
@@ -346,9 +398,87 @@ impl Property {
                     .impact(Impact::empty().layout())
                     .interpolation(Interpolation::Length)
             }
-            Self::Radius => Metadata::new(Value::Corners(Corners::default()))
-                .impact(Impact::empty().paint().effect())
-                .interpolation(Interpolation::Corners)
+            Self::Radius => Metadata::new(Value::BorderRadii(BorderRadii::all(
+                CornerRadius::new(Length::ZERO, Length::ZERO).unwrap(),
+            )))
+            .impact(Impact::empty().paint())
+            .interpolation(Interpolation::Corners)
+            .animatable(true),
+            Self::BorderTopLeftRadius
+            | Self::BorderTopRightRadius
+            | Self::BorderBottomRightRadius
+            | Self::BorderBottomLeftRadius => Metadata::new(Value::CornerRadius(
+                CornerRadius::new(Length::ZERO, Length::ZERO).unwrap(),
+            ))
+            .impact(Impact::empty().paint())
+            .interpolation(Interpolation::Corners)
+            .animatable(true),
+            Self::Outline => Metadata::new(Value::Outline(
+                Outline::try_new(
+                    Some(OutlineWidth::Medium),
+                    Some(OutlineStyle::Border(BorderLineStyle::None)),
+                    Some(StyleColor::current_color()),
+                )
+                .unwrap(),
+            ))
+            .impact(Impact::empty().paint()),
+            Self::OutlineWidth => Metadata::new(Value::OutlineWidth(OutlineWidth::Medium))
+                .impact(Impact::empty().paint())
+                .interpolation(Interpolation::Length)
+                .animatable(true),
+            Self::OutlineStyle => Metadata::new(Value::OutlineStyle(OutlineStyle::Border(
+                BorderLineStyle::None,
+            )))
+            .impact(Impact::empty().paint()),
+            Self::OutlineColor => Metadata::new(Value::StyleColor(StyleColor::current_color()))
+                .impact(Impact::empty().paint())
+                .interpolation(Interpolation::Color)
+                .animatable(true),
+            Self::Border
+            | Self::BorderTop
+            | Self::BorderRight
+            | Self::BorderBottom
+            | Self::BorderLeft => Metadata::new(Value::Border(
+                Border::try_new(
+                    Some(Length::Px(3.0)),
+                    Some(BorderLineStyle::None),
+                    Some(StyleColor::current_color()),
+                )
+                .unwrap(),
+            ))
+            .impact(Impact::empty().layout().paint()),
+            Self::BorderStyle => Metadata::new(Value::BorderStyles(BorderStyles::new(
+                BorderLineStyle::None,
+                BorderLineStyle::None,
+                BorderLineStyle::None,
+                BorderLineStyle::None,
+            )))
+            .impact(Impact::empty().layout().paint()),
+            Self::BorderTopStyle
+            | Self::BorderRightStyle
+            | Self::BorderBottomStyle
+            | Self::BorderLeftStyle => Metadata::new(Value::BorderLineStyle(BorderLineStyle::None))
+                .impact(Impact::empty().layout().paint()),
+            Self::BorderColor
+            | Self::BorderTopColor
+            | Self::BorderRightColor
+            | Self::BorderBottomColor
+            | Self::BorderLeftColor => {
+                Metadata::new(Value::StyleColor(StyleColor::current_color()))
+                    .impact(Impact::empty().paint())
+                    .interpolation(Interpolation::Color)
+                    .animatable(true)
+            }
+            Self::BorderWidth => Metadata::new(Value::Edges(Edges::all(Length::Px(3.0))))
+                .impact(Impact::empty().layout().paint())
+                .interpolation(Interpolation::Edges)
+                .animatable(true),
+            Self::BorderTopWidth
+            | Self::BorderRightWidth
+            | Self::BorderBottomWidth
+            | Self::BorderLeftWidth => Metadata::new(Value::Length(Length::Px(3.0)))
+                .impact(Impact::empty().layout().paint())
+                .interpolation(Interpolation::Length)
                 .animatable(true),
             Self::Shadow => Metadata::new(Value::ShadowList(Vec::new()))
                 .impact(Impact::empty().effect().paint())
@@ -432,19 +562,6 @@ impl Property {
             Self::Order => {
                 Metadata::new(Value::Order(Order::default())).impact(Impact::empty().layout())
             }
-            Self::BorderColor => Metadata::new(Value::Color(Color::TRANSPARENT))
-                .impact(Impact::empty().paint())
-                .interpolation(Interpolation::Color)
-                .animatable(true),
-            Self::BorderWidth => Metadata::new(Value::Edges(Edges::default()))
-                .impact(Impact::empty().layout().paint())
-                .interpolation(Interpolation::Edges),
-            Self::BorderTopWidth
-            | Self::BorderRightWidth
-            | Self::BorderBottomWidth
-            | Self::BorderLeftWidth => Metadata::new(Value::Length(Length::ZERO))
-                .impact(Impact::empty().layout().paint())
-                .interpolation(Interpolation::Length),
             Self::Font => Metadata::new(Value::Font(
                 Font::try_new(
                     None,
@@ -626,10 +743,8 @@ impl Property {
             }
             Self::ZIndex => Metadata::new(Value::ZIndex(ZIndex::default()))
                 .impact(Impact::empty().layout().paint()),
-            Self::BorderStyle | Self::Filter => {
-                Metadata::new(Value::Keyword(super::value::Keyword::Initial))
-                    .impact(Impact::empty().layout().paint())
-            }
+            Self::Filter => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
+                .impact(Impact::empty().layout().paint()),
         }
     }
 
@@ -649,7 +764,7 @@ impl Property {
             return true;
         }
         match self {
-            Self::BorderStyle | Self::Filter | Self::TransitionTiming => false,
+            Self::Filter | Self::TransitionTiming => false,
             Self::Display => matches!(value, Value::Display(_)),
             Self::BoxSizing => matches!(value, Value::BoxSizing(_)),
             Self::Position => matches!(value, Value::Position(_)),
@@ -694,6 +809,16 @@ impl Property {
             Self::Inset | Self::Margin | Self::Padding | Self::BorderWidth => {
                 matches!(value, Value::Edges(_))
             }
+            Self::Border
+            | Self::BorderTop
+            | Self::BorderRight
+            | Self::BorderBottom
+            | Self::BorderLeft => matches!(value, Value::Border(_)),
+            Self::BorderStyle => matches!(value, Value::BorderStyles(_)),
+            Self::BorderTopStyle
+            | Self::BorderRightStyle
+            | Self::BorderBottomStyle
+            | Self::BorderLeftStyle => matches!(value, Value::BorderLineStyle(_)),
             Self::Top
             | Self::Right
             | Self::Bottom
@@ -743,11 +868,22 @@ impl Property {
             Self::Opacity | Self::TransitionDuration | Self::TransitionDelay => {
                 matches!(value, Value::Number(_))
             }
-            Self::Background | Self::Color => matches!(value, Value::StyleColor(_)),
-            Self::Foreground | Self::BorderColor | Self::SelectionColor => {
-                matches!(value, Value::Color(_))
+            Self::Background | Self::Color | Self::BorderColor | Self::OutlineColor => {
+                matches!(value, Value::StyleColor(_))
             }
-            Self::Radius => matches!(value, Value::Corners(_)),
+            Self::BorderTopColor
+            | Self::BorderRightColor
+            | Self::BorderBottomColor
+            | Self::BorderLeftColor => matches!(value, Value::StyleColor(_)),
+            Self::Foreground | Self::SelectionColor => matches!(value, Value::Color(_)),
+            Self::Radius => matches!(value, Value::BorderRadii(_)),
+            Self::BorderTopLeftRadius
+            | Self::BorderTopRightRadius
+            | Self::BorderBottomRightRadius
+            | Self::BorderBottomLeftRadius => matches!(value, Value::CornerRadius(_)),
+            Self::Outline => matches!(value, Value::Outline(_)),
+            Self::OutlineStyle => matches!(value, Value::OutlineStyle(_)),
+            Self::OutlineWidth => matches!(value, Value::OutlineWidth(_)),
             Self::Shadow => matches!(value, Value::ShadowList(_)),
             Self::Visibility => matches!(value, Value::Visibility(_)),
             Self::Font => matches!(value, Value::Font(_)),
@@ -797,24 +933,23 @@ impl Property {
                 validate_line_height_length(length)?;
                 validate_non_negative_length(length, self)
             }
-            (Self::Padding | Self::BorderWidth, Value::Edges(edges)) => {
-                validate_non_negative_edges(edges, self)
-            }
+            (Self::Padding, Value::Edges(edges)) => validate_non_negative_edges(edges, self),
+            (Self::BorderWidth, Value::Edges(edges)) => validate_border_width_edges(edges),
             (
-                Self::PaddingTop
-                | Self::PaddingRight
-                | Self::PaddingBottom
-                | Self::PaddingLeft
-                | Self::BorderTopWidth
-                | Self::BorderRightWidth
-                | Self::BorderBottomWidth
-                | Self::BorderLeftWidth,
+                Self::PaddingTop | Self::PaddingRight | Self::PaddingBottom | Self::PaddingLeft,
                 Value::Length(length),
             ) => {
                 validate_normal_length_scope(length, self)?;
                 validate_auto_length_scope(length, self)?;
                 validate_non_negative_length(length, self)
             }
+            (
+                Self::BorderTopWidth
+                | Self::BorderRightWidth
+                | Self::BorderBottomWidth
+                | Self::BorderLeftWidth,
+                Value::Length(length),
+            ) => validate_border_width_length(length),
             (
                 Self::MarginTop | Self::MarginRight | Self::MarginBottom | Self::MarginLeft,
                 Value::Length(length),
@@ -840,12 +975,6 @@ impl Property {
             ) => value.validate(),
             (Self::GridRow | Self::GridColumn, Value::GridPlacement(value)) => value.validate(),
             (Self::GridArea, Value::GridAreaPlacement(value)) => value.validate(),
-            (Self::Radius, Value::Corners(corners)) => {
-                validate_non_negative_length(&corners.top_left, self)?;
-                validate_non_negative_length(&corners.top_right, self)?;
-                validate_non_negative_length(&corners.bottom_right, self)?;
-                validate_non_negative_length(&corners.bottom_left, self)
-            }
             (Self::Opacity, Value::Number(value)) => validate_unit_number(*value, self),
             (Self::TransitionDuration | Self::TransitionDelay, Value::Number(value)) => {
                 validate_non_negative_number(*value, self)
@@ -860,6 +989,13 @@ fn validate_non_negative_edges(edges: &Edges, property: Property) -> Result<()> 
     validate_non_negative_length(&edges.right, property)?;
     validate_non_negative_length(&edges.bottom, property)?;
     validate_non_negative_length(&edges.left, property)
+}
+
+fn validate_border_width_edges(edges: &Edges) -> Result<()> {
+    validate_border_width_length(&edges.top)?;
+    validate_border_width_length(&edges.right)?;
+    validate_border_width_length(&edges.bottom)?;
+    validate_border_width_length(&edges.left)
 }
 
 fn validate_normal_length_scope(length: &Length, property: Property) -> Result<()> {
@@ -1056,6 +1192,14 @@ fn value_kind(value: &Value) -> &'static str {
         Value::StyleColor(_) => "style color",
         Value::Color(_) => "color",
         Value::Corners(_) => "corners",
+        Value::Border(_) => "border shorthand",
+        Value::BorderStyles(_) => "border styles",
+        Value::BorderLineStyle(_) => "border line style",
+        Value::CornerRadius(_) => "corner radius",
+        Value::BorderRadii(_) => "border radii",
+        Value::Outline(_) => "outline shorthand",
+        Value::OutlineStyle(_) => "outline style",
+        Value::OutlineWidth(_) => "outline width",
         Value::FontFamilyList(_) => "font family list",
         Value::FontWeight(_) => "font weight",
         Value::TextSlant(_) => "font style",
