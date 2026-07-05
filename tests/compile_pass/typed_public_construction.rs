@@ -1,8 +1,9 @@
 use surgeist_style::{
     AnimationNameList, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue,
     AuthoredTokens, Color, CssPx, CssWideKeyword, CustomPropertyName, Declarations,
-    DimensionLength, DurationSeconds, FontFamilyList, GridTrackList, LayerOrder, Opacity, Property,
-    RulePrecedence, SourceOrder, TypedDeclaration, Value,
+    DimensionLength, DurationSeconds, FontFamilyList, GridTrackList, LayerOrder, Length, Opacity,
+    Property, RulePrecedence, SourceOrder, TypedDeclaration, Value, VariableDependentValue,
+    VariableExpression, VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -38,6 +39,40 @@ fn main() -> surgeist_style::Result<()> {
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");
     assert_eq!(custom_name.as_str(), "--brand");
     assert_eq!(authored_tokens.as_css(), "var(--brand, #000)");
+
+    let space_name = CustomPropertyName::try_new("--space")?;
+    let variable_gap = VariableDependentValue::try_new(
+        Property::Gap,
+        AuthoredTokens::new("var(--space, 8px)"),
+        VariableExpression::Reference(VariableReference::new(
+            space_name,
+            Some(VariableFallback::new(
+                AuthoredTokens::new("8px"),
+                VariableExpression::Value(Value::Length(Length::px(8.0))),
+            )),
+        )),
+    )?;
+    assert_eq!(variable_gap.property(), Property::Gap);
+    assert_eq!(variable_gap.dependencies().len(), 1);
+
+    let nested_fallback_width = VariableDependentValue::try_new(
+        Property::Width,
+        AuthoredTokens::new("var(--space, var(--fallback, 4px))"),
+        VariableExpression::Reference(VariableReference::new(
+            CustomPropertyName::try_new("--space")?,
+            Some(VariableFallback::new(
+                AuthoredTokens::new("var(--fallback, 4px)"),
+                VariableExpression::Reference(VariableReference::new(
+                    CustomPropertyName::try_new("--fallback")?,
+                    Some(VariableFallback::new(
+                        AuthoredTokens::new("4px"),
+                        VariableExpression::Value(Value::Length(Length::px(4.0))),
+                    )),
+                )),
+            )),
+        )),
+    )?;
+    assert_eq!(nested_fallback_width.dependencies().len(), 2);
 
     let mut authored = AuthoredDeclarations::new();
     authored.push(AuthoredDeclaration::css_wide(
