@@ -679,7 +679,7 @@ count_ledger_rows() {
     $0 == "## " section { in_section = 1; next }
     in_section && /^## / { in_section = 0 }
     in_section && /^\|/ && $0 !~ /\| ---/ { rows++ }
-    END { print rows > 0 ? rows - 1 : 0 }
+    END { print (rows > 0 ? rows - 1 : 0) }
   ' "$ledger"
 }
 printf "CSS Rule Ledger row count: "
