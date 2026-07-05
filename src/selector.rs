@@ -440,6 +440,7 @@ pub struct Compound {
     attributes: Vec<AttributeSelector>,
     pseudo_classes: Vec<PseudoClassSelector>,
     position: Option<PositionSelector>,
+    scope_anchor: bool,
 }
 
 impl Compound {
@@ -491,6 +492,12 @@ impl Compound {
     }
 
     #[must_use]
+    pub const fn scope_anchor(mut self) -> Self {
+        self.scope_anchor = true;
+        self
+    }
+
+    #[must_use]
     pub fn pseudo(mut self, pseudo_class: PseudoClassSelector) -> Self {
         self.pseudo_classes.push(pseudo_class);
         self
@@ -524,6 +531,9 @@ impl Compound {
     ) -> Result<bool> {
         let id = context.subject();
         let traversal = context.traversal();
+        if self.scope_anchor && !matches_scope(context) {
+            return Ok(false);
+        }
         let node = tree.node(id)?;
         if self
             .tag
@@ -694,6 +704,8 @@ pub enum Combinator {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PseudoClassSelector {
+    Root,
+    Scope,
     Runtime(RuntimePseudoClass),
     Structural(StructuralSelector),
     SelectorList(SelectorListPseudoClass),
@@ -724,6 +736,8 @@ impl PseudoClassSelector {
     pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
         let id = context.subject();
         match self {
+            Self::Root => matches_root(tree, context),
+            Self::Scope => Ok(matches_scope(context)),
             Self::Runtime(pseudo_class) => {
                 runtime_state_matches(tree, id, pseudo_class.state_flag())
             }
@@ -736,6 +750,7 @@ impl PseudoClassSelector {
     #[must_use]
     pub fn specificity(&self) -> SelectorSpecificity {
         match self {
+            Self::Root | Self::Scope => SelectorSpecificity::new(0, 1, 0),
             Self::Runtime(_) => SelectorSpecificity::new(0, 1, 0),
             Self::Structural(selector) => selector.specificity(),
             Self::SelectorList(selector) => selector.specificity(),
@@ -870,6 +885,23 @@ impl RuntimePseudoClass {
 
 fn runtime_state_matches<T: Tree>(tree: &T, id: T::Id, flag: StateFlag) -> Result<bool> {
     Ok(tree.node(id)?.has_state(flag))
+}
+
+fn matches_root<T: Tree>(tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+    let id = context.subject();
+    if let Some(root) = context.root() {
+        return Ok(id == root);
+    }
+    let mut root = id;
+    while let Some(parent) = tree.parent(root, context.traversal())? {
+        root = parent;
+    }
+    Ok(id == root)
+}
+
+fn matches_scope<Id: Copy + Eq>(context: SelectorMatchContext<Id>) -> bool {
+    let id = context.subject();
+    context.scope().is_none_or(|scope| id == scope)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1765,6 +1797,85 @@ mod tests {
 
         assert!(selector.matches(&tree, 0, Traversal::Canonical).unwrap());
         assert_eq!(selector.specificity(), SelectorSpecificity::new(0, 2, 0));
+    }
+
+    #[test]
+    fn root_and_scope_pseudo_classes_use_match_context() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("root").children([1]),
+            TestNode::new(1).tag("section").children([2]),
+            TestNode::new(2).tag("button"),
+        ]);
+
+        let context = SelectorMatchContext::new(2, Traversal::Canonical)
+            .with_root(0)
+            .with_scope(1);
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::Root)
+                .matches_with_context(&tree, context.with_subject(0))
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::Root)
+                .matches_with_context(&tree, context.with_subject(1))
+                .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::Scope)
+                .matches_with_context(&tree, context.with_subject(1))
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::Scope)
+                .matches_with_context(&tree, context.with_subject(2))
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn root_and_scope_pseudo_classes_use_fallbacks_without_match_context() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("root").children([1]),
+            TestNode::new(1).tag("section").children([2]),
+            TestNode::new(2).tag("button"),
+        ]);
+        let root = Selector::pseudo(PseudoClassSelector::Root);
+        let scope = Selector::pseudo(PseudoClassSelector::Scope);
+
+        assert!(root.matches(&tree, 0, Traversal::Canonical).unwrap());
+        assert!(!root.matches(&tree, 1, Traversal::Canonical).unwrap());
+        assert!(scope.matches(&tree, 2, Traversal::Canonical).unwrap());
+    }
+
+    #[test]
+    fn compound_scope_anchor_matches_scope_node() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("root").children([1]),
+            TestNode::new(1).tag("section").class("scope"),
+        ]);
+        let selector = Selector::compound()
+            .scope_anchor()
+            .class("scope")
+            .unwrap()
+            .selector();
+
+        assert!(
+            selector
+                .matches_with_context(
+                    &tree,
+                    SelectorMatchContext::new(1, Traversal::Canonical).with_scope(1),
+                )
+                .unwrap()
+        );
+        assert!(
+            !selector
+                .matches_with_context(
+                    &tree,
+                    SelectorMatchContext::new(0, Traversal::Canonical).with_scope(1),
+                )
+                .unwrap()
+        );
     }
 
     #[test]

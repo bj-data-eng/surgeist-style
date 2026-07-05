@@ -5,8 +5,8 @@ use std::{
 
 use super::{
     Condition, Container, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges, Length,
-    PointerEvents, Property, Result, RulePrecedence, Sheet, Size, Transform, Traversal, Tree,
-    Value, Version, Viewport, Visibility, declaration::hash_value,
+    PointerEvents, Property, Result, RulePrecedence, SelectorMatchContext, Sheet, Size, Transform,
+    Traversal, Tree, Value, Version, Viewport, Visibility, declaration::hash_value,
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -283,6 +283,8 @@ pub struct Context<'a, T: Tree> {
     pub parent: Option<&'a Resolved>,
     pub local: Option<&'a Declarations>,
     pub animated: Option<&'a Declarations>,
+    selector_root: Option<T::Id>,
+    selector_scope: Option<T::Id>,
 }
 
 impl<'a, T: Tree> Context<'a, T> {
@@ -297,6 +299,8 @@ impl<'a, T: Tree> Context<'a, T> {
             parent: None,
             local: None,
             animated: None,
+            selector_root: None,
+            selector_scope: None,
         }
     }
 
@@ -333,6 +337,18 @@ impl<'a, T: Tree> Context<'a, T> {
     #[must_use]
     pub const fn animated(mut self, animated: &'a Declarations) -> Self {
         self.animated = Some(animated);
+        self
+    }
+
+    #[must_use]
+    pub const fn selector_root(mut self, root: T::Id) -> Self {
+        self.selector_root = Some(root);
+        self
+    }
+
+    #[must_use]
+    pub const fn selector_scope(mut self, scope: T::Id) -> Self {
+        self.selector_scope = Some(scope);
         self
     }
 }
@@ -409,9 +425,16 @@ impl Resolver {
             if !Condition::matches_all(rule.conditions(), context.viewport, context.container) {
                 continue;
             }
+            let mut selector_context = SelectorMatchContext::new(context.node, context.traversal);
+            if let Some(root) = context.selector_root {
+                selector_context = selector_context.with_root(root);
+            }
+            if let Some(scope) = context.selector_scope {
+                selector_context = selector_context.with_scope(scope);
+            }
             if rule
                 .selector()
-                .matches(context.tree, context.node, context.traversal)?
+                .matches_with_context(context.tree, selector_context)?
             {
                 for declaration in rule.declaration_items() {
                     let candidate = RuleCandidate::try_from_declaration(
@@ -503,6 +526,8 @@ impl Resolver {
             .animated
             .map(Declarations::fingerprint)
             .hash(&mut hasher);
+        context.selector_root.hash(&mut hasher);
+        context.selector_scope.hash(&mut hasher);
         Ok(Some(CacheKey {
             value: hasher.finish(),
             node: node_hash,
@@ -1110,9 +1135,10 @@ mod tests {
     use super::*;
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
-        Color, CssWideKeyword, CustomPropertyName, CustomPropertyValue, Error, ErrorCode,
-        LayerOrder, Node, RulePrecedence, Selector, SourceOrder, StyleRole, StyleState, StyleTag,
-        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        Color, Combinator, ComplexSelectorPart, CssWideKeyword, CustomPropertyName,
+        CustomPropertyValue, Error, ErrorCode, LayerOrder, Node, RulePrecedence, Selector,
+        SourceOrder, StyleClass, StyleRole, StyleState, StyleTag, VariableDependentValue,
+        VariableExpression, VariableFallback, VariableReference,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -2046,10 +2072,47 @@ mod tests {
         assert_eq!(resolved.text_color(), Color::BLACK);
     }
 
+    #[test]
+    fn resolver_applies_scope_anchor_rules_only_with_matching_selector_scope() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0, "root").children([1, 2]),
+            TestNode::new(1, "section").class("scope").children([3]),
+            TestNode::new(2, "section").class("other").children([4]),
+            TestNode::new(3, "button"),
+            TestNode::new(4, "button"),
+        ]);
+        let selector = Selector::complex([
+            ComplexSelectorPart::root(Selector::compound().scope_anchor().class("scope").unwrap()),
+            ComplexSelectorPart::related(
+                Combinator::Descendant,
+                Selector::compound().tag("button").unwrap(),
+            ),
+        ])
+        .unwrap();
+        let sheet = Sheet::new().rule(
+            selector,
+            Declarations::new()
+                .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                .unwrap(),
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let scoped = resolver
+            .resolve(Context::new(&tree, 3).selector_root(0).selector_scope(1))
+            .unwrap();
+        let unscoped = resolver
+            .resolve(Context::new(&tree, 4).selector_root(0).selector_scope(1))
+            .unwrap();
+
+        assert_eq!(scoped.text_color(), Color::rgba(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(unscoped.text_color(), Color::BLACK);
+    }
+
     #[derive(Clone, Debug)]
     struct TestNode {
         id: usize,
         tag: StyleTag,
+        classes: Vec<StyleClass>,
         children: Vec<usize>,
     }
 
@@ -2058,8 +2121,14 @@ mod tests {
             Self {
                 id,
                 tag: StyleTag::new(tag).unwrap(),
+                classes: Vec::new(),
                 children: Vec::new(),
             }
+        }
+
+        fn class(mut self, class: &str) -> Self {
+            self.classes.push(StyleClass::new(class).unwrap());
+            self
         }
 
         fn children(mut self, children: impl IntoIterator<Item = usize>) -> Self {
@@ -2094,7 +2163,7 @@ mod tests {
                 id: node.id,
                 tag: Some(node.tag.clone()),
                 key: None,
-                classes: Vec::new(),
+                classes: node.classes.clone(),
                 attributes: Vec::new(),
                 role: StyleRole::default(),
                 state: StyleState::default(),
