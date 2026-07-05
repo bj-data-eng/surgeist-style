@@ -4,15 +4,16 @@ use surgeist_style::{
     AuthoredProperty, AuthoredTokens, AuthoredValue, Change, Color, Combinator,
     ContentVisibility, Context, CssPx, CssWideKeyword, CustomPropertyName,
     CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
-    DurationSeconds, Flex, FlexFactor, FontFamilyList, GridTrackList, LayerOrder,
-    LayoutPosition, Length, Node, NthPattern, NthSelector, Opacity, Order,
+    DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
+    FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
+    LayerOrder, LayoutPosition, Length, Node, NthPattern, NthSelector, Opacity, Order,
     PlaceContentAlignment, PlaceItemsAlignment, Property, PseudoClassSelector, PseudoElement,
     RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
     RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
     StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState, StyleTag,
-    Traversal, Tree, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
-    VariableFallback, VariableReference, ZIndex,
+    TextSlant, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
+    VariableExpression, VariableFallback, VariableReference, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -40,6 +41,31 @@ fn main() -> surgeist_style::Result<()> {
             Value::AnimationNameList(AnimationNameList::new(["fade-in"])?),
         )?;
     assert_eq!(declarations.len(), 2);
+
+    let font_features = FontFeatureSettings::features([FontFeature::new(
+        FontFeatureTag::new("kern")?,
+        Some(FontFeatureValue::On),
+    )])?;
+    let font = Font::try_new(
+        Some(TextSlant::Italic),
+        Some(FontVariant::SmallCaps),
+        Some(FontWeight::Bold),
+        Some(FontStretch::Expanded),
+        Length::Px(16.0),
+        Some(Length::Percent(120.0)),
+        FontFamilyList::new(["Inter", "serif"])?,
+    )?;
+    let declarations = Declarations::new()
+        .try_font_family(FontFamilyList::new(["Inter", "serif"])?)?
+        .try_font_size(Length::Px(16.0))?
+        .try_line_height(Length::Percent(120.0))?
+        .font_weight(FontWeight::Bold)
+        .try_font_style(TextSlant::Italic)?
+        .font_stretch(FontStretch::Expanded)
+        .font_variant(FontVariant::SmallCaps)
+        .try_font_feature_settings(font_features)?
+        .try_font(font)?;
+    assert_eq!(declarations.len(), 8);
 
     let declarations = Declarations::new()
         .try_inset_top(Length::Auto)?

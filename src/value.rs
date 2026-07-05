@@ -511,6 +511,273 @@ impl FontFamilyList {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct FontWeightNumber(i32);
+
+impl FontWeightNumber {
+    pub fn new(value: i32) -> Result<Self> {
+        if (1..=1000).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "font weight number must be between 1 and 1000",
+            ))
+        }
+    }
+
+    #[must_use]
+    pub const fn normal() -> Self {
+        Self(400)
+    }
+
+    #[must_use]
+    pub const fn bold() -> Self {
+        Self(700)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+impl Default for FontWeightNumber {
+    fn default() -> Self {
+        Self::normal()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum FontWeight {
+    #[default]
+    Normal,
+    Bold,
+    Bolder,
+    Lighter,
+    Number(FontWeightNumber),
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum FontStretch {
+    #[default]
+    Normal,
+    UltraCondensed,
+    ExtraCondensed,
+    Condensed,
+    SemiCondensed,
+    SemiExpanded,
+    Expanded,
+    ExtraExpanded,
+    UltraExpanded,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum FontVariant {
+    #[default]
+    Normal,
+    SmallCaps,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct FontFeatureTag(String);
+
+impl FontFeatureTag {
+    pub fn new(tag: impl Into<String>) -> Result<Self> {
+        let tag = tag.into();
+        if tag.chars().count() == 4 {
+            Ok(Self(tag))
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "font feature tag must contain exactly four characters",
+            ))
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum FontFeatureValue {
+    On,
+    Off,
+    Integer(i32),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct FontFeature {
+    tag: FontFeatureTag,
+    value: Option<FontFeatureValue>,
+}
+
+impl FontFeature {
+    #[must_use]
+    pub const fn new(tag: FontFeatureTag, value: Option<FontFeatureValue>) -> Self {
+        Self { tag, value }
+    }
+
+    #[must_use]
+    pub const fn tag(&self) -> &FontFeatureTag {
+        &self.tag
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> Option<FontFeatureValue> {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct FontFeatureSettings {
+    kind: FontFeatureSettingsKind,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+enum FontFeatureSettingsKind {
+    Normal,
+    Features(Vec<FontFeature>),
+}
+
+impl Default for FontFeatureSettings {
+    fn default() -> Self {
+        Self::NORMAL
+    }
+}
+
+impl FontFeatureSettings {
+    pub const NORMAL: Self = Self {
+        kind: FontFeatureSettingsKind::Normal,
+    };
+
+    pub fn features(features: impl IntoIterator<Item = FontFeature>) -> Result<Self> {
+        let features = features.into_iter().collect::<Vec<_>>();
+        if features.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "font feature settings must contain at least one feature",
+            ))
+        } else {
+            Ok(Self {
+                kind: FontFeatureSettingsKind::Features(features),
+            })
+        }
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[FontFeature] {
+        match &self.kind {
+            FontFeatureSettingsKind::Normal => &[],
+            FontFeatureSettingsKind::Features(features) => features.as_slice(),
+        }
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.as_slice().is_empty()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Font {
+    style: Option<TextSlant>,
+    variant: Option<FontVariant>,
+    weight: Option<FontWeight>,
+    stretch: Option<FontStretch>,
+    size: Length,
+    line_height: Option<Length>,
+    family: FontFamilyList,
+}
+
+impl Font {
+    pub fn try_new(
+        style: Option<TextSlant>,
+        variant: Option<FontVariant>,
+        weight: Option<FontWeight>,
+        stretch: Option<FontStretch>,
+        size: Length,
+        line_height: Option<Length>,
+        family: FontFamilyList,
+    ) -> Result<Self> {
+        validate_font_size_length(&size)?;
+        if let Some(line_height) = &line_height {
+            validate_line_height_length(line_height)?;
+        }
+        family.validate()?;
+        if family.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "font shorthand requires at least one font family",
+            ));
+        }
+        let font = Self {
+            style,
+            variant,
+            weight,
+            stretch,
+            size,
+            line_height,
+            family,
+        };
+        font.validate()?;
+        Ok(font)
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<TextSlant> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn variant(&self) -> Option<FontVariant> {
+        self.variant
+    }
+
+    #[must_use]
+    pub const fn weight(&self) -> Option<FontWeight> {
+        self.weight
+    }
+
+    #[must_use]
+    pub const fn stretch(&self) -> Option<FontStretch> {
+        self.stretch
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> &Length {
+        &self.size
+    }
+
+    #[must_use]
+    pub const fn line_height(&self) -> Option<&Length> {
+        self.line_height.as_ref()
+    }
+
+    #[must_use]
+    pub const fn family(&self) -> &FontFamilyList {
+        &self.family
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        validate_font_size_length(&self.size)?;
+        if let Some(style) = self.style {
+            validate_slant(style)?;
+        }
+        if let Some(line_height) = &self.line_height {
+            validate_line_height_length(line_height)?;
+        }
+        self.family.validate()
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct AnimationNameList(StyleStringList);
 
@@ -595,6 +862,12 @@ pub enum Value {
     Color(Color),
     Corners(Corners),
     FontFamilyList(FontFamilyList),
+    FontWeight(FontWeight),
+    TextSlant(TextSlant),
+    FontStretch(FontStretch),
+    FontVariant(FontVariant),
+    FontFeatureSettings(FontFeatureSettings),
+    Font(Font),
     AnimationNameList(AnimationNameList),
     PropertyList(Vec<Property>),
     ShadowList(Vec<Shadow>),
@@ -619,7 +892,9 @@ impl Value {
             Self::ShadowList(_) => Interpolation::ShadowList,
             Self::Stroke(_) => Interpolation::Stroke,
             Self::Transform(_) => Interpolation::Transform,
-            Self::FlexFactor(_) | Self::AspectRatio(_) => Interpolation::Number,
+            Self::FlexFactor(_) | Self::AspectRatio(_) | Self::FontWeight(_) => {
+                Interpolation::Number
+            }
             Self::Keyword(_)
             | Self::Display(_)
             | Self::BoxSizing(_)
@@ -652,6 +927,11 @@ impl Value {
             | Self::GridAutoFlow(_)
             | Self::GridFlowTolerance(_)
             | Self::FontFamilyList(_)
+            | Self::TextSlant(_)
+            | Self::FontStretch(_)
+            | Self::FontVariant(_)
+            | Self::FontFeatureSettings(_)
+            | Self::Font(_)
             | Self::AnimationNameList(_)
             | Self::PropertyList(_)
             | Self::Text(_)
@@ -703,6 +983,12 @@ impl Value {
             Self::Color(value) => value.validate(),
             Self::Corners(value) => value.validate(),
             Self::FontFamilyList(values) => values.validate(),
+            Self::FontWeight(_)
+            | Self::FontStretch(_)
+            | Self::FontVariant(_)
+            | Self::FontFeatureSettings(_) => Ok(()),
+            Self::TextSlant(value) => validate_slant(*value),
+            Self::Font(value) => value.validate(),
             Self::AnimationNameList(values) => values.validate(),
             Self::PropertyList(_) => Ok(()),
             Self::ShadowList(shadows) => shadows.iter().try_for_each(|shadow| shadow.validate()),
@@ -2491,6 +2777,33 @@ fn validate_slant(value: TextSlant) -> Result<()> {
     match value {
         TextSlant::Oblique(Some(angle)) => validate_finite(angle, "font oblique angle"),
         TextSlant::Normal | TextSlant::Italic | TextSlant::Oblique(None) => Ok(()),
+    }
+}
+
+pub(crate) fn validate_font_size_length(length: &Length) -> Result<()> {
+    match length {
+        Length::Px(_) | Length::Percent(_) | Length::Calc(_) => length.validate(),
+        Length::Auto
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "font-size accepts only font-size length values",
+        )),
+    }
+}
+
+pub(crate) fn validate_line_height_length(length: &Length) -> Result<()> {
+    match length {
+        Length::Px(_) | Length::Percent(_) | Length::Normal | Length::Calc(_) => length.validate(),
+        Length::Auto | Length::Fill | Length::Fit | Length::MinContent | Length::MaxContent => {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "line-height accepts only line-height length values",
+            ))
+        }
     }
 }
 

@@ -5,7 +5,8 @@ use std::{
 
 use super::{
     AlignContent, AspectRatio, CalcLength, CalcLengthTerm, Color, ContentVisibility, Corners,
-    Cursor, DimensionLength, Display, DurationSeconds, Edges, Flex, FlexFactor, GridAreaPlacement,
+    Cursor, DimensionLength, Display, DurationSeconds, Edges, Flex, FlexFactor, Font,
+    FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
     GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
     GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, MaxTrackSizing,
     MinTrackSizing, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents,
@@ -303,6 +304,44 @@ impl Declarations {
 
     pub fn try_font_size(self, size: Length) -> Result<Self> {
         self.try_set(Property::FontSize, Value::Length(size))
+    }
+
+    pub fn try_font_family(self, family: FontFamilyList) -> Result<Self> {
+        self.try_set(Property::FontFamily, Value::FontFamilyList(family))
+    }
+
+    pub fn try_line_height(self, line_height: Length) -> Result<Self> {
+        self.try_set(Property::LineHeight, Value::Length(line_height))
+    }
+
+    #[must_use]
+    pub fn font_weight(self, weight: FontWeight) -> Self {
+        self.set(Property::FontWeight, Value::FontWeight(weight))
+    }
+
+    pub fn try_font_style(self, style: TextSlant) -> Result<Self> {
+        self.try_set(Property::FontStyle, Value::TextSlant(style))
+    }
+
+    #[must_use]
+    pub fn font_stretch(self, stretch: FontStretch) -> Self {
+        self.set(Property::FontStretch, Value::FontStretch(stretch))
+    }
+
+    #[must_use]
+    pub fn font_variant(self, variant: FontVariant) -> Self {
+        self.set(Property::FontVariant, Value::FontVariant(variant))
+    }
+
+    pub fn try_font_feature_settings(self, settings: FontFeatureSettings) -> Result<Self> {
+        self.try_set(
+            Property::FontFeatureSettings,
+            Value::FontFeatureSettings(settings),
+        )
+    }
+
+    pub fn try_font(self, font: Font) -> Result<Self> {
+        self.try_set(Property::Font, Value::Font(font))
     }
 
     #[must_use]
@@ -664,6 +703,15 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::FlexShrink,
             Property::FlexBasis,
         ],
+        Property::Font => vec![
+            Property::FontStyle,
+            Property::FontVariant,
+            Property::FontWeight,
+            Property::FontStretch,
+            Property::FontSize,
+            Property::LineHeight,
+            Property::FontFamily,
+        ],
         Property::Gap => vec![Property::RowGap, Property::ColumnGap],
         Property::GridTemplate => vec![
             Property::GridTemplateRows,
@@ -812,6 +860,11 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Value::Keyword(keyword),
         ),
         (Property::Flex, Value::Flex(value)) => flex_declarations(value),
+        (Property::Font, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Font),
+            Value::Keyword(keyword),
+        ),
+        (Property::Font, Value::Font(font)) => font_declarations(font),
         (Property::Gap, Value::Keyword(keyword)) => {
             same_value_declarations(canonical_properties(Property::Gap), Value::Keyword(keyword))
         }
@@ -944,6 +997,50 @@ fn flex_declarations(value: Flex) -> Vec<Declaration> {
         Declaration::new(Property::FlexShrink, Value::FlexFactor(shrink)),
         Declaration::new(Property::FlexBasis, Value::Length(basis)),
     ]
+}
+
+fn font_declarations(font: Font) -> Vec<Declaration> {
+    let mut declarations = Vec::new();
+    declarations.push(Declaration::new(
+        Property::FontStyle,
+        Value::TextSlant(font.style().unwrap_or_default()),
+    ));
+    declarations.push(Declaration::new(
+        Property::FontVariant,
+        Value::FontVariant(font.variant().unwrap_or_default()),
+    ));
+    declarations.push(Declaration::new(
+        Property::FontWeight,
+        Value::FontWeight(font.weight().unwrap_or_default()),
+    ));
+    declarations.push(Declaration::new(
+        Property::FontStretch,
+        Value::FontStretch(font.stretch().unwrap_or_default()),
+    ));
+    declarations.push(Declaration::new(
+        Property::FontSize,
+        Value::Length(font.size().clone()),
+    ));
+    declarations.push(Declaration::new(
+        Property::LineHeight,
+        Value::Length(
+            font.line_height()
+                .cloned()
+                .unwrap_or_else(default_line_height),
+        ),
+    ));
+    declarations.push(Declaration::new(
+        Property::FontFamily,
+        Value::FontFamilyList(font.family().clone()),
+    ));
+    declarations
+}
+
+fn default_line_height() -> Length {
+    match Property::LineHeight.metadata().default() {
+        Value::Length(length) => length.clone(),
+        _ => unreachable!("line-height metadata default is a length"),
+    }
 }
 
 fn grid_placement_end_for_shorthand(start: &GridLine, end: GridLine) -> GridLine {
@@ -1189,6 +1286,30 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             7u8.hash(state);
             value.hash(state);
         }
+        Value::FontWeight(value) => {
+            50u8.hash(state);
+            value.hash(state);
+        }
+        Value::TextSlant(value) => {
+            51u8.hash(state);
+            hash_slant(*value, state);
+        }
+        Value::FontStretch(value) => {
+            52u8.hash(state);
+            value.hash(state);
+        }
+        Value::FontVariant(value) => {
+            53u8.hash(state);
+            value.hash(state);
+        }
+        Value::FontFeatureSettings(value) => {
+            54u8.hash(state);
+            value.hash(state);
+        }
+        Value::Font(value) => {
+            55u8.hash(state);
+            hash_font(value, state);
+        }
         Value::AnimationNameList(value) => {
             40u8.hash(state);
             value.hash(state);
@@ -1288,6 +1409,26 @@ fn hash_flex(value: &Flex, state: &mut DefaultHasher) {
             }
         }
     }
+}
+
+fn hash_font(value: &Font, state: &mut DefaultHasher) {
+    if let Some(style) = value.style() {
+        true.hash(state);
+        hash_slant(style, state);
+    } else {
+        false.hash(state);
+    }
+    value.variant().hash(state);
+    value.weight().hash(state);
+    value.stretch().hash(state);
+    hash_length(value.size(), state);
+    if let Some(line_height) = value.line_height() {
+        true.hash(state);
+        hash_length(line_height, state);
+    } else {
+        false.hash(state);
+    }
+    value.family().hash(state);
 }
 
 fn hash_grid_track_list(value: &GridTrackList, state: &mut DefaultHasher) {
@@ -1567,7 +1708,11 @@ fn hash_f32(value: f32, state: &mut DefaultHasher) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, GridFlowTolerance};
+    use crate::{
+        AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, Font, FontFeature,
+        FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
+        FontWeight, FontWeightNumber, GridFlowTolerance,
+    };
 
     fn value_hash(value: &Value) -> u64 {
         let mut hasher = DefaultHasher::new();
@@ -1678,6 +1823,161 @@ mod tests {
                 ))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn font_shorthand_lowers_to_canonical_font_longhands() {
+        let families = FontFamilyList::new(["Inter", "system-ui"]).unwrap();
+        let font = Font::try_new(
+            Some(TextSlant::Italic),
+            Some(FontVariant::SmallCaps),
+            Some(FontWeight::Number(FontWeightNumber::new(650).unwrap())),
+            Some(FontStretch::Condensed),
+            Length::Px(18.0),
+            Some(Length::Percent(125.0)),
+            families.clone(),
+        )
+        .unwrap();
+
+        let declarations = Declarations::new().try_font(font).unwrap();
+
+        assert_eq!(declarations.get(Property::Font), None);
+        assert_eq!(
+            declarations.get(Property::FontStyle),
+            Some(&Value::TextSlant(TextSlant::Italic))
+        );
+        assert_eq!(
+            declarations.get(Property::FontVariant),
+            Some(&Value::FontVariant(FontVariant::SmallCaps))
+        );
+        assert_eq!(
+            declarations.get(Property::FontWeight),
+            Some(&Value::FontWeight(FontWeight::Number(
+                FontWeightNumber::new(650).unwrap()
+            )))
+        );
+        assert_eq!(
+            declarations.get(Property::FontStretch),
+            Some(&Value::FontStretch(FontStretch::Condensed))
+        );
+        assert_eq!(
+            declarations.get(Property::FontSize),
+            Some(&Value::Length(Length::Px(18.0)))
+        );
+        assert_eq!(
+            declarations.get(Property::LineHeight),
+            Some(&Value::Length(Length::Percent(125.0)))
+        );
+        assert_eq!(
+            declarations.get(Property::FontFamily),
+            Some(&Value::FontFamilyList(families))
+        );
+    }
+
+    #[test]
+    fn font_shorthand_resets_omitted_components_to_defaults() {
+        let families = FontFamilyList::new(["Inter"]).unwrap();
+        let font = Font::try_new(
+            None,
+            None,
+            None,
+            None,
+            Length::Px(14.0),
+            None,
+            families.clone(),
+        )
+        .unwrap();
+
+        let declarations = Declarations::new()
+            .try_font_style(TextSlant::Italic)
+            .unwrap()
+            .font_variant(FontVariant::SmallCaps)
+            .font_weight(FontWeight::Bold)
+            .font_stretch(FontStretch::Expanded)
+            .try_line_height(Length::Percent(140.0))
+            .unwrap()
+            .try_font(font)
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::FontStyle),
+            Some(&Value::TextSlant(TextSlant::default()))
+        );
+        assert_eq!(
+            declarations.get(Property::FontVariant),
+            Some(&Value::FontVariant(FontVariant::default()))
+        );
+        assert_eq!(
+            declarations.get(Property::FontWeight),
+            Some(&Value::FontWeight(FontWeight::default()))
+        );
+        assert_eq!(
+            declarations.get(Property::FontStretch),
+            Some(&Value::FontStretch(FontStretch::default()))
+        );
+        assert_eq!(
+            declarations.get(Property::FontSize),
+            Some(&Value::Length(Length::Px(14.0)))
+        );
+        assert_eq!(
+            declarations.get(Property::LineHeight),
+            Some(&Property::LineHeight.metadata().default().clone())
+        );
+        assert_eq!(
+            declarations.get(Property::FontFamily),
+            Some(&Value::FontFamilyList(families))
+        );
+    }
+
+    #[test]
+    fn font_values_validate_css_facing_domains() {
+        assert!(FontWeightNumber::new(1).is_ok());
+        assert!(FontWeightNumber::new(1000).is_ok());
+        assert!(FontWeightNumber::new(0).is_err());
+        assert!(FontWeightNumber::new(1001).is_err());
+
+        assert!(FontFeatureTag::new("kern").is_ok());
+        assert!(FontFeatureTag::new("liga").is_ok());
+        assert!(FontFeatureTag::new("abc").is_err());
+        assert!(FontFeatureTag::new("abcde").is_err());
+
+        let features = FontFeatureSettings::features([FontFeature::new(
+            FontFeatureTag::new("kern").unwrap(),
+            Some(FontFeatureValue::On),
+        )])
+        .unwrap();
+        assert_eq!(features.len(), 1);
+        assert!(FontFeatureSettings::features([]).is_err());
+    }
+
+    #[test]
+    fn font_shorthand_rejects_invalid_length_domains() {
+        let families = FontFamilyList::new(["Inter"]).unwrap();
+        let invalid_size =
+            Font::try_new(None, None, None, None, Length::Auto, None, families.clone())
+                .unwrap_err();
+        assert_eq!(invalid_size.code(), ErrorCode::InvalidValue);
+
+        let invalid_line_height = Font::try_new(
+            None,
+            None,
+            None,
+            None,
+            Length::Px(16.0),
+            Some(Length::Auto),
+            families,
+        )
+        .unwrap_err();
+        assert_eq!(invalid_line_height.code(), ErrorCode::InvalidValue);
+    }
+
+    #[test]
+    fn font_style_builder_rejects_invalid_slant() {
+        let invalid = Declarations::new()
+            .try_font_style(TextSlant::Oblique(Some(f32::NAN)))
+            .unwrap_err();
+
+        assert_eq!(invalid.code(), ErrorCode::InvalidValue);
     }
 
     #[test]

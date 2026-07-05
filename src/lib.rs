@@ -56,15 +56,17 @@ pub use tree::{Node, Traversal, Tree};
 pub use value::{
     AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, Clear, Color,
     ContentVisibility, Corners, CssPx, Cursor, Dash, Decoration, DimensionLength, Direction,
-    Display, DurationSeconds, Edges, Flex, FlexDirection, FlexFactor, FlexWrap, Float,
-    FontFamilyList, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
-    GridPlacement, GridTemplate, GridTemplateAreaRow, GridTemplateAreas, GridTrackComponent,
-    GridTrackList, Keyword, LayoutPosition, Length, LineStyle, MaxTrackSizing, MinTrackSizing,
-    Opacity, Order, Overflow, OverflowAxes, OverflowWrap, PlaceContentAlignment,
-    PlaceItemsAlignment, PointerEvents, ScrollbarWidth, Shadow, SideSet, Size, Stroke, StrokeAlign,
-    StyleTextAlign, SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextSlant,
-    TextValue, TextWeight, TextWrap, TrackRepeat, TrackRepeatCount, TrackSizing, Transform,
-    TransformOp, Value, Visibility, WhiteSpace, WordBreak, WritingMode, ZIndex,
+    Display, DurationSeconds, Edges, Flex, FlexDirection, FlexFactor, FlexWrap, Float, Font,
+    FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
+    FontStretch, FontVariant, FontWeight, FontWeightNumber, GridAreaPlacement, GridAutoFlow,
+    GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow,
+    GridTemplateAreas, GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length,
+    LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Order, Overflow, OverflowAxes,
+    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, ScrollbarWidth,
+    Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign, SubgridLineNameComponent,
+    SubgridLineNameRepeatCount, SubgridTrack, TextSlant, TextValue, TextWeight, TextWrap,
+    TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp, Value, Visibility,
+    WhiteSpace, WordBreak, WritingMode, ZIndex,
 };
 
 #[must_use]

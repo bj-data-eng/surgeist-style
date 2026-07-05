@@ -5,9 +5,10 @@ use std::{
 
 use super::{
     AlignContent, AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword,
-    Cursor, Declarations, Display, Edges, FlexFactor, LayoutPosition, Length, Order, PointerEvents,
-    Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet, Size,
-    StyleBucket, Transform, Traversal, Tree, Value, Version, Viewport, Visibility, ZIndex,
+    Cursor, Declarations, Display, Edges, FlexFactor, FontFamilyList, FontFeatureSettings,
+    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, Order, PointerEvents, Property,
+    Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket,
+    TextSlant, Transform, Traversal, Tree, Value, Version, Viewport, Visibility, ZIndex,
     declaration::hash_value,
 };
 use crate::{
@@ -154,6 +155,62 @@ impl Resolved {
         match self.get(Property::FontSize) {
             Value::Length(value) => value.clone(),
             _ => Length::Px(16.0),
+        }
+    }
+
+    #[must_use]
+    pub fn font_family(&self) -> &FontFamilyList {
+        match self.get(Property::FontFamily) {
+            Value::FontFamilyList(family) => family,
+            _ => unreachable!("resolved font-family stores a font family list"),
+        }
+    }
+
+    #[must_use]
+    pub fn line_height(&self) -> Length {
+        match self.get(Property::LineHeight) {
+            Value::Length(value) => value.clone(),
+            _ => Length::Px(16.0),
+        }
+    }
+
+    #[must_use]
+    pub fn font_weight(&self) -> FontWeight {
+        match self.get(Property::FontWeight) {
+            Value::FontWeight(value) => *value,
+            _ => FontWeight::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn font_style(&self) -> TextSlant {
+        match self.get(Property::FontStyle) {
+            Value::TextSlant(value) => *value,
+            _ => TextSlant::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn font_stretch(&self) -> FontStretch {
+        match self.get(Property::FontStretch) {
+            Value::FontStretch(value) => *value,
+            _ => FontStretch::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn font_variant(&self) -> FontVariant {
+        match self.get(Property::FontVariant) {
+            Value::FontVariant(value) => *value,
+            _ => FontVariant::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn font_feature_settings(&self) -> &FontFeatureSettings {
+        match self.get(Property::FontFeatureSettings) {
+            Value::FontFeatureSettings(value) => value,
+            _ => unreachable!("resolved font-feature-settings stores feature settings"),
         }
     }
 
@@ -1253,11 +1310,13 @@ mod tests {
     use crate::{
         AspectRatio, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
         AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
-        CustomPropertyName, CustomPropertyValue, Error, ErrorCode, Flex, LayerOrder,
-        LayoutPosition, Node, Order, PlaceContentAlignment, RulePrecedence, RuleTarget,
-        ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass,
-        StyleRole, StyleState, StyleTag, VariableDependentValue, VariableExpression,
-        VariableFallback, VariableReference, ZIndex,
+        CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, Flex,
+        FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
+        FontStretch, FontVariant, FontWeight, LayerOrder, LayoutPosition, Node, Order,
+        PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth, Selector,
+        SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState, StyleTag,
+        TextSlant, VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1514,6 +1573,44 @@ mod tests {
         assert_eq!(style.flex_grow(), FlexFactor::one());
         assert_eq!(style.flex_shrink(), FlexFactor::one());
         assert_eq!(style.align_tracks(), AlignContent::SpaceEvenly);
+    }
+
+    #[test]
+    fn resolved_font_getters_return_typed_values() {
+        let features = FontFeatureSettings::features([FontFeature::new(
+            FontFeatureTag::new("kern").unwrap(),
+            Some(FontFeatureValue::On),
+        )])
+        .unwrap();
+
+        let style = resolve_single(
+            Declarations::new()
+                .try_font_family(FontFamilyList::new(["Inter", "serif"]).unwrap())
+                .unwrap()
+                .try_font_size(Length::Px(17.0))
+                .unwrap()
+                .try_line_height(Length::Percent(140.0))
+                .unwrap()
+                .font_weight(FontWeight::Bold)
+                .try_font_style(TextSlant::Oblique(None))
+                .unwrap()
+                .font_stretch(FontStretch::Expanded)
+                .font_variant(FontVariant::SmallCaps)
+                .try_font_feature_settings(features.clone())
+                .unwrap(),
+        );
+
+        assert_eq!(
+            style.font_family().as_slice(),
+            &["Inter".to_string(), "serif".to_string()]
+        );
+        assert_eq!(style.font_size(), Length::Px(17.0));
+        assert_eq!(style.line_height(), Length::Percent(140.0));
+        assert_eq!(style.font_weight(), FontWeight::Bold);
+        assert_eq!(style.font_style(), TextSlant::Oblique(None));
+        assert_eq!(style.font_stretch(), FontStretch::Expanded);
+        assert_eq!(style.font_variant(), FontVariant::SmallCaps);
+        assert_eq!(style.font_feature_settings(), &features);
     }
 
     #[test]

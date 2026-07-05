@@ -1,9 +1,11 @@
 use super::{
     AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, CalcLength, CalcOperator,
     Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, Flex,
-    FlexDirection, FlexFactor, FlexWrap, Float, FontFamilyList, GridFlowTolerance, LayoutPosition,
-    Length, Order, Overflow, PlaceContentAlignment, PlaceItemsAlignment, Result, ScrollbarWidth,
-    StyleTextAlign, Value, Visibility, WritingMode, ZIndex,
+    FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
+    FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, Order,
+    Overflow, PlaceContentAlignment, PlaceItemsAlignment, Result, ScrollbarWidth, StyleTextAlign,
+    TextSlant, Value, Visibility, WritingMode, ZIndex,
+    value::{validate_font_size_length, validate_line_height_length},
 };
 
 #[non_exhaustive]
@@ -100,10 +102,14 @@ pub enum Property {
     Shadow,
     Opacity,
     Visibility,
+    Font,
     FontFamily,
     FontSize,
     FontWeight,
     FontStyle,
+    FontStretch,
+    FontVariant,
+    FontFeatureSettings,
     LineHeight,
     TextWrap,
     WhiteSpace,
@@ -219,10 +225,14 @@ impl Property {
         Self::Shadow,
         Self::Opacity,
         Self::Visibility,
+        Self::Font,
         Self::FontFamily,
         Self::FontSize,
         Self::FontWeight,
         Self::FontStyle,
+        Self::FontStretch,
+        Self::FontVariant,
+        Self::FontFeatureSettings,
         Self::LineHeight,
         Self::TextWrap,
         Self::WhiteSpace,
@@ -263,6 +273,7 @@ impl Property {
                 | Self::PlaceItems
                 | Self::PlaceSelf
                 | Self::Flex
+                | Self::Font
                 | Self::GridTemplate
                 | Self::Grid
                 | Self::GridRow
@@ -410,6 +421,20 @@ impl Property {
             | Self::BorderLeftWidth => Metadata::new(Value::Length(Length::ZERO))
                 .impact(Impact::empty().layout().paint())
                 .interpolation(Interpolation::Length),
+            Self::Font => Metadata::new(Value::Font(
+                Font::try_new(
+                    None,
+                    None,
+                    None,
+                    None,
+                    Length::Px(16.0),
+                    None,
+                    FontFamilyList::new(["serif"]).unwrap(),
+                )
+                .unwrap(),
+            ))
+            .inherited(true)
+            .impact(Impact::empty().text().layout()),
             Self::FontSize | Self::LineHeight => Metadata::new(Value::Length(Length::Px(16.0)))
                 .inherited(true)
                 .impact(Impact::empty().text().layout())
@@ -417,9 +442,25 @@ impl Property {
             Self::FontFamily => Metadata::new(Value::FontFamilyList(FontFamilyList::empty()))
                 .inherited(true)
                 .impact(Impact::empty().text().layout()),
-            Self::FontWeight
-            | Self::FontStyle
-            | Self::TextWrap
+            Self::FontWeight => Metadata::new(Value::FontWeight(FontWeight::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout())
+                .interpolation(Interpolation::Number),
+            Self::FontStyle => Metadata::new(Value::TextSlant(TextSlant::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::FontStretch => Metadata::new(Value::FontStretch(FontStretch::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::FontVariant => Metadata::new(Value::FontVariant(FontVariant::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::FontFeatureSettings => {
+                Metadata::new(Value::FontFeatureSettings(FontFeatureSettings::default()))
+                    .inherited(true)
+                    .impact(Impact::empty().text().layout())
+            }
+            Self::TextWrap
             | Self::WhiteSpace
             | Self::WordBreak
             | Self::OverflowWrap
@@ -540,8 +581,6 @@ impl Property {
         }
         match self {
             Self::BorderStyle
-            | Self::FontWeight
-            | Self::FontStyle
             | Self::TextWrap
             | Self::WhiteSpace
             | Self::WordBreak
@@ -636,7 +675,13 @@ impl Property {
             Self::Radius => matches!(value, Value::Corners(_)),
             Self::Shadow => matches!(value, Value::ShadowList(_)),
             Self::Visibility => matches!(value, Value::Visibility(_)),
+            Self::Font => matches!(value, Value::Font(_)),
             Self::FontFamily => matches!(value, Value::FontFamilyList(_)),
+            Self::FontWeight => matches!(value, Value::FontWeight(_)),
+            Self::FontStyle => matches!(value, Value::TextSlant(_)),
+            Self::FontStretch => matches!(value, Value::FontStretch(_)),
+            Self::FontVariant => matches!(value, Value::FontVariant(_)),
+            Self::FontFeatureSettings => matches!(value, Value::FontFeatureSettings(_)),
             Self::AnimationName => matches!(value, Value::AnimationNameList(_)),
             Self::Cursor => matches!(value, Value::Cursor(_)),
             Self::PointerEvents => matches!(value, Value::PointerEvents(_)),
@@ -663,12 +708,18 @@ impl Property {
                 | Self::FlexBasis
                 | Self::Gap
                 | Self::RowGap
-                | Self::ColumnGap
-                | Self::FontSize
-                | Self::LineHeight,
+                | Self::ColumnGap,
                 Value::Length(length),
             ) => {
                 validate_normal_length_scope(length, self)?;
+                validate_non_negative_length(length, self)
+            }
+            (Self::FontSize, Value::Length(length)) => {
+                validate_font_size_length(length)?;
+                validate_non_negative_length(length, self)
+            }
+            (Self::LineHeight, Value::Length(length)) => {
+                validate_line_height_length(length)?;
                 validate_non_negative_length(length, self)
             }
             (Self::Padding | Self::BorderWidth, Value::Edges(edges)) => {
@@ -916,6 +967,12 @@ fn value_kind(value: &Value) -> &'static str {
         Value::Color(_) => "color",
         Value::Corners(_) => "corners",
         Value::FontFamilyList(_) => "font family list",
+        Value::FontWeight(_) => "font weight",
+        Value::TextSlant(_) => "font style",
+        Value::FontStretch(_) => "font stretch",
+        Value::FontVariant(_) => "font variant",
+        Value::FontFeatureSettings(_) => "font feature settings",
+        Value::Font(_) => "font shorthand",
         Value::AnimationNameList(_) => "animation name list",
         Value::PropertyList(_) => "property list",
         Value::ShadowList(_) => "shadow list",
