@@ -104,18 +104,32 @@ impl Resolved {
 
     #[must_use]
     pub fn padding_edges(&self) -> Edges {
-        match self.get(Property::Padding) {
-            Value::Edges(edges) => edges.clone(),
-            _ => Edges::default(),
-        }
+        Edges::new(
+            self.length_or(Property::PaddingTop, Length::ZERO),
+            self.length_or(Property::PaddingRight, Length::ZERO),
+            self.length_or(Property::PaddingBottom, Length::ZERO),
+            self.length_or(Property::PaddingLeft, Length::ZERO),
+        )
     }
 
     #[must_use]
     pub fn margin_edges(&self) -> Edges {
-        match self.get(Property::Margin) {
-            Value::Edges(edges) => edges.clone(),
-            _ => Edges::default(),
-        }
+        Edges::new(
+            self.length_or(Property::MarginTop, Length::ZERO),
+            self.length_or(Property::MarginRight, Length::ZERO),
+            self.length_or(Property::MarginBottom, Length::ZERO),
+            self.length_or(Property::MarginLeft, Length::ZERO),
+        )
+    }
+
+    #[must_use]
+    pub fn inset_edges(&self) -> Edges {
+        Edges::new(
+            self.length_or(Property::Top, Length::Auto),
+            self.length_or(Property::Right, Length::Auto),
+            self.length_or(Property::Bottom, Length::Auto),
+            self.length_or(Property::Left, Length::Auto),
+        )
     }
 
     #[must_use]
@@ -160,10 +174,12 @@ impl Resolved {
 
     #[must_use]
     pub fn border_width_edges(&self) -> Edges {
-        match self.get(Property::BorderWidth) {
-            Value::Edges(edges) => edges.clone(),
-            _ => Edges::default(),
-        }
+        Edges::new(
+            self.length_or(Property::BorderTopWidth, Length::ZERO),
+            self.length_or(Property::BorderRightWidth, Length::ZERO),
+            self.length_or(Property::BorderBottomWidth, Length::ZERO),
+            self.length_or(Property::BorderLeftWidth, Length::ZERO),
+        )
     }
 
     #[must_use]
@@ -227,6 +243,13 @@ impl Resolved {
         match self.get(Property::Display) {
             Value::Display(display) => *display,
             _ => Display::default(),
+        }
+    }
+
+    fn length_or(&self, property: Property, fallback: Length) -> Length {
+        match self.get(property) {
+            Value::Length(value) => value.clone(),
+            _ => fallback,
         }
     }
 
@@ -1293,6 +1316,13 @@ mod tests {
         resolver.resolve(context).unwrap()
     }
 
+    fn resolve_single(declarations: Declarations) -> Resolved {
+        resolve_child(
+            Sheet::new().rule(Selector::tag("button").unwrap(), declarations),
+            None,
+        )
+    }
+
     fn parent_color(color: Color) -> Resolved {
         let mut parent = Resolved::new();
         parent
@@ -1315,6 +1345,32 @@ mod tests {
         sheet
             .push_authored_rule(Selector::tag("button").unwrap(), declarations, precedence)
             .unwrap();
+    }
+
+    #[test]
+    fn resolved_edge_getters_assemble_side_longhands() {
+        let style = resolve_single(
+            Declarations::new()
+                .try_margin_top(Length::Px(2.0))
+                .unwrap()
+                .try_margin_right(Length::Px(4.0))
+                .unwrap()
+                .try_padding_bottom(Length::Px(6.0))
+                .unwrap()
+                .try_border_left_width(Length::Px(8.0))
+                .unwrap(),
+        );
+
+        assert_eq!(style.margin_edges().top, Length::Px(2.0));
+        assert_eq!(style.margin_edges().right, Length::Px(4.0));
+        assert_eq!(style.margin_edges().bottom, Length::ZERO);
+        assert_eq!(style.margin_edges().left, Length::ZERO);
+
+        assert_eq!(style.padding_edges().top, Length::ZERO);
+        assert_eq!(style.padding_edges().bottom, Length::Px(6.0));
+
+        assert_eq!(style.border_width_edges().left, Length::Px(8.0));
+        assert_eq!(style.inset_edges().top, Length::Auto);
     }
 
     #[test]

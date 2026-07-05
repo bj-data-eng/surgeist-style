@@ -121,7 +121,12 @@ impl Declarations {
     }
 
     fn insert(&mut self, property: Property, value: Value) -> &mut Self {
-        for declaration in canonical_declarations(property, value) {
+        self.insert_validated(canonical_declarations(property, value));
+        self
+    }
+
+    fn insert_validated(&mut self, declarations: Vec<Declaration>) -> &mut Self {
+        for declaration in declarations {
             self.insert_canonical(declaration.property, declaration.value);
         }
         self
@@ -141,7 +146,11 @@ impl Declarations {
 
     pub fn try_insert(&mut self, property: Property, value: Value) -> Result<&mut Self> {
         property.validate_value(&value)?;
-        Ok(self.insert(property, value))
+        let declarations = canonical_declarations(property, value);
+        for declaration in &declarations {
+            declaration.property.validate_value(&declaration.value)?;
+        }
+        Ok(self.insert_validated(declarations))
     }
 
     #[must_use]
@@ -202,6 +211,58 @@ impl Declarations {
         self.try_set(Property::Margin, Value::Edges(edges))
     }
 
+    pub fn try_inset(self, edges: Edges) -> Result<Self> {
+        self.try_set(Property::Inset, Value::Edges(edges))
+    }
+
+    pub fn try_inset_top(self, value: Length) -> Result<Self> {
+        self.try_set(Property::Top, Value::Length(value))
+    }
+
+    pub fn try_inset_right(self, value: Length) -> Result<Self> {
+        self.try_set(Property::Right, Value::Length(value))
+    }
+
+    pub fn try_inset_bottom(self, value: Length) -> Result<Self> {
+        self.try_set(Property::Bottom, Value::Length(value))
+    }
+
+    pub fn try_inset_left(self, value: Length) -> Result<Self> {
+        self.try_set(Property::Left, Value::Length(value))
+    }
+
+    pub fn try_margin_top(self, value: Length) -> Result<Self> {
+        self.try_set(Property::MarginTop, Value::Length(value))
+    }
+
+    pub fn try_margin_right(self, value: Length) -> Result<Self> {
+        self.try_set(Property::MarginRight, Value::Length(value))
+    }
+
+    pub fn try_margin_bottom(self, value: Length) -> Result<Self> {
+        self.try_set(Property::MarginBottom, Value::Length(value))
+    }
+
+    pub fn try_margin_left(self, value: Length) -> Result<Self> {
+        self.try_set(Property::MarginLeft, Value::Length(value))
+    }
+
+    pub fn try_padding_top(self, value: Length) -> Result<Self> {
+        self.try_set(Property::PaddingTop, Value::Length(value))
+    }
+
+    pub fn try_padding_right(self, value: Length) -> Result<Self> {
+        self.try_set(Property::PaddingRight, Value::Length(value))
+    }
+
+    pub fn try_padding_bottom(self, value: Length) -> Result<Self> {
+        self.try_set(Property::PaddingBottom, Value::Length(value))
+    }
+
+    pub fn try_padding_left(self, value: Length) -> Result<Self> {
+        self.try_set(Property::PaddingLeft, Value::Length(value))
+    }
+
     pub fn try_radius(self, corners: Corners) -> Result<Self> {
         self.try_set(Property::Radius, Value::Corners(corners))
     }
@@ -212,6 +273,22 @@ impl Declarations {
 
     pub fn try_border_width(self, edges: Edges) -> Result<Self> {
         self.try_set(Property::BorderWidth, Value::Edges(edges))
+    }
+
+    pub fn try_border_top_width(self, value: Length) -> Result<Self> {
+        self.try_set(Property::BorderTopWidth, Value::Length(value))
+    }
+
+    pub fn try_border_right_width(self, value: Length) -> Result<Self> {
+        self.try_set(Property::BorderRightWidth, Value::Length(value))
+    }
+
+    pub fn try_border_bottom_width(self, value: Length) -> Result<Self> {
+        self.try_set(Property::BorderBottomWidth, Value::Length(value))
+    }
+
+    pub fn try_border_left_width(self, value: Length) -> Result<Self> {
+        self.try_set(Property::BorderLeftWidth, Value::Length(value))
     }
 
     pub fn try_border_color(self, color: Color) -> Result<Self> {
@@ -353,18 +430,24 @@ impl Declarations {
 
     #[must_use]
     pub fn padding_edges(&self) -> Option<Edges> {
-        match self.get(Property::Padding) {
-            Some(Value::Edges(edges)) => Some(edges.clone()),
-            _ => None,
-        }
+        edge_values(
+            self,
+            Property::PaddingTop,
+            Property::PaddingRight,
+            Property::PaddingBottom,
+            Property::PaddingLeft,
+        )
     }
 
     #[must_use]
     pub fn margin_edges(&self) -> Option<Edges> {
-        match self.get(Property::Margin) {
-            Some(Value::Edges(edges)) => Some(edges.clone()),
-            _ => None,
-        }
+        edge_values(
+            self,
+            Property::MarginTop,
+            Property::MarginRight,
+            Property::MarginBottom,
+            Property::MarginLeft,
+        )
     }
 
     #[must_use]
@@ -417,10 +500,13 @@ impl Declarations {
 
     #[must_use]
     pub fn border_width_edges(&self) -> Option<Edges> {
-        match self.get(Property::BorderWidth) {
-            Some(Value::Edges(edges)) => Some(edges.clone()),
-            _ => None,
-        }
+        edge_values(
+            self,
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+        )
     }
 
     #[must_use]
@@ -474,6 +560,30 @@ impl Declarations {
 
 pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
     match property {
+        Property::Inset => vec![
+            Property::Top,
+            Property::Right,
+            Property::Bottom,
+            Property::Left,
+        ],
+        Property::Margin => vec![
+            Property::MarginTop,
+            Property::MarginRight,
+            Property::MarginBottom,
+            Property::MarginLeft,
+        ],
+        Property::Padding => vec![
+            Property::PaddingTop,
+            Property::PaddingRight,
+            Property::PaddingBottom,
+            Property::PaddingLeft,
+        ],
+        Property::BorderWidth => vec![
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+        ],
         Property::MinSize => vec![Property::MinWidth, Property::MinHeight],
         Property::MaxSize => vec![Property::MaxWidth, Property::MaxHeight],
         Property::Overflow => vec![Property::OverflowX, Property::OverflowY],
@@ -507,6 +617,50 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
 
 pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> {
     match (property, value) {
+        (Property::Inset, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Inset),
+            Value::Keyword(keyword),
+        ),
+        (Property::Inset, Value::Edges(edges)) => edge_declarations(
+            edges,
+            Property::Top,
+            Property::Right,
+            Property::Bottom,
+            Property::Left,
+        ),
+        (Property::Margin, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Margin),
+            Value::Keyword(keyword),
+        ),
+        (Property::Margin, Value::Edges(edges)) => edge_declarations(
+            edges,
+            Property::MarginTop,
+            Property::MarginRight,
+            Property::MarginBottom,
+            Property::MarginLeft,
+        ),
+        (Property::Padding, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Padding),
+            Value::Keyword(keyword),
+        ),
+        (Property::Padding, Value::Edges(edges)) => edge_declarations(
+            edges,
+            Property::PaddingTop,
+            Property::PaddingRight,
+            Property::PaddingBottom,
+            Property::PaddingLeft,
+        ),
+        (Property::BorderWidth, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::BorderWidth),
+            Value::Keyword(keyword),
+        ),
+        (Property::BorderWidth, Value::Edges(edges)) => edge_declarations(
+            edges,
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+        ),
         (Property::MinSize, Value::Keyword(keyword)) => same_value_declarations(
             canonical_properties(Property::MinSize),
             Value::Keyword(keyword),
@@ -682,6 +836,43 @@ fn same_value_declarations(properties: Vec<Property>, value: Value) -> Vec<Decla
         .into_iter()
         .map(|property| Declaration::new(property, value.clone()))
         .collect()
+}
+
+fn edge_declarations(
+    edges: Edges,
+    top: Property,
+    right: Property,
+    bottom: Property,
+    left: Property,
+) -> Vec<Declaration> {
+    vec![
+        Declaration::new(top, Value::Length(edges.top)),
+        Declaration::new(right, Value::Length(edges.right)),
+        Declaration::new(bottom, Value::Length(edges.bottom)),
+        Declaration::new(left, Value::Length(edges.left)),
+    ]
+}
+
+fn edge_values(
+    declarations: &Declarations,
+    top: Property,
+    right: Property,
+    bottom: Property,
+    left: Property,
+) -> Option<Edges> {
+    Some(Edges::new(
+        declaration_length(declarations, top)?,
+        declaration_length(declarations, right)?,
+        declaration_length(declarations, bottom)?,
+        declaration_length(declarations, left)?,
+    ))
+}
+
+fn declaration_length(declarations: &Declarations, property: Property) -> Option<Length> {
+    match declarations.get(property) {
+        Some(Value::Length(length)) => Some(length.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
@@ -1275,5 +1466,115 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("grid flow tolerance length"));
+    }
+
+    #[test]
+    fn edge_shorthands_lower_to_side_longhands() {
+        let edges = Edges::new(
+            Length::Px(1.0),
+            Length::Px(2.0),
+            Length::Px(3.0),
+            Length::Px(4.0),
+        );
+
+        let declarations = Declarations::new().try_margin(edges.clone()).unwrap();
+        assert_eq!(declarations.get(Property::Margin), None);
+        assert_eq!(
+            declarations.get(Property::MarginTop),
+            Some(&Value::Length(edges.top.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::MarginRight),
+            Some(&Value::Length(edges.right.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::MarginBottom),
+            Some(&Value::Length(edges.bottom.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::MarginLeft),
+            Some(&Value::Length(edges.left.clone()))
+        );
+
+        let declarations = Declarations::new().try_padding(edges.clone()).unwrap();
+        assert_eq!(declarations.get(Property::Padding), None);
+        assert_eq!(
+            declarations.get(Property::PaddingTop),
+            Some(&Value::Length(edges.top.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::PaddingRight),
+            Some(&Value::Length(edges.right.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::PaddingBottom),
+            Some(&Value::Length(edges.bottom.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::PaddingLeft),
+            Some(&Value::Length(edges.left.clone()))
+        );
+
+        let declarations = Declarations::new().try_border_width(edges.clone()).unwrap();
+        assert_eq!(declarations.get(Property::BorderWidth), None);
+        assert_eq!(
+            declarations.get(Property::BorderTopWidth),
+            Some(&Value::Length(edges.top.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderRightWidth),
+            Some(&Value::Length(edges.right.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderBottomWidth),
+            Some(&Value::Length(edges.bottom.clone()))
+        );
+        assert_eq!(
+            declarations.get(Property::BorderLeftWidth),
+            Some(&Value::Length(edges.left.clone()))
+        );
+
+        let declarations = Declarations::new().try_inset(edges.clone()).unwrap();
+        assert_eq!(declarations.get(Property::Inset), None);
+        assert_eq!(
+            declarations.get(Property::Top),
+            Some(&Value::Length(edges.top))
+        );
+        assert_eq!(
+            declarations.get(Property::Right),
+            Some(&Value::Length(edges.right))
+        );
+        assert_eq!(
+            declarations.get(Property::Bottom),
+            Some(&Value::Length(edges.bottom))
+        );
+        assert_eq!(
+            declarations.get(Property::Left),
+            Some(&Value::Length(edges.left))
+        );
+    }
+
+    #[test]
+    fn edge_shorthands_validate_canonical_longhand_domains() {
+        assert!(
+            Declarations::new()
+                .try_padding(Edges::all(Length::Auto))
+                .is_err()
+        );
+        assert!(
+            Declarations::new()
+                .try_border_width(Edges::all(Length::Normal))
+                .is_err()
+        );
+        assert!(
+            Declarations::new()
+                .try_margin(Edges::all(Length::Normal))
+                .is_err()
+        );
+        assert!(
+            Declarations::new()
+                .try_set(Property::PaddingTop, Value::Color(Color::BLACK))
+                .is_err()
+        );
     }
 }

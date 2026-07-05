@@ -38,6 +38,13 @@ fn main() -> surgeist_style::Result<()> {
         )?;
     assert_eq!(declarations.len(), 2);
 
+    let declarations = Declarations::new()
+        .try_inset_top(Length::Auto)?
+        .try_margin_left(Length::Px(-4.0))?
+        .try_padding_right(Length::Px(8.0))?
+        .try_border_bottom_width(Length::Px(2.0))?;
+    assert_eq!(declarations.len(), 4);
+
     let precedence = RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(8));
     assert_eq!(precedence.layer_order(), LayerOrder::new(2));
 

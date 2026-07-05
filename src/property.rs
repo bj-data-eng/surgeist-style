@@ -12,6 +12,10 @@ pub enum Property {
     BoxSizing,
     Position,
     Inset,
+    Top,
+    Right,
+    Bottom,
+    Left,
     Width,
     Height,
     MinWidth,
@@ -22,7 +26,15 @@ pub enum Property {
     MaxSize,
     AspectRatio,
     Margin,
+    MarginTop,
+    MarginRight,
+    MarginBottom,
+    MarginLeft,
     Padding,
+    PaddingTop,
+    PaddingRight,
+    PaddingBottom,
+    PaddingLeft,
     Overflow,
     OverflowX,
     OverflowY,
@@ -70,6 +82,10 @@ pub enum Property {
     Color,
     BorderColor,
     BorderWidth,
+    BorderTopWidth,
+    BorderRightWidth,
+    BorderBottomWidth,
+    BorderLeftWidth,
     BorderStyle,
     Radius,
     Shadow,
@@ -107,6 +123,10 @@ impl Property {
         Self::BoxSizing,
         Self::Position,
         Self::Inset,
+        Self::Top,
+        Self::Right,
+        Self::Bottom,
+        Self::Left,
         Self::Width,
         Self::Height,
         Self::MinWidth,
@@ -117,7 +137,15 @@ impl Property {
         Self::MaxSize,
         Self::AspectRatio,
         Self::Margin,
+        Self::MarginTop,
+        Self::MarginRight,
+        Self::MarginBottom,
+        Self::MarginLeft,
         Self::Padding,
+        Self::PaddingTop,
+        Self::PaddingRight,
+        Self::PaddingBottom,
+        Self::PaddingLeft,
         Self::Overflow,
         Self::OverflowX,
         Self::OverflowY,
@@ -165,6 +193,10 @@ impl Property {
         Self::Color,
         Self::BorderColor,
         Self::BorderWidth,
+        Self::BorderTopWidth,
+        Self::BorderRightWidth,
+        Self::BorderBottomWidth,
+        Self::BorderLeftWidth,
         Self::BorderStyle,
         Self::Radius,
         Self::Shadow,
@@ -200,7 +232,11 @@ impl Property {
     pub const fn is_canonical(self) -> bool {
         !matches!(
             self,
-            Self::Gap
+            Self::Inset
+                | Self::Margin
+                | Self::Padding
+                | Self::BorderWidth
+                | Self::Gap
                 | Self::MinSize
                 | Self::MaxSize
                 | Self::Overflow
@@ -233,12 +269,27 @@ impl Property {
             Self::Padding => Metadata::new(Value::Edges(Edges::default()))
                 .impact(Impact::empty().layout())
                 .interpolation(Interpolation::Edges),
+            Self::PaddingTop | Self::PaddingRight | Self::PaddingBottom | Self::PaddingLeft => {
+                Metadata::new(Value::Length(Length::ZERO))
+                    .impact(Impact::empty().layout())
+                    .interpolation(Interpolation::Length)
+            }
             Self::Margin => Metadata::new(Value::Edges(Edges::default()))
                 .impact(Impact::empty().layout())
                 .interpolation(Interpolation::Edges),
+            Self::MarginTop | Self::MarginRight | Self::MarginBottom | Self::MarginLeft => {
+                Metadata::new(Value::Length(Length::ZERO))
+                    .impact(Impact::empty().layout())
+                    .interpolation(Interpolation::Length)
+            }
             Self::Inset => Metadata::new(Value::Edges(Edges::all(Length::Auto)))
                 .impact(Impact::empty().layout())
                 .interpolation(Interpolation::Edges),
+            Self::Top | Self::Right | Self::Bottom | Self::Left => {
+                Metadata::new(Value::Length(Length::Auto))
+                    .impact(Impact::empty().layout())
+                    .interpolation(Interpolation::Length)
+            }
             Self::Radius => Metadata::new(Value::Corners(Corners::default()))
                 .impact(Impact::empty().paint().effect())
                 .interpolation(Interpolation::Corners)
@@ -321,6 +372,12 @@ impl Property {
             Self::BorderWidth => Metadata::new(Value::Edges(Edges::default()))
                 .impact(Impact::empty().layout().paint())
                 .interpolation(Interpolation::Edges),
+            Self::BorderTopWidth
+            | Self::BorderRightWidth
+            | Self::BorderBottomWidth
+            | Self::BorderLeftWidth => Metadata::new(Value::Length(Length::ZERO))
+                .impact(Impact::empty().layout().paint())
+                .interpolation(Interpolation::Length),
             Self::FontSize | Self::LineHeight => Metadata::new(Value::Length(Length::Px(16.0)))
                 .inherited(true)
                 .impact(Impact::empty().text().layout())
@@ -470,6 +527,22 @@ impl Property {
             Self::Inset | Self::Margin | Self::Padding | Self::BorderWidth => {
                 matches!(value, Value::Edges(_))
             }
+            Self::Top
+            | Self::Right
+            | Self::Bottom
+            | Self::Left
+            | Self::MarginTop
+            | Self::MarginRight
+            | Self::MarginBottom
+            | Self::MarginLeft
+            | Self::PaddingTop
+            | Self::PaddingRight
+            | Self::PaddingBottom
+            | Self::PaddingLeft
+            | Self::BorderTopWidth
+            | Self::BorderRightWidth
+            | Self::BorderBottomWidth
+            | Self::BorderLeftWidth => matches!(value, Value::Length(_)),
             Self::Width
             | Self::Height
             | Self::MinWidth
@@ -550,6 +623,28 @@ impl Property {
             (Self::Padding | Self::BorderWidth, Value::Edges(edges)) => {
                 validate_non_negative_edges(edges, self)
             }
+            (
+                Self::PaddingTop
+                | Self::PaddingRight
+                | Self::PaddingBottom
+                | Self::PaddingLeft
+                | Self::BorderTopWidth
+                | Self::BorderRightWidth
+                | Self::BorderBottomWidth
+                | Self::BorderLeftWidth,
+                Value::Length(length),
+            ) => {
+                validate_normal_length_scope(length, self)?;
+                validate_auto_length_scope(length, self)?;
+                validate_non_negative_length(length, self)
+            }
+            (
+                Self::MarginTop | Self::MarginRight | Self::MarginBottom | Self::MarginLeft,
+                Value::Length(length),
+            )
+            | (Self::Top | Self::Right | Self::Bottom | Self::Left, Value::Length(length)) => {
+                validate_normal_length_scope(length, self)
+            }
             (Self::GridTemplateRows | Self::GridTemplateColumns, Value::GridTrackList(value)) => {
                 value.validate()
             }
@@ -604,6 +699,28 @@ fn validate_normal_length_scope(length: &Length, property: Property) -> Result<(
         return Err(Error::new(
             ErrorCode::InvalidValue,
             format!("{property:?} does not accept normal length"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_auto_length_scope(length: &Length, property: Property) -> Result<()> {
+    if matches!(length, Length::Auto)
+        && matches!(
+            property,
+            Property::PaddingTop
+                | Property::PaddingRight
+                | Property::PaddingBottom
+                | Property::PaddingLeft
+                | Property::BorderTopWidth
+                | Property::BorderRightWidth
+                | Property::BorderBottomWidth
+                | Property::BorderLeftWidth
+        )
+    {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{property:?} does not accept auto length"),
         ));
     }
     Ok(())
