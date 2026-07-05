@@ -1,6 +1,8 @@
 use surgeist_style::{
-    AnimationNameList, Color, CssPx, Declarations, DimensionLength, DurationSeconds,
-    FontFamilyList, GridTrackList, Opacity, Property, TypedDeclaration, Value,
+    AnimationNameList, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue,
+    Color, CssPx, CssWideKeyword, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
+    GridTrackList, LayerOrder, Opacity, Property, RulePrecedence, SourceOrder, TypedDeclaration,
+    Value,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -28,5 +30,19 @@ fn main() -> surgeist_style::Result<()> {
             Value::AnimationNameList(AnimationNameList::new(["fade-in"])?),
         )?;
     assert_eq!(declarations.len(), 2);
+
+    let precedence = RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(8));
+    assert_eq!(precedence.layer_order(), LayerOrder::new(2));
+
+    let mut authored = AuthoredDeclarations::new();
+    authored.push(AuthoredDeclaration::css_wide(
+        AuthoredProperty::All,
+        CssWideKeyword::Initial,
+    ));
+    authored.try_push(AuthoredDeclaration::try_new(
+        AuthoredProperty::Property(Property::Color),
+        AuthoredValue::Value(Value::Color(Color::BLACK)),
+    )?)?;
+    assert!(authored.len() >= 2);
     Ok(())
 }
