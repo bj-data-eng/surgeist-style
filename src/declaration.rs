@@ -4,12 +4,13 @@ use std::{
 };
 
 use super::{
-    CalcLength, CalcLengthTerm, Color, Corners, Cursor, DimensionLength, Display, DurationSeconds,
-    Edges, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
-    GridPlacement, GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, Length,
-    MaxTrackSizing, MinTrackSizing, Opacity, PointerEvents, Property, Result, Shadow, Size,
+    AspectRatio, CalcLength, CalcLengthTerm, Color, ContentVisibility, Corners, Cursor,
+    DimensionLength, Display, DurationSeconds, Edges, FlexFactor, GridAreaPlacement, GridAutoFlow,
+    GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreas,
+    GridTrackComponent, GridTrackList, LayoutPosition, Length, MaxTrackSizing, MinTrackSizing,
+    Opacity, Order, PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size,
     SubgridLineNameComponent, TextSlant, TrackRepeatCount, TrackSizing, Transform, Value,
-    Visibility,
+    Visibility, ZIndex,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -320,6 +321,43 @@ impl Declarations {
     #[must_use]
     pub fn visibility(self, visibility: Visibility) -> Self {
         self.set(Property::Visibility, Value::Visibility(visibility))
+    }
+
+    #[must_use]
+    pub fn position(self, position: LayoutPosition) -> Self {
+        self.set(Property::Position, Value::Position(position))
+    }
+
+    #[must_use]
+    pub fn z_index(self, z_index: ZIndex) -> Self {
+        self.set(Property::ZIndex, Value::ZIndex(z_index))
+    }
+
+    #[must_use]
+    pub fn scrollbar_width(self, value: ScrollbarWidth) -> Self {
+        self.set(Property::ScrollbarWidth, Value::ScrollbarWidth(value))
+    }
+
+    #[must_use]
+    pub fn content_visibility(self, value: ContentVisibility) -> Self {
+        self.set(Property::ContentVisibility, Value::ContentVisibility(value))
+    }
+
+    #[must_use]
+    pub fn order(self, order: Order) -> Self {
+        self.set(Property::Order, Value::Order(order))
+    }
+
+    pub fn try_flex_grow(self, value: FlexFactor) -> Result<Self> {
+        self.try_set(Property::FlexGrow, Value::FlexFactor(value))
+    }
+
+    pub fn try_flex_shrink(self, value: FlexFactor) -> Result<Self> {
+        self.try_set(Property::FlexShrink, Value::FlexFactor(value))
+    }
+
+    pub fn try_aspect_ratio(self, value: AspectRatio) -> Result<Self> {
+        self.try_set(Property::AspectRatio, Value::AspectRatio(value))
     }
 
     pub fn try_transform(self, transform: Transform) -> Result<Self> {
@@ -892,6 +930,46 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::Position(value) => {
             27u8.hash(state);
             value.hash(state);
+        }
+        Value::ZIndex(value) => {
+            41u8.hash(state);
+            match value {
+                ZIndex::Auto => {
+                    0u8.hash(state);
+                }
+                ZIndex::Integer(value) => {
+                    1u8.hash(state);
+                    value.hash(state);
+                }
+            }
+        }
+        Value::ScrollbarWidth(value) => {
+            45u8.hash(state);
+            value.hash(state);
+        }
+        Value::ContentVisibility(value) => {
+            46u8.hash(state);
+            value.hash(state);
+        }
+        Value::Order(value) => {
+            42u8.hash(state);
+            value.get().hash(state);
+        }
+        Value::FlexFactor(value) => {
+            43u8.hash(state);
+            value.get().to_bits().hash(state);
+        }
+        Value::AspectRatio(value) => {
+            44u8.hash(state);
+            match value.as_ratio() {
+                Some(ratio) => {
+                    1u8.hash(state);
+                    ratio.to_bits().hash(state);
+                }
+                None => {
+                    0u8.hash(state);
+                }
+            }
         }
         Value::Direction(value) => {
             28u8.hash(state);

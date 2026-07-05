@@ -1,8 +1,8 @@
 use super::{
-    AlignContent, AlignItems, AnimationNameList, BoxSizing, CalcLength, CalcOperator, Clear, Color,
-    Corners, Direction, Edges, Error, ErrorCode, FlexDirection, FlexWrap, Float, FontFamilyList,
-    GridFlowTolerance, LayoutPosition, Length, Overflow, Result, StyleTextAlign, Value, Visibility,
-    WritingMode,
+    AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, CalcLength, CalcOperator,
+    Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, FlexDirection,
+    FlexFactor, FlexWrap, Float, FontFamilyList, GridFlowTolerance, LayoutPosition, Length, Order,
+    Overflow, Result, ScrollbarWidth, StyleTextAlign, Value, Visibility, WritingMode, ZIndex,
 };
 
 #[non_exhaustive]
@@ -39,6 +39,7 @@ pub enum Property {
     OverflowX,
     OverflowY,
     ScrollbarWidth,
+    ContentVisibility,
     ZIndex,
     Direction,
     WritingMode,
@@ -47,6 +48,7 @@ pub enum Property {
     Clear,
     FlexDirection,
     FlexWrap,
+    Order,
     FlexGrow,
     FlexShrink,
     FlexBasis,
@@ -150,6 +152,7 @@ impl Property {
         Self::OverflowX,
         Self::OverflowY,
         Self::ScrollbarWidth,
+        Self::ContentVisibility,
         Self::ZIndex,
         Self::Direction,
         Self::WritingMode,
@@ -158,6 +161,7 @@ impl Property {
         Self::Clear,
         Self::FlexDirection,
         Self::FlexWrap,
+        Self::Order,
         Self::FlexGrow,
         Self::FlexShrink,
         Self::FlexBasis,
@@ -357,14 +361,24 @@ impl Property {
                 Metadata::new(Value::GridFlowTolerance(super::GridFlowTolerance::default()))
                     .impact(Impact::empty().layout())
             }
-            Self::FlexGrow | Self::ScrollbarWidth | Self::AspectRatio => {
-                Metadata::new(Value::Number(0.0))
-                    .impact(Impact::empty().layout())
-                    .interpolation(Interpolation::Number)
-            }
-            Self::FlexShrink => Metadata::new(Value::Number(1.0))
+            Self::FlexGrow => Metadata::new(Value::FlexFactor(FlexFactor::zero()))
                 .impact(Impact::empty().layout())
                 .interpolation(Interpolation::Number),
+            Self::FlexShrink => Metadata::new(Value::FlexFactor(FlexFactor::one()))
+                .impact(Impact::empty().layout())
+                .interpolation(Interpolation::Number),
+            Self::AspectRatio => Metadata::new(Value::AspectRatio(AspectRatio::default()))
+                .impact(Impact::empty().layout())
+                .interpolation(Interpolation::Number),
+            Self::ScrollbarWidth => Metadata::new(Value::ScrollbarWidth(ScrollbarWidth::default()))
+                .impact(Impact::empty().layout()),
+            Self::ContentVisibility => {
+                Metadata::new(Value::ContentVisibility(ContentVisibility::default()))
+                    .impact(Impact::empty().layout().paint())
+            }
+            Self::Order => {
+                Metadata::new(Value::Order(Order::default())).impact(Impact::empty().layout())
+            }
             Self::BorderColor => Metadata::new(Value::Color(Color::TRANSPARENT))
                 .impact(Impact::empty().paint())
                 .interpolation(Interpolation::Color)
@@ -470,7 +484,9 @@ impl Property {
             }
             Self::JustifyContent => Metadata::new(Value::AlignContent(AlignContent::default()))
                 .impact(Impact::empty().layout()),
-            Self::ZIndex | Self::BorderStyle | Self::Filter => {
+            Self::ZIndex => Metadata::new(Value::ZIndex(ZIndex::default()))
+                .impact(Impact::empty().layout().paint()),
+            Self::BorderStyle | Self::Filter => {
                 Metadata::new(Value::Keyword(super::value::Keyword::Initial))
                     .impact(Impact::empty().layout().paint())
             }
@@ -516,6 +532,8 @@ impl Property {
             Self::Clear => matches!(value, Value::Clear(_)),
             Self::FlexDirection => matches!(value, Value::FlexDirection(_)),
             Self::FlexWrap => matches!(value, Value::FlexWrap(_)),
+            Self::Order => matches!(value, Value::Order(_)),
+            Self::FlexGrow | Self::FlexShrink => matches!(value, Value::FlexFactor(_)),
             Self::Align | Self::AlignItems | Self::AlignSelf => {
                 matches!(value, Value::AlignItems(_))
             }
@@ -569,14 +587,13 @@ impl Property {
             }
             Self::GridRow | Self::GridColumn => matches!(value, Value::GridPlacement(_)),
             Self::GridArea => matches!(value, Value::GridAreaPlacement(_)),
-            Self::ZIndex
-            | Self::FlexGrow
-            | Self::FlexShrink
-            | Self::ScrollbarWidth
-            | Self::AspectRatio
-            | Self::Opacity
-            | Self::TransitionDuration
-            | Self::TransitionDelay => matches!(value, Value::Number(_)),
+            Self::ZIndex => matches!(value, Value::ZIndex(_)),
+            Self::ScrollbarWidth => matches!(value, Value::ScrollbarWidth(_)),
+            Self::ContentVisibility => matches!(value, Value::ContentVisibility(_)),
+            Self::AspectRatio => matches!(value, Value::AspectRatio(_)),
+            Self::Opacity | Self::TransitionDuration | Self::TransitionDelay => {
+                matches!(value, Value::Number(_))
+            }
             Self::Background
             | Self::Foreground
             | Self::Color
@@ -670,11 +687,7 @@ impl Property {
                 validate_non_negative_length(&corners.bottom_left, self)
             }
             (Self::Opacity, Value::Number(value)) => validate_unit_number(*value, self),
-            (
-                Self::FlexGrow | Self::FlexShrink | Self::ScrollbarWidth | Self::AspectRatio,
-                Value::Number(value),
-            )
-            | (Self::TransitionDuration | Self::TransitionDelay, Value::Number(value)) => {
+            (Self::TransitionDuration | Self::TransitionDelay, Value::Number(value)) => {
                 validate_non_negative_number(*value, self)
             }
             _ => Ok(()),
@@ -833,6 +846,12 @@ fn value_kind(value: &Value) -> &'static str {
         Value::Display(_) => "display",
         Value::BoxSizing(_) => "box sizing",
         Value::Position(_) => "position",
+        Value::ZIndex(_) => "z-index",
+        Value::ScrollbarWidth(_) => "scrollbar width",
+        Value::ContentVisibility(_) => "content visibility",
+        Value::Order(_) => "order",
+        Value::FlexFactor(_) => "flex factor",
+        Value::AspectRatio(_) => "aspect ratio",
         Value::Direction(_) => "direction",
         Value::Overflow(_) => "overflow",
         Value::OverflowAxes(_) => "overflow axes",
@@ -1031,5 +1050,66 @@ impl Impact {
     pub(crate) const fn animation(mut self) -> Self {
         self.animation = true;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AspectRatio, ContentVisibility, FlexFactor, LayoutPosition, Order, ScrollbarWidth, ZIndex,
+    };
+
+    #[test]
+    fn core_layout_properties_accept_typed_values() {
+        Property::Position
+            .validate_value(&Value::Position(LayoutPosition::Fixed))
+            .unwrap();
+        Property::ZIndex
+            .validate_value(&Value::ZIndex(ZIndex::Auto))
+            .unwrap();
+        Property::ZIndex
+            .validate_value(&Value::ZIndex(ZIndex::integer(-2)))
+            .unwrap();
+        Property::ScrollbarWidth
+            .validate_value(&Value::ScrollbarWidth(ScrollbarWidth::Thin))
+            .unwrap();
+        Property::ContentVisibility
+            .validate_value(&Value::ContentVisibility(ContentVisibility::Auto))
+            .unwrap();
+        Property::AspectRatio
+            .validate_value(&Value::AspectRatio(AspectRatio::ratio(16.0 / 9.0).unwrap()))
+            .unwrap();
+        Property::Order
+            .validate_value(&Value::Order(Order::new(-2)))
+            .unwrap();
+        Property::FlexGrow
+            .validate_value(&Value::FlexFactor(FlexFactor::new(2.0).unwrap()))
+            .unwrap();
+    }
+
+    #[test]
+    fn semantic_numbers_are_not_interchangeable() {
+        assert!(
+            Property::ZIndex
+                .validate_value(&Value::Number(1.0))
+                .is_err()
+        );
+        assert!(
+            Property::AspectRatio
+                .validate_value(&Value::Number(1.0))
+                .is_err()
+        );
+        assert!(
+            Property::FlexGrow
+                .validate_value(&Value::Number(1.0))
+                .is_err()
+        );
+        assert!(Property::Order.validate_value(&Value::Number(1.0)).is_err());
+        assert!(
+            Property::ScrollbarWidth
+                .validate_value(&Value::Number(1.0))
+                .is_err()
+        );
     }
 }

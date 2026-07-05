@@ -112,6 +112,125 @@ impl DurationSeconds {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum ContentVisibility {
+    #[default]
+    Visible,
+    Hidden,
+    Auto,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum ScrollbarWidth {
+    #[default]
+    Auto,
+    Thin,
+    None,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum ZIndex {
+    #[default]
+    Auto,
+    Integer(i32),
+}
+
+impl ZIndex {
+    #[must_use]
+    pub const fn integer(value: i32) -> Self {
+        Self::Integer(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct Order(i32);
+
+impl Order {
+    #[must_use]
+    pub const fn new(value: i32) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> i32 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlexFactor(f32);
+
+impl FlexFactor {
+    pub fn new(value: f32) -> Result<Self> {
+        validate_non_negative(value, "flex factor")?;
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self(0.0)
+    }
+
+    #[must_use]
+    pub const fn one() -> Self {
+        Self(1.0)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+
+    pub fn validate(self) -> Result<()> {
+        validate_non_negative(self.0, "flex factor")
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AspectRatio(AspectRatioKind);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum AspectRatioKind {
+    Auto,
+    Ratio(f32),
+}
+
+impl AspectRatio {
+    pub const AUTO: Self = Self(AspectRatioKind::Auto);
+
+    pub fn ratio(value: f32) -> Result<Self> {
+        validate_finite(value, "aspect ratio")?;
+        if value <= 0.0 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "aspect ratio must be positive",
+            ));
+        }
+        Ok(Self(AspectRatioKind::Ratio(value)))
+    }
+
+    #[must_use]
+    pub const fn as_ratio(self) -> Option<f32> {
+        match self.0 {
+            AspectRatioKind::Auto => None,
+            AspectRatioKind::Ratio(value) => Some(value),
+        }
+    }
+
+    pub fn validate(self) -> Result<()> {
+        match self.as_ratio() {
+            Some(value) => Self::ratio(value).map(|_| ()),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Default for AspectRatio {
+    fn default() -> Self {
+        Self::AUTO
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Length {
     Normal,
@@ -384,6 +503,12 @@ pub enum Value {
     Display(Display),
     BoxSizing(BoxSizing),
     Position(LayoutPosition),
+    ZIndex(ZIndex),
+    ScrollbarWidth(ScrollbarWidth),
+    ContentVisibility(ContentVisibility),
+    Order(Order),
+    FlexFactor(FlexFactor),
+    AspectRatio(AspectRatio),
     Direction(Direction),
     Overflow(Overflow),
     OverflowAxes(OverflowAxes),
@@ -435,10 +560,15 @@ impl Value {
             Self::ShadowList(_) => Interpolation::ShadowList,
             Self::Stroke(_) => Interpolation::Stroke,
             Self::Transform(_) => Interpolation::Transform,
+            Self::FlexFactor(_) | Self::AspectRatio(_) => Interpolation::Number,
             Self::Keyword(_)
             | Self::Display(_)
             | Self::BoxSizing(_)
             | Self::Position(_)
+            | Self::ZIndex(_)
+            | Self::ScrollbarWidth(_)
+            | Self::ContentVisibility(_)
+            | Self::Order(_)
             | Self::Direction(_)
             | Self::Overflow(_)
             | Self::OverflowAxes(_)
@@ -475,6 +605,10 @@ impl Value {
             Self::Display(_) => Ok(()),
             Self::BoxSizing(_)
             | Self::Position(_)
+            | Self::ZIndex(_)
+            | Self::ScrollbarWidth(_)
+            | Self::ContentVisibility(_)
+            | Self::Order(_)
             | Self::Direction(_)
             | Self::Overflow(_)
             | Self::OverflowAxes(_)
@@ -487,6 +621,8 @@ impl Value {
             | Self::AlignItems(_)
             | Self::AlignContent(_) => Ok(()),
             Self::Number(value) => validate_finite(*value, "number"),
+            Self::FlexFactor(value) => value.validate(),
+            Self::AspectRatio(value) => value.validate(),
             Self::Length(value) => value.validate(),
             Self::Size(value) => value.validate(),
             Self::Edges(value) => value.validate(),
@@ -543,9 +679,12 @@ pub enum BoxSizing {
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum LayoutPosition {
+    Static,
     #[default]
     Relative,
     Absolute,
+    Fixed,
+    Sticky,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

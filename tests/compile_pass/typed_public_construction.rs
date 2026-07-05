@@ -1,15 +1,16 @@
 use surgeist_style::{
-    AnimationNameList, AttributeCaseSensitivity, AttributeMatcher, AttributeSelector,
-    AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, AuthoredTokens,
-    Change, Color, Combinator, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
-    CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
-    GridTrackList, LayerOrder, Length, Node, NthPattern, NthSelector, Opacity, Property,
+    AnimationNameList, AspectRatio, AttributeCaseSensitivity, AttributeMatcher, AttributeSelector,
+    AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
+    Change, Color, Combinator, ContentVisibility, Context, CssPx, CssWideKeyword,
+    CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
+    DimensionLength, DurationSeconds, FlexFactor, FontFamilyList, GridTrackList, LayerOrder,
+    LayoutPosition, Length, Node, NthPattern, NthSelector, Opacity, Order, Property,
     PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList,
-    RulePrecedence, RuleTarget, RuntimePseudoClass, Selector, SelectorList, Context,
+    RulePrecedence, RuleTarget, RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList,
     SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag,
-    StructuralSelector, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole,
-    StyleState, StyleTag, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
-    VariableExpression, VariableFallback, VariableReference,
+    StructuralSelector, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState,
+    StyleTag, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
+    VariableFallback, VariableReference, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -44,6 +45,17 @@ fn main() -> surgeist_style::Result<()> {
         .try_padding_right(Length::Px(8.0))?
         .try_border_bottom_width(Length::Px(2.0))?;
     assert_eq!(declarations.len(), 4);
+
+    let declarations = Declarations::new()
+        .position(LayoutPosition::Fixed)
+        .z_index(ZIndex::integer(-1))
+        .scrollbar_width(ScrollbarWidth::Thin)
+        .content_visibility(ContentVisibility::Auto)
+        .order(Order::new(2))
+        .try_flex_grow(FlexFactor::new(2.0)?)?
+        .try_flex_shrink(FlexFactor::new(0.0)?)?
+        .try_aspect_ratio(AspectRatio::ratio(16.0 / 9.0)?)?;
+    assert_eq!(declarations.len(), 8);
 
     let precedence = RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(8));
     assert_eq!(precedence.layer_order(), LayerOrder::new(2));

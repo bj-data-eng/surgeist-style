@@ -4,9 +4,10 @@ use std::{
 };
 
 use super::{
-    Condition, Container, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges, Length,
-    PointerEvents, Property, Result, RulePrecedence, SelectorMatchContext, Sheet, Size,
-    StyleBucket, Transform, Traversal, Tree, Value, Version, Viewport, Visibility,
+    AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword, Cursor,
+    Declarations, Display, Edges, FlexFactor, LayoutPosition, Length, Order, PointerEvents,
+    Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet, Size,
+    StyleBucket, Transform, Traversal, Tree, Value, Version, Viewport, Visibility, ZIndex,
     declaration::hash_value,
 };
 use crate::{
@@ -243,6 +244,70 @@ impl Resolved {
         match self.get(Property::Display) {
             Value::Display(display) => *display,
             _ => Display::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn position(&self) -> LayoutPosition {
+        match self.get(Property::Position) {
+            Value::Position(value) => *value,
+            _ => LayoutPosition::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn z_index(&self) -> ZIndex {
+        match self.get(Property::ZIndex) {
+            Value::ZIndex(value) => *value,
+            _ => ZIndex::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn scrollbar_width(&self) -> ScrollbarWidth {
+        match self.get(Property::ScrollbarWidth) {
+            Value::ScrollbarWidth(value) => *value,
+            _ => ScrollbarWidth::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn content_visibility(&self) -> ContentVisibility {
+        match self.get(Property::ContentVisibility) {
+            Value::ContentVisibility(value) => *value,
+            _ => ContentVisibility::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn order(&self) -> Order {
+        match self.get(Property::Order) {
+            Value::Order(value) => *value,
+            _ => Order::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn flex_grow(&self) -> FlexFactor {
+        match self.get(Property::FlexGrow) {
+            Value::FlexFactor(value) => *value,
+            _ => FlexFactor::zero(),
+        }
+    }
+
+    #[must_use]
+    pub fn flex_shrink(&self) -> FlexFactor {
+        match self.get(Property::FlexShrink) {
+            Value::FlexFactor(value) => *value,
+            _ => FlexFactor::one(),
+        }
+    }
+
+    #[must_use]
+    pub fn aspect_ratio(&self) -> AspectRatio {
+        match self.get(Property::AspectRatio) {
+            Value::AspectRatio(value) => *value,
+            _ => AspectRatio::default(),
         }
     }
 
@@ -1170,11 +1235,12 @@ fn hash_variable_expression(expression: &VariableExpression, hasher: &mut Defaul
 mod tests {
     use super::*;
     use crate::{
-        AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
-        Color, Combinator, ComplexSelectorPart, CssWideKeyword, CustomPropertyName,
-        CustomPropertyValue, Error, ErrorCode, LayerOrder, Node, RulePrecedence, RuleTarget,
-        Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState,
-        StyleTag, VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        AspectRatio, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
+        AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
+        CustomPropertyName, CustomPropertyValue, Error, ErrorCode, LayerOrder, LayoutPosition,
+        Node, Order, RulePrecedence, RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity,
+        SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState, StyleTag,
+        VariableDependentValue, VariableExpression, VariableFallback, VariableReference, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1371,6 +1437,27 @@ mod tests {
 
         assert_eq!(style.border_width_edges().left, Length::Px(8.0));
         assert_eq!(style.inset_edges().top, Length::Auto);
+    }
+
+    #[test]
+    fn resolved_core_layout_getters_return_typed_values() {
+        let style = resolve_single(
+            Declarations::new()
+                .position(LayoutPosition::Sticky)
+                .z_index(ZIndex::integer(3))
+                .scrollbar_width(ScrollbarWidth::None)
+                .content_visibility(ContentVisibility::Hidden)
+                .order(Order::new(-1))
+                .try_aspect_ratio(AspectRatio::ratio(2.0).unwrap())
+                .unwrap(),
+        );
+
+        assert_eq!(style.position(), LayoutPosition::Sticky);
+        assert_eq!(style.z_index(), ZIndex::integer(3));
+        assert_eq!(style.scrollbar_width(), ScrollbarWidth::None);
+        assert_eq!(style.content_visibility(), ContentVisibility::Hidden);
+        assert_eq!(style.order(), Order::new(-1));
+        assert_eq!(style.aspect_ratio(), AspectRatio::ratio(2.0).unwrap());
     }
 
     #[test]

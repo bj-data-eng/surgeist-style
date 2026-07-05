@@ -54,16 +54,17 @@ pub use sheet::{Rule, RuleTarget, Sheet, Version};
 pub use state::StateFlag;
 pub use tree::{Node, Traversal, Tree};
 pub use value::{
-    AlignContent, AlignItems, AnimationNameList, BoxSizing, Clear, Color, Corners, CssPx, Cursor,
-    Dash, Decoration, DimensionLength, Direction, Display, DurationSeconds, Edges, FlexDirection,
-    FlexWrap, Float, FontFamilyList, GridAreaPlacement, GridAutoFlow, GridDefinition,
-    GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow,
-    GridTemplateAreas, GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length,
-    LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Overflow, OverflowAxes, OverflowWrap,
-    PointerEvents, Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign,
-    SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextSlant, TextValue,
-    TextWeight, TextWrap, TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp,
-    Value, Visibility, WhiteSpace, WordBreak, WritingMode,
+    AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, Clear, Color,
+    ContentVisibility, Corners, CssPx, Cursor, Dash, Decoration, DimensionLength, Direction,
+    Display, DurationSeconds, Edges, FlexDirection, FlexFactor, FlexWrap, Float, FontFamilyList,
+    GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement,
+    GridTemplate, GridTemplateAreaRow, GridTemplateAreas, GridTrackComponent, GridTrackList,
+    Keyword, LayoutPosition, Length, LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Order,
+    Overflow, OverflowAxes, OverflowWrap, PointerEvents, ScrollbarWidth, Shadow, SideSet, Size,
+    Stroke, StrokeAlign, StyleTextAlign, SubgridLineNameComponent, SubgridLineNameRepeatCount,
+    SubgridTrack, TextSlant, TextValue, TextWeight, TextWrap, TrackRepeat, TrackRepeatCount,
+    TrackSizing, Transform, TransformOp, Value, Visibility, WhiteSpace, WordBreak, WritingMode,
+    ZIndex,
 };
 
 #[must_use]
