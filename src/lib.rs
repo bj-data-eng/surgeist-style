@@ -10,6 +10,7 @@ mod declaration;
 mod error;
 mod identity;
 mod invalidation;
+mod precedence;
 mod property;
 mod resolver;
 mod selector;
@@ -27,6 +28,7 @@ pub use identity::{
     StyleState, StyleTag,
 };
 pub use invalidation::{Change, Invalidation, Scope};
+pub use precedence::{LayerOrder, RulePrecedence, SourceOrder};
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
 pub use selector::{
