@@ -34,16 +34,17 @@ pub use custom::{
 pub use declaration::{Declaration, Declarations, Fingerprint, TypedDeclaration};
 pub use error::{Error, ErrorCode, Result};
 pub use identity::{
-    StyleAttribute, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey, StyleRole,
-    StyleState, StyleTag,
+    RangeState, StyleAttribute, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey,
+    StyleRole, StyleState, StyleTag,
 };
 pub use invalidation::{Change, Invalidation, Scope};
 pub use precedence::{LayerOrder, RulePrecedence, SourceOrder};
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
 pub use selector::{
-    AttributeSelector, Combinator, ComplexSelector, ComplexSelectorPart, Compound, Nth, Position,
-    PositionSelector, Selector, SelectorList, SelectorMatchContext, SelectorSpecificity,
+    AttributeCaseSensitivity, AttributeMatcher, AttributeSelector, Combinator, ComplexSelector,
+    ComplexSelectorPart, Compound, Nth, Position, PositionSelector, PseudoClassSelector,
+    RuntimePseudoClass, Selector, SelectorList, SelectorMatchContext, SelectorSpecificity,
 };
 pub use sheet::{Rule, Sheet, Version};
 pub use state::StateFlag;

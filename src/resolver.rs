@@ -1029,16 +1029,27 @@ struct CacheEntry {
 }
 
 fn hash_state(state: &super::StyleState, hasher: &mut impl Hasher) {
-    state.disabled().hash(hasher);
     state.hovered().hash(hasher);
     state.active().hash(hasher);
     state.focused().hash(hasher);
+    state.focus_visible().hash(hasher);
     state.focus_within().hash(hasher);
     state.pointer_captured().hash(hasher);
+    state.enabled().hash(hasher);
     state.selected().hash(hasher);
     state.pressed().hash(hasher);
     state.checked().hash(hasher);
     state.expanded().hash(hasher);
+    state.required().hash(hasher);
+    state.valid().hash(hasher);
+    state.placeholder_shown().hash(hasher);
+    state.modal().hash(hasher);
+    state.fullscreen().hash(hasher);
+    state.popover_open().hash(hasher);
+    state.default_state().hash(hasher);
+    state.indeterminate().hash(hasher);
+    state.read_write().hash(hasher);
+    state.range_state().hash(hasher);
 }
 
 fn hash_node<T: Hash>(node: &T) -> u64 {

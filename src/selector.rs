@@ -65,6 +65,7 @@ pub enum Selector {
     State(StateFlag),
     Attribute(AttributeSelector),
     Position(PositionSelector),
+    Pseudo(PseudoClassSelector),
     Compound(Compound),
     Complex(ComplexSelector),
     List(SelectorList),
@@ -107,6 +108,11 @@ impl Selector {
     }
 
     #[must_use]
+    pub const fn pseudo(pseudo_class: PseudoClassSelector) -> Self {
+        Self::Pseudo(pseudo_class)
+    }
+
+    #[must_use]
     pub fn compound() -> Compound {
         Compound::new()
     }
@@ -145,11 +151,12 @@ impl Selector {
             Self::Tag(tag) => Ok(tree.node(id)?.tag.as_ref() == Some(tag)),
             Self::Class(class) => Ok(tree.node(id)?.classes.contains(class)),
             Self::Key(key) => Ok(tree.node(id)?.key.as_ref() == Some(key)),
-            Self::State(state) => Ok(tree.node(id)?.has_state(*state)),
+            Self::State(state) => runtime_state_matches(tree, id, *state),
             Self::Attribute(attribute) => attribute.matches(tree, id),
             Self::Position(position) => position.matches(tree, id, traversal),
-            Self::Compound(compound) => compound.matches(tree, id, traversal),
-            Self::Complex(complex) => complex.matches(tree, id, traversal),
+            Self::Pseudo(pseudo_class) => pseudo_class.matches(tree, context),
+            Self::Compound(compound) => compound.matches_with_context(tree, context),
+            Self::Complex(complex) => complex.matches_with_context(tree, context),
             Self::List(list) => list.matches(tree, context),
         }
     }
@@ -159,9 +166,11 @@ impl Selector {
         match self {
             Self::Any => SelectorSpecificity::zero(),
             Self::Tag(_) => SelectorSpecificity::new(0, 0, 1),
-            Self::Class(_) | Self::State(_) | Self::Attribute(_) | Self::Position(_) => {
-                SelectorSpecificity::new(0, 1, 0)
-            }
+            Self::Class(_)
+            | Self::State(_)
+            | Self::Attribute(_)
+            | Self::Position(_)
+            | Self::Pseudo(_) => SelectorSpecificity::new(0, 1, 0),
             Self::Key(_) => SelectorSpecificity::new(1, 0, 0),
             Self::Compound(compound) => compound.specificity(),
             Self::Complex(complex) => complex.specificity(),
@@ -180,9 +189,12 @@ impl Selector {
                 .last()
                 .map(|part| part.selector().primary_key())
                 .unwrap_or(PrimaryKey::Universal),
-            Self::Any | Self::State(_) | Self::Attribute(_) | Self::Position(_) | Self::List(_) => {
-                PrimaryKey::Universal
-            }
+            Self::Any
+            | Self::State(_)
+            | Self::Attribute(_)
+            | Self::Position(_)
+            | Self::Pseudo(_)
+            | Self::List(_) => PrimaryKey::Universal,
         }
     }
 }
@@ -265,6 +277,12 @@ impl<Id: Copy> SelectorMatchContext<Id> {
     }
 
     #[must_use]
+    pub const fn with_subject(mut self, subject: Id) -> Self {
+        self.subject = subject;
+        self
+    }
+
+    #[must_use]
     pub const fn subject(self) -> Id {
         self.subject
     }
@@ -272,6 +290,16 @@ impl<Id: Copy> SelectorMatchContext<Id> {
     #[must_use]
     pub const fn traversal(self) -> Traversal {
         self.traversal
+    }
+
+    #[must_use]
+    pub const fn root(self) -> Option<Id> {
+        self.root
+    }
+
+    #[must_use]
+    pub const fn scope(self) -> Option<Id> {
+        self.scope
     }
 }
 
@@ -306,6 +334,7 @@ pub struct Compound {
     classes: Vec<StyleClass>,
     states: Vec<StateFlag>,
     attributes: Vec<AttributeSelector>,
+    pseudo_classes: Vec<PseudoClassSelector>,
     position: Option<PositionSelector>,
 }
 
@@ -358,11 +387,39 @@ impl Compound {
     }
 
     #[must_use]
+    pub fn pseudo(mut self, pseudo_class: PseudoClassSelector) -> Self {
+        self.pseudo_classes.push(pseudo_class);
+        self
+    }
+
+    #[must_use]
+    pub fn runtime_pseudo(mut self, pseudo_class: RuntimePseudoClass) -> Self {
+        self.pseudo_classes
+            .push(PseudoClassSelector::runtime(pseudo_class));
+        self
+    }
+
+    #[must_use]
+    pub fn pseudo_classes(&self) -> &[PseudoClassSelector] {
+        &self.pseudo_classes
+    }
+
+    #[must_use]
     pub fn selector(self) -> Selector {
         Selector::Compound(self)
     }
 
     pub fn matches<T: Tree>(&self, tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
+        self.matches_with_context(tree, SelectorMatchContext::new(id, traversal))
+    }
+
+    pub fn matches_with_context<T: Tree>(
+        &self,
+        tree: &T,
+        context: SelectorMatchContext<T::Id>,
+    ) -> Result<bool> {
+        let id = context.subject();
+        let traversal = context.traversal();
         let node = tree.node(id)?;
         if self
             .tag
@@ -385,8 +442,10 @@ impl Compound {
         {
             return Ok(false);
         }
-        if !self.states.iter().all(|state| node.has_state(*state)) {
-            return Ok(false);
+        for state in &self.states {
+            if !runtime_state_matches(tree, id, *state)? {
+                return Ok(false);
+            }
         }
         for attribute in &self.attributes {
             if !attribute.matches(tree, id)? {
@@ -397,6 +456,11 @@ impl Compound {
             && !position.matches(tree, id, traversal)?
         {
             return Ok(false);
+        }
+        for pseudo_class in &self.pseudo_classes {
+            if !pseudo_class.matches(tree, context)? {
+                return Ok(false);
+            }
         }
         Ok(true)
     }
@@ -431,6 +495,9 @@ impl Compound {
         for _ in &self.attributes {
             specificity = specificity.saturating_add(SelectorSpecificity::new(0, 1, 0));
         }
+        for pseudo_class in &self.pseudo_classes {
+            specificity = specificity.saturating_add(pseudo_class.specificity());
+        }
         if self.position.is_some() {
             specificity = specificity.saturating_add(SelectorSpecificity::new(0, 1, 0));
         }
@@ -456,7 +523,15 @@ impl ComplexSelector {
     }
 
     pub fn matches<T: Tree>(&self, tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
-        complex_matches(&self.parts, tree, id, traversal)
+        self.matches_with_context(tree, SelectorMatchContext::new(id, traversal))
+    }
+
+    pub fn matches_with_context<T: Tree>(
+        &self,
+        tree: &T,
+        context: SelectorMatchContext<T::Id>,
+    ) -> Result<bool> {
+        complex_matches(&self.parts, tree, context)
     }
 
     #[must_use]
@@ -514,35 +589,322 @@ pub enum Combinator {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PseudoClassSelector {
+    Runtime(RuntimePseudoClass),
+}
+
+impl PseudoClassSelector {
+    #[must_use]
+    pub const fn runtime(pseudo_class: RuntimePseudoClass) -> Self {
+        Self::Runtime(pseudo_class)
+    }
+
+    pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+        let id = context.subject();
+        match self {
+            Self::Runtime(pseudo_class) => {
+                runtime_state_matches(tree, id, pseudo_class.state_flag())
+            }
+        }
+    }
+
+    #[must_use]
+    pub const fn specificity(&self) -> SelectorSpecificity {
+        SelectorSpecificity::new(0, 1, 0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum RuntimePseudoClass {
+    Hover,
+    Active,
+    Focus,
+    FocusVisible,
+    FocusWithin,
+    Disabled,
+    Enabled,
+    Checked,
+    Required,
+    Optional,
+    Valid,
+    Invalid,
+    PlaceholderShown,
+    Modal,
+    Fullscreen,
+    PopoverOpen,
+    Default,
+    Indeterminate,
+    ReadOnly,
+    ReadWrite,
+    InRange,
+    OutOfRange,
+}
+
+impl RuntimePseudoClass {
+    #[must_use]
+    pub const fn state_flag(self) -> StateFlag {
+        match self {
+            Self::Hover => StateFlag::Hovered,
+            Self::Active => StateFlag::Active,
+            Self::Focus => StateFlag::Focused,
+            Self::FocusVisible => StateFlag::FocusVisible,
+            Self::FocusWithin => StateFlag::FocusWithin,
+            Self::Disabled => StateFlag::Disabled,
+            Self::Enabled => StateFlag::Enabled,
+            Self::Checked => StateFlag::Checked,
+            Self::Required => StateFlag::Required,
+            Self::Optional => StateFlag::Optional,
+            Self::Valid => StateFlag::Valid,
+            Self::Invalid => StateFlag::Invalid,
+            Self::PlaceholderShown => StateFlag::PlaceholderShown,
+            Self::Modal => StateFlag::Modal,
+            Self::Fullscreen => StateFlag::Fullscreen,
+            Self::PopoverOpen => StateFlag::PopoverOpen,
+            Self::Default => StateFlag::Default,
+            Self::Indeterminate => StateFlag::Indeterminate,
+            Self::ReadOnly => StateFlag::ReadOnly,
+            Self::ReadWrite => StateFlag::ReadWrite,
+            Self::InRange => StateFlag::InRange,
+            Self::OutOfRange => StateFlag::OutOfRange,
+        }
+    }
+}
+
+fn runtime_state_matches<T: Tree>(tree: &T, id: T::Id, flag: StateFlag) -> Result<bool> {
+    Ok(tree.node(id)?.has_state(flag))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AttributeSelector {
-    Exists(StyleAttributeName),
-    Equals(StyleAttributeName, StyleAttributeValue),
+    Exists {
+        name: StyleAttributeName,
+    },
+    Matcher {
+        name: StyleAttributeName,
+        matcher: AttributeMatcher,
+        case_sensitivity: AttributeCaseSensitivity,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AttributeMatcher {
+    Equals(StyleAttributeValue),
+    Includes(StyleAttributeValue),
+    DashMatch(StyleAttributeValue),
+    Prefix(StyleAttributeValue),
+    Suffix(StyleAttributeValue),
+    Substring(StyleAttributeValue),
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum AttributeCaseSensitivity {
+    DocumentDefault,
+    AsciiCaseInsensitive,
+    ExplicitSensitive,
 }
 
 impl AttributeSelector {
     pub fn exists(name: impl AsRef<str>) -> Result<Self> {
-        Ok(Self::Exists(attribute_name_from_str(name.as_ref())?))
+        Ok(Self::Exists {
+            name: attribute_name_from_str(name.as_ref())?,
+        })
     }
 
     pub fn equals(name: impl AsRef<str>, value: impl AsRef<str>) -> Result<Self> {
-        Ok(Self::Equals(
-            attribute_name_from_str(name.as_ref())?,
-            attribute_value_from_str(value.as_ref())?,
-        ))
+        Self::equals_with_case(name, value, AttributeCaseSensitivity::DocumentDefault)
+    }
+
+    pub fn includes(name: impl AsRef<str>, value: impl AsRef<str>) -> Result<Self> {
+        Self::matcher(
+            name,
+            AttributeMatcher::Includes(attribute_value_from_str(value.as_ref())?),
+        )
+    }
+
+    pub fn dash_match(name: impl AsRef<str>, value: impl AsRef<str>) -> Result<Self> {
+        Self::matcher(
+            name,
+            AttributeMatcher::DashMatch(attribute_value_from_str(value.as_ref())?),
+        )
+    }
+
+    pub fn prefix(name: impl AsRef<str>, value: impl AsRef<str>) -> Result<Self> {
+        Self::matcher(
+            name,
+            AttributeMatcher::Prefix(attribute_value_from_str(value.as_ref())?),
+        )
+    }
+
+    pub fn suffix(name: impl AsRef<str>, value: impl AsRef<str>) -> Result<Self> {
+        Self::matcher(
+            name,
+            AttributeMatcher::Suffix(attribute_value_from_str(value.as_ref())?),
+        )
+    }
+
+    pub fn substring(name: impl AsRef<str>, value: impl AsRef<str>) -> Result<Self> {
+        Self::matcher(
+            name,
+            AttributeMatcher::Substring(attribute_value_from_str(value.as_ref())?),
+        )
+    }
+
+    pub fn equals_with_case(
+        name: impl AsRef<str>,
+        value: impl AsRef<str>,
+        case_sensitivity: AttributeCaseSensitivity,
+    ) -> Result<Self> {
+        Ok(Self::Matcher {
+            name: attribute_name_from_str(name.as_ref())?,
+            matcher: AttributeMatcher::Equals(attribute_value_from_str(value.as_ref())?),
+            case_sensitivity,
+        })
+    }
+
+    fn matcher(name: impl AsRef<str>, matcher: AttributeMatcher) -> Result<Self> {
+        Ok(Self::Matcher {
+            name: attribute_name_from_str(name.as_ref())?,
+            matcher,
+            case_sensitivity: AttributeCaseSensitivity::DocumentDefault,
+        })
+    }
+
+    pub fn matcher_with_case(
+        name: impl AsRef<str>,
+        matcher: AttributeMatcher,
+        case_sensitivity: AttributeCaseSensitivity,
+    ) -> Result<Self> {
+        Ok(Self::Matcher {
+            name: attribute_name_from_str(name.as_ref())?,
+            matcher,
+            case_sensitivity,
+        })
     }
 
     pub fn matches<T: Tree>(&self, tree: &T, id: T::Id) -> Result<bool> {
         let node = tree.node(id)?;
         Ok(match self {
-            Self::Exists(name) => node
+            Self::Exists { name } => node
                 .attributes
                 .iter()
                 .any(|attribute| attribute.name() == name),
-            Self::Equals(name, value) => node
-                .attributes
-                .iter()
-                .any(|attribute| attribute.name() == name && attribute.value() == value),
+            Self::Matcher {
+                name,
+                matcher,
+                case_sensitivity,
+            } => node.attributes.iter().any(|attribute| {
+                attribute.name() == name
+                    && attribute_matcher_matches(attribute.value(), matcher, *case_sensitivity)
+            }),
         })
+    }
+}
+
+fn attribute_matcher_matches(
+    actual: &StyleAttributeValue,
+    matcher: &AttributeMatcher,
+    case_sensitivity: AttributeCaseSensitivity,
+) -> bool {
+    match matcher {
+        AttributeMatcher::Equals(expected) => {
+            compare_attribute_value(actual, expected, case_sensitivity)
+        }
+        AttributeMatcher::Includes(expected) => {
+            let expected = expected.as_str();
+            !expected.is_empty()
+                && actual
+                    .as_str()
+                    .split_ascii_whitespace()
+                    .any(|token| compare_attribute_str(token, expected, case_sensitivity))
+        }
+        AttributeMatcher::DashMatch(expected) => {
+            compare_attribute_value(actual, expected, case_sensitivity)
+                || attribute_starts_with(actual.as_str(), expected.as_str(), case_sensitivity)
+                    && actual
+                        .as_str()
+                        .as_bytes()
+                        .get(expected.as_str().len())
+                        .is_some_and(|byte| *byte == b'-')
+        }
+        AttributeMatcher::Prefix(expected) => {
+            let expected = expected.as_str();
+            !expected.is_empty()
+                && attribute_starts_with(actual.as_str(), expected, case_sensitivity)
+        }
+        AttributeMatcher::Suffix(expected) => {
+            let expected = expected.as_str();
+            !expected.is_empty() && attribute_ends_with(actual.as_str(), expected, case_sensitivity)
+        }
+        AttributeMatcher::Substring(expected) => {
+            let expected = expected.as_str();
+            !expected.is_empty() && attribute_contains(actual.as_str(), expected, case_sensitivity)
+        }
+    }
+}
+
+fn compare_attribute_value(
+    actual: &StyleAttributeValue,
+    expected: &StyleAttributeValue,
+    case_sensitivity: AttributeCaseSensitivity,
+) -> bool {
+    compare_attribute_str(actual.as_str(), expected.as_str(), case_sensitivity)
+}
+
+fn compare_attribute_str(
+    actual: &str,
+    expected: &str,
+    case_sensitivity: AttributeCaseSensitivity,
+) -> bool {
+    match case_sensitivity {
+        AttributeCaseSensitivity::DocumentDefault | AttributeCaseSensitivity::ExplicitSensitive => {
+            actual == expected
+        }
+        AttributeCaseSensitivity::AsciiCaseInsensitive => actual.eq_ignore_ascii_case(expected),
+    }
+}
+
+fn attribute_starts_with(
+    actual: &str,
+    expected: &str,
+    case_sensitivity: AttributeCaseSensitivity,
+) -> bool {
+    match case_sensitivity {
+        AttributeCaseSensitivity::DocumentDefault | AttributeCaseSensitivity::ExplicitSensitive => {
+            actual.starts_with(expected)
+        }
+        AttributeCaseSensitivity::AsciiCaseInsensitive => actual
+            .to_ascii_lowercase()
+            .starts_with(&expected.to_ascii_lowercase()),
+    }
+}
+
+fn attribute_ends_with(
+    actual: &str,
+    expected: &str,
+    case_sensitivity: AttributeCaseSensitivity,
+) -> bool {
+    match case_sensitivity {
+        AttributeCaseSensitivity::DocumentDefault | AttributeCaseSensitivity::ExplicitSensitive => {
+            actual.ends_with(expected)
+        }
+        AttributeCaseSensitivity::AsciiCaseInsensitive => actual
+            .to_ascii_lowercase()
+            .ends_with(&expected.to_ascii_lowercase()),
+    }
+}
+
+fn attribute_contains(
+    actual: &str,
+    expected: &str,
+    case_sensitivity: AttributeCaseSensitivity,
+) -> bool {
+    match case_sensitivity {
+        AttributeCaseSensitivity::DocumentDefault | AttributeCaseSensitivity::ExplicitSensitive => {
+            actual.contains(expected)
+        }
+        AttributeCaseSensitivity::AsciiCaseInsensitive => actual
+            .to_ascii_lowercase()
+            .contains(&expected.to_ascii_lowercase()),
     }
 }
 
@@ -642,25 +1004,24 @@ impl Nth {
 fn complex_matches<T: Tree>(
     parts: &[ComplexSelectorPart],
     tree: &T,
-    id: T::Id,
-    traversal: Traversal,
+    context: SelectorMatchContext<T::Id>,
 ) -> Result<bool> {
     let Some(last) = parts.last() else {
         return Ok(false);
     };
-    if !last.selector.matches(tree, id, traversal)? {
+    let id = context.subject();
+    if !last.selector.matches_with_context(tree, context)? {
         return Ok(false);
     }
 
-    complex_prefix_matches(parts, parts.len() - 1, tree, id, traversal)
+    complex_prefix_matches(parts, parts.len() - 1, tree, context.with_subject(id))
 }
 
 fn complex_prefix_matches<T: Tree>(
     parts: &[ComplexSelectorPart],
     index: usize,
     tree: &T,
-    current: T::Id,
-    traversal: Traversal,
+    context: SelectorMatchContext<T::Id>,
 ) -> Result<bool> {
     if index == 0 {
         return Ok(true);
@@ -671,14 +1032,8 @@ fn complex_prefix_matches<T: Tree>(
             "complex selector part is missing a combinator",
         )
     })?;
-    for candidate in related_candidates(
-        combinator,
-        &parts[index - 1].selector,
-        tree,
-        current,
-        traversal,
-    )? {
-        if complex_prefix_matches(parts, index - 1, tree, candidate, traversal)? {
+    for candidate in related_candidates(combinator, &parts[index - 1].selector, tree, context)? {
+        if complex_prefix_matches(parts, index - 1, tree, context.with_subject(candidate))? {
             return Ok(true);
         }
     }
@@ -689,15 +1044,16 @@ fn related_candidates<T: Tree>(
     combinator: Combinator,
     selector: &Compound,
     tree: &T,
-    id: T::Id,
-    traversal: Traversal,
+    context: SelectorMatchContext<T::Id>,
 ) -> Result<Vec<T::Id>> {
+    let id = context.subject();
+    let traversal = context.traversal();
     match combinator {
         Combinator::Child => {
             let Some(parent) = tree.parent(id, traversal)? else {
                 return Ok(Vec::new());
             };
-            if selector.matches(tree, parent, traversal)? {
+            if selector.matches_with_context(tree, context.with_subject(parent))? {
                 Ok(vec![parent])
             } else {
                 Ok(Vec::new())
@@ -707,7 +1063,7 @@ fn related_candidates<T: Tree>(
             let mut parent = tree.parent(id, traversal)?;
             let mut candidates = Vec::new();
             while let Some(candidate) = parent {
-                if selector.matches(tree, candidate, traversal)? {
+                if selector.matches_with_context(tree, context.with_subject(candidate))? {
                     candidates.push(candidate);
                 }
                 parent = tree.parent(candidate, traversal)?;
@@ -718,7 +1074,7 @@ fn related_candidates<T: Tree>(
             let Some(previous) = tree.previous_sibling(id, traversal)? else {
                 return Ok(Vec::new());
             };
-            if selector.matches(tree, previous, traversal)? {
+            if selector.matches_with_context(tree, context.with_subject(previous))? {
                 Ok(vec![previous])
             } else {
                 Ok(Vec::new())
@@ -734,7 +1090,7 @@ fn related_candidates<T: Tree>(
             };
             let mut candidates = Vec::new();
             for candidate in siblings[..index].iter().rev().copied() {
-                if selector.matches(tree, candidate, traversal)? {
+                if selector.matches_with_context(tree, context.with_subject(candidate))? {
                     candidates.push(candidate);
                 }
             }
@@ -897,6 +1253,179 @@ mod tests {
         assert_eq!(compound.specificity(), SelectorSpecificity::new(1, 2, 1));
         assert_eq!(complex.specificity(), SelectorSpecificity::new(0, 1, 1));
         assert_eq!(list.specificity(), SelectorSpecificity::new(1, 0, 0));
+    }
+
+    #[test]
+    fn attribute_selector_supports_css_matcher_variants() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0)
+                .attribute("data-tags", "primary featured")
+                .attribute("lang", "en-US")
+                .attribute("data-id", "Card-Primary"),
+        ]);
+
+        assert!(
+            AttributeSelector::includes("data-tags", "featured")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            AttributeSelector::dash_match("lang", "en")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            AttributeSelector::prefix("data-id", "Card")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            AttributeSelector::suffix("data-id", "Primary")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            AttributeSelector::substring("data-id", "rd-P")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            !AttributeSelector::prefix("data-id", "")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            !AttributeSelector::suffix("data-id", "")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            !AttributeSelector::substring("data-id", "")
+                .unwrap()
+                .matches(&tree, 0)
+                .unwrap()
+        );
+        assert!(
+            AttributeSelector::equals_with_case(
+                "data-id",
+                "card-primary",
+                AttributeCaseSensitivity::AsciiCaseInsensitive,
+            )
+            .unwrap()
+            .matches(&tree, 0)
+            .unwrap()
+        );
+        assert!(
+            !AttributeSelector::equals_with_case(
+                "data-id",
+                "card-primary",
+                AttributeCaseSensitivity::ExplicitSensitive,
+            )
+            .unwrap()
+            .matches(&tree, 0)
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn runtime_pseudo_classes_use_explicit_style_state_facts() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).state(
+                StyleState::default()
+                    .with_enabled(Some(true))
+                    .with_focus_visible(true)
+                    .with_valid(Some(false))
+                    .with_read_write(Some(true)),
+            ),
+            TestNode::new(1).state(StyleState::default()),
+            TestNode::new(2).state(StyleState::default().with_enabled(Some(false))),
+        ]);
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Enabled))
+                .matches(&tree, 0, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Invalid))
+                .matches(&tree, 0, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Disabled))
+                .matches(&tree, 0, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Enabled))
+                .matches(&tree, 1, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Disabled))
+                .matches(&tree, 1, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Enabled))
+                .matches(&tree, 2, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Disabled))
+                .matches(&tree, 2, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Required))
+                .matches(&tree, 1, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Optional))
+                .matches(&tree, 1, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::InRange))
+                .matches(&tree, 1, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::OutOfRange))
+                .matches(&tree, 1, Traversal::Canonical)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn compound_selectors_can_combine_tag_class_attribute_and_runtime_pseudo_classes() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0)
+                .tag("button")
+                .class("primary")
+                .attribute("data-mode", "submit")
+                .state(StyleState::default().with_hovered(true)),
+        ]);
+        let selector = Selector::compound()
+            .tag("button")
+            .unwrap()
+            .class("primary")
+            .unwrap()
+            .attribute_exists("data-mode")
+            .unwrap()
+            .runtime_pseudo(RuntimePseudoClass::Hover)
+            .selector();
+
+        assert!(selector.matches(&tree, 0, Traversal::Canonical).unwrap());
+        assert_eq!(selector.specificity(), SelectorSpecificity::new(0, 3, 1));
     }
 
     #[test]

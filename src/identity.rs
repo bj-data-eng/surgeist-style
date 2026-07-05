@@ -153,24 +153,41 @@ pub enum StyleRole {
     Custom(StyleTag),
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum RangeState {
+    InRange,
+    OutOfRange,
+}
+
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct StyleState {
-    disabled: bool,
     hovered: bool,
     active: bool,
     focused: bool,
+    focus_visible: bool,
     focus_within: bool,
     pointer_captured: bool,
+    enabled: Option<bool>,
     selected: bool,
     pressed: bool,
     checked: Option<bool>,
     expanded: Option<bool>,
+    required: Option<bool>,
+    valid: Option<bool>,
+    placeholder_shown: bool,
+    modal: bool,
+    fullscreen: bool,
+    popover_open: bool,
+    default: bool,
+    indeterminate: bool,
+    read_write: Option<bool>,
+    range_state: Option<RangeState>,
 }
 
 impl StyleState {
     #[must_use]
     pub const fn disabled(&self) -> bool {
-        self.disabled
+        matches!(self.enabled, Some(false))
     }
 
     #[must_use]
@@ -189,6 +206,11 @@ impl StyleState {
     }
 
     #[must_use]
+    pub const fn focus_visible(&self) -> bool {
+        self.focus_visible
+    }
+
+    #[must_use]
     pub const fn focus_within(&self) -> bool {
         self.focus_within
     }
@@ -196,6 +218,11 @@ impl StyleState {
     #[must_use]
     pub const fn pointer_captured(&self) -> bool {
         self.pointer_captured
+    }
+
+    #[must_use]
+    pub const fn enabled(&self) -> Option<bool> {
+        self.enabled
     }
 
     #[must_use]
@@ -219,24 +246,90 @@ impl StyleState {
     }
 
     #[must_use]
+    pub const fn required(&self) -> Option<bool> {
+        self.required
+    }
+
+    #[must_use]
+    pub const fn valid(&self) -> Option<bool> {
+        self.valid
+    }
+
+    #[must_use]
+    pub const fn placeholder_shown(&self) -> bool {
+        self.placeholder_shown
+    }
+
+    #[must_use]
+    pub const fn modal(&self) -> bool {
+        self.modal
+    }
+
+    #[must_use]
+    pub const fn fullscreen(&self) -> bool {
+        self.fullscreen
+    }
+
+    #[must_use]
+    pub const fn popover_open(&self) -> bool {
+        self.popover_open
+    }
+
+    #[must_use]
+    pub const fn default_state(&self) -> bool {
+        self.default
+    }
+
+    #[must_use]
+    pub const fn indeterminate(&self) -> bool {
+        self.indeterminate
+    }
+
+    #[must_use]
+    pub const fn read_write(&self) -> Option<bool> {
+        self.read_write
+    }
+
+    #[must_use]
+    pub const fn range_state(&self) -> Option<RangeState> {
+        self.range_state
+    }
+
+    #[must_use]
     pub const fn has_flag(&self, flag: StateFlag) -> bool {
         match flag {
             StateFlag::Hovered => self.hovered,
             StateFlag::Active => self.active,
             StateFlag::Focused => self.focused,
+            StateFlag::FocusVisible => self.focus_visible,
             StateFlag::FocusWithin => self.focus_within,
             StateFlag::PointerCaptured => self.pointer_captured,
-            StateFlag::Disabled => self.disabled,
+            StateFlag::Disabled => matches!(self.enabled, Some(false)),
+            StateFlag::Enabled => matches!(self.enabled, Some(true)),
             StateFlag::Selected => self.selected,
             StateFlag::Pressed => self.pressed,
             StateFlag::Checked => matches!(self.checked, Some(true)),
             StateFlag::Expanded => matches!(self.expanded, Some(true)),
+            StateFlag::Required => matches!(self.required, Some(true)),
+            StateFlag::Optional => matches!(self.required, Some(false)),
+            StateFlag::Valid => matches!(self.valid, Some(true)),
+            StateFlag::Invalid => matches!(self.valid, Some(false)),
+            StateFlag::PlaceholderShown => self.placeholder_shown,
+            StateFlag::Modal => self.modal,
+            StateFlag::Fullscreen => self.fullscreen,
+            StateFlag::PopoverOpen => self.popover_open,
+            StateFlag::Default => self.default,
+            StateFlag::Indeterminate => self.indeterminate,
+            StateFlag::ReadOnly => matches!(self.read_write, Some(false)),
+            StateFlag::ReadWrite => matches!(self.read_write, Some(true)),
+            StateFlag::InRange => matches!(self.range_state, Some(RangeState::InRange)),
+            StateFlag::OutOfRange => matches!(self.range_state, Some(RangeState::OutOfRange)),
         }
     }
 
     #[must_use]
     pub const fn with_disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
+        self.enabled = Some(!disabled);
         self
     }
 
@@ -259,6 +352,12 @@ impl StyleState {
     }
 
     #[must_use]
+    pub const fn with_focus_visible(mut self, focus_visible: bool) -> Self {
+        self.focus_visible = focus_visible;
+        self
+    }
+
+    #[must_use]
     pub const fn with_focus_within(mut self, focus_within: bool) -> Self {
         self.focus_within = focus_within;
         self
@@ -267,6 +366,12 @@ impl StyleState {
     #[must_use]
     pub const fn with_pointer_captured(mut self, pointer_captured: bool) -> Self {
         self.pointer_captured = pointer_captured;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_enabled(mut self, enabled: Option<bool>) -> Self {
+        self.enabled = enabled;
         self
     }
 
@@ -291,6 +396,66 @@ impl StyleState {
     #[must_use]
     pub const fn with_expanded(mut self, expanded: Option<bool>) -> Self {
         self.expanded = expanded;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_required(mut self, required: Option<bool>) -> Self {
+        self.required = required;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_valid(mut self, valid: Option<bool>) -> Self {
+        self.valid = valid;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_placeholder_shown(mut self, placeholder_shown: bool) -> Self {
+        self.placeholder_shown = placeholder_shown;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_modal(mut self, modal: bool) -> Self {
+        self.modal = modal;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_fullscreen(mut self, fullscreen: bool) -> Self {
+        self.fullscreen = fullscreen;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_popover_open(mut self, popover_open: bool) -> Self {
+        self.popover_open = popover_open;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_default(mut self, default: bool) -> Self {
+        self.default = default;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_indeterminate(mut self, indeterminate: bool) -> Self {
+        self.indeterminate = indeterminate;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_read_write(mut self, read_write: Option<bool>) -> Self {
+        self.read_write = read_write;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_range_state(mut self, range_state: Option<RangeState>) -> Self {
+        self.range_state = range_state;
         self
     }
 }

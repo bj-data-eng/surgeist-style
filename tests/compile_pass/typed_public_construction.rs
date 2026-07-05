@@ -1,9 +1,11 @@
 use surgeist_style::{
-    AnimationNameList, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue,
-    AuthoredTokens, Color, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
+    AnimationNameList, AttributeCaseSensitivity, AttributeMatcher, AttributeSelector,
+    AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, AuthoredTokens,
+    Color, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
-    GridTrackList, LayerOrder, Length, Opacity, Property, RulePrecedence, Selector, SelectorList,
-    SelectorSpecificity, SourceOrder, TypedDeclaration, Value, VariableDependentValue,
+    GridTrackList, LayerOrder, Length, Opacity, Property, PseudoClassSelector, RangeState,
+    RulePrecedence, RuntimePseudoClass, Selector, SelectorList, SelectorSpecificity, SourceOrder,
+    StateFlag, StyleAttributeValue, StyleState, TypedDeclaration, Value, VariableDependentValue,
     VariableExpression, VariableFallback, VariableReference,
 };
 
@@ -43,6 +45,22 @@ fn main() -> surgeist_style::Result<()> {
         Selector::class("primary")?,
     ])?;
     assert_eq!(selector_list.selectors().len(), 2);
+    let attribute_selector = AttributeSelector::equals_with_case(
+        "data-id",
+        "submit",
+        AttributeCaseSensitivity::AsciiCaseInsensitive,
+    )?;
+    let matcher_selector = AttributeSelector::matcher_with_case(
+        "data-tags",
+        AttributeMatcher::Includes(StyleAttributeValue::new("primary")?),
+        AttributeCaseSensitivity::DocumentDefault,
+    )?;
+    assert!(matches!(attribute_selector, AttributeSelector::Matcher { .. }));
+    assert!(matches!(matcher_selector, AttributeSelector::Matcher { .. }));
+    let pseudo_selector = Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Hover));
+    assert_eq!(pseudo_selector.specificity(), SelectorSpecificity::new(0, 1, 0));
+    let state = StyleState::default().with_range_state(Some(RangeState::InRange));
+    assert!(state.has_flag(StateFlag::InRange));
 
     let custom_name = CustomPropertyName::try_new("--brand")?;
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");
