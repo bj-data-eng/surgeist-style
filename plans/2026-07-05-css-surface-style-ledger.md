@@ -548,10 +548,18 @@ Dependency check: `rg -n "surgeist_css|surgeist-css" Cargo.toml src tests plans`
 reported references only in planning files. `Cargo.toml`, `src`, and `tests`
 have no `surgeist-css` or `surgeist_css` references.
 
+Rust checks were skipped because this plan creates a source-derived planning ledger only and does not modify Rust source.
+
 ## Coverage Audit
 
 | Surface | Expected source count or minimum | Ledger row count | Audit result |
 | --- | --- | --- | --- |
+| `CssRule` | Source count `9` | `9` | Pass: ledger row count equals source count. |
+| `CssValue` | Source count `110` | `110` | Pass: ledger row count equals source count. |
+| `CssGlobalKeyword` | Required count `5` | `5` | Pass: ledger row count equals required CSS-wide keyword count. |
+| `CssProperty` | Source count `180` | `180` | Pass: ledger row count equals source count. |
+| Selector required rows | Minimum `65` | `65` | Pass: ledger row count meets the required minimum. |
+| Condition/layer/scope/environment required rows | Minimum `52` | `52` | Pass: ledger row count meets the required minimum. |
 
 ## Root Coordination Questions
 
