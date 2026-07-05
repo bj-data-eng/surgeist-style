@@ -3,10 +3,11 @@ use surgeist_style::{
     AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, AuthoredTokens,
     Color, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
-    GridTrackList, LayerOrder, Length, Opacity, Property, PseudoClassSelector, RangeState,
-    RulePrecedence, RuntimePseudoClass, Selector, SelectorList, SelectorSpecificity, SourceOrder,
-    StateFlag, StyleAttributeValue, StyleState, TypedDeclaration, Value, VariableDependentValue,
-    VariableExpression, VariableFallback, VariableReference,
+    GridTrackList, LayerOrder, Length, NthPattern, NthSelector, Opacity, Property,
+    PseudoClassSelector, RangeState, RulePrecedence, RuntimePseudoClass, Selector, SelectorList,
+    SelectorSpecificity, SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue,
+    StyleState, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
+    VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -59,6 +60,16 @@ fn main() -> surgeist_style::Result<()> {
     assert!(matches!(matcher_selector, AttributeSelector::Matcher { .. }));
     let pseudo_selector = Selector::pseudo(PseudoClassSelector::runtime(RuntimePseudoClass::Hover));
     assert_eq!(pseudo_selector.specificity(), SelectorSpecificity::new(0, 1, 0));
+    let nth_selector = NthSelector::new(NthPattern::odd(), Some(selector_list.clone()));
+    assert_eq!(nth_selector.pattern(), NthPattern::odd());
+    assert!(nth_selector.filter().is_some());
+    let structural_selector = Selector::pseudo(PseudoClassSelector::structural(
+        StructuralSelector::NthChild(nth_selector),
+    ));
+    assert_eq!(
+        structural_selector.specificity(),
+        SelectorSpecificity::new(0, 2, 0)
+    );
     let state = StyleState::default().with_range_state(Some(RangeState::InRange));
     assert!(state.has_flag(StateFlag::InRange));
 

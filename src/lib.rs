@@ -43,8 +43,9 @@ pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
 pub use selector::{
     AttributeCaseSensitivity, AttributeMatcher, AttributeSelector, Combinator, ComplexSelector,
-    ComplexSelectorPart, Compound, Nth, Position, PositionSelector, PseudoClassSelector,
-    RuntimePseudoClass, Selector, SelectorList, SelectorMatchContext, SelectorSpecificity,
+    ComplexSelectorPart, Compound, Nth, NthPattern, NthSelector, Position, PositionSelector,
+    PseudoClassSelector, RuntimePseudoClass, Selector, SelectorList, SelectorMatchContext,
+    SelectorSpecificity, StructuralSelector,
 };
 pub use sheet::{Rule, Sheet, Version};
 pub use state::StateFlag;

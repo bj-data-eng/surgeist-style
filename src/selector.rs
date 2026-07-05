@@ -166,11 +166,10 @@ impl Selector {
         match self {
             Self::Any => SelectorSpecificity::zero(),
             Self::Tag(_) => SelectorSpecificity::new(0, 0, 1),
-            Self::Class(_)
-            | Self::State(_)
-            | Self::Attribute(_)
-            | Self::Position(_)
-            | Self::Pseudo(_) => SelectorSpecificity::new(0, 1, 0),
+            Self::Class(_) | Self::State(_) | Self::Attribute(_) | Self::Position(_) => {
+                SelectorSpecificity::new(0, 1, 0)
+            }
+            Self::Pseudo(pseudo_class) => pseudo_class.specificity(),
             Self::Key(_) => SelectorSpecificity::new(1, 0, 0),
             Self::Compound(compound) => compound.specificity(),
             Self::Complex(complex) => complex.specificity(),
@@ -591,6 +590,7 @@ pub enum Combinator {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PseudoClassSelector {
     Runtime(RuntimePseudoClass),
+    Structural(StructuralSelector),
 }
 
 impl PseudoClassSelector {
@@ -599,18 +599,95 @@ impl PseudoClassSelector {
         Self::Runtime(pseudo_class)
     }
 
+    #[must_use]
+    pub const fn structural(selector: StructuralSelector) -> Self {
+        Self::Structural(selector)
+    }
+
     pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
         let id = context.subject();
         match self {
             Self::Runtime(pseudo_class) => {
                 runtime_state_matches(tree, id, pseudo_class.state_flag())
             }
+            Self::Structural(selector) => selector.matches(tree, context),
         }
     }
 
     #[must_use]
-    pub const fn specificity(&self) -> SelectorSpecificity {
-        SelectorSpecificity::new(0, 1, 0)
+    pub fn specificity(&self) -> SelectorSpecificity {
+        match self {
+            Self::Runtime(_) => SelectorSpecificity::new(0, 1, 0),
+            Self::Structural(selector) => selector.specificity(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StructuralSelector {
+    FirstChild,
+    LastChild,
+    OnlyChild,
+    Empty,
+    FirstOfType,
+    LastOfType,
+    OnlyOfType,
+    NthChild(NthSelector),
+    NthLastChild(NthSelector),
+    NthOfType(NthPattern),
+    NthLastOfType(NthPattern),
+}
+
+impl StructuralSelector {
+    pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+        let id = context.subject();
+        let traversal = context.traversal();
+        Ok(match self {
+            Self::FirstChild => child_position(tree, context, None)?
+                .is_some_and(|position| NthPattern::integer(1).matches(position)),
+            Self::LastChild => reverse_child_position(tree, context, None)?
+                .is_some_and(|position| NthPattern::integer(1).matches(position)),
+            Self::OnlyChild => child_position(tree, context, None)?
+                .zip(reverse_child_position(tree, context, None)?)
+                .is_some_and(|(from_start, from_end)| from_start == 1 && from_end == 1),
+            Self::Empty => node_is_empty(tree, id, traversal)?,
+            Self::FirstOfType => type_position(tree, id, traversal)?
+                .is_some_and(|position| NthPattern::integer(1).matches(position)),
+            Self::LastOfType => reverse_type_position(tree, id, traversal)?
+                .is_some_and(|position| NthPattern::integer(1).matches(position)),
+            Self::OnlyOfType => type_position(tree, id, traversal)?
+                .zip(reverse_type_position(tree, id, traversal)?)
+                .is_some_and(|(from_start, from_end)| from_start == 1 && from_end == 1),
+            Self::NthChild(selector) => child_position(tree, context, selector.filter())?
+                .is_some_and(|position| selector.pattern().matches(position)),
+            Self::NthLastChild(selector) => {
+                reverse_child_position(tree, context, selector.filter())?
+                    .is_some_and(|position| selector.pattern().matches(position))
+            }
+            Self::NthOfType(pattern) => type_position(tree, id, traversal)?
+                .is_some_and(|position| pattern.matches(position)),
+            Self::NthLastOfType(pattern) => reverse_type_position(tree, id, traversal)?
+                .is_some_and(|position| pattern.matches(position)),
+        })
+    }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        let base = SelectorSpecificity::new(0, 1, 0);
+        match self {
+            Self::NthChild(selector) | Self::NthLastChild(selector) => {
+                base.saturating_add(selector.filter_specificity())
+            }
+            Self::FirstChild
+            | Self::LastChild
+            | Self::OnlyChild
+            | Self::Empty
+            | Self::FirstOfType
+            | Self::LastOfType
+            | Self::OnlyOfType
+            | Self::NthOfType(_)
+            | Self::NthLastOfType(_) => base,
+        }
     }
 }
 
@@ -988,17 +1065,211 @@ impl Nth {
 
     #[must_use]
     pub fn matches(self, position: usize) -> bool {
-        if position == 0 {
+        let step = i32::try_from(self.step).unwrap_or(i32::MAX);
+        let offset = i32::try_from(self.offset).unwrap_or(i32::MAX);
+        NthPattern::new(step, offset).matches(position)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NthPattern {
+    a: i32,
+    b: i32,
+}
+
+impl NthPattern {
+    #[must_use]
+    pub const fn new(a: i32, b: i32) -> Self {
+        Self { a, b }
+    }
+
+    #[must_use]
+    pub const fn odd() -> Self {
+        Self::new(2, 1)
+    }
+
+    #[must_use]
+    pub const fn even() -> Self {
+        Self::new(2, 0)
+    }
+
+    #[must_use]
+    pub const fn integer(position: i32) -> Self {
+        Self::new(0, position)
+    }
+
+    #[must_use]
+    pub fn matches(self, one_based_position: usize) -> bool {
+        let position = i32::try_from(one_based_position).unwrap_or(i32::MAX);
+        if position <= 0 {
             return false;
         }
-        if self.step == 0 {
-            return self.offset > 0 && position == self.offset;
+        if self.a == 0 {
+            return position == self.b;
         }
-        if self.offset == 0 {
-            return position.is_multiple_of(self.step);
+        let delta = position - self.b;
+        if self.a > 0 {
+            delta >= 0 && delta % self.a == 0
+        } else {
+            delta <= 0 && delta % self.a == 0
         }
-        position >= self.offset && (position - self.offset).is_multiple_of(self.step)
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NthSelector {
+    pattern: NthPattern,
+    filter: Option<SelectorList>,
+}
+
+impl NthSelector {
+    #[must_use]
+    pub const fn new(pattern: NthPattern, filter: Option<SelectorList>) -> Self {
+        Self { pattern, filter }
+    }
+
+    #[must_use]
+    pub const fn pattern(&self) -> NthPattern {
+        self.pattern
+    }
+
+    #[must_use]
+    pub const fn filter(&self) -> Option<&SelectorList> {
+        self.filter.as_ref()
+    }
+
+    #[must_use]
+    fn filter_specificity(&self) -> SelectorSpecificity {
+        self.filter()
+            .map_or_else(SelectorSpecificity::zero, SelectorList::max_specificity)
+    }
+}
+
+fn child_position<T: Tree>(
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+    filter: Option<&SelectorList>,
+) -> Result<Option<usize>> {
+    let id = context.subject();
+    let traversal = context.traversal();
+    let Some(parent) = tree.parent(id, traversal)? else {
+        return Ok(None);
+    };
+    position_in_siblings(tree, context, tree.children(parent, traversal)?, filter)
+}
+
+fn reverse_child_position<T: Tree>(
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+    filter: Option<&SelectorList>,
+) -> Result<Option<usize>> {
+    let id = context.subject();
+    let traversal = context.traversal();
+    let Some(parent) = tree.parent(id, traversal)? else {
+        return Ok(None);
+    };
+    reverse_position_in_siblings(tree, context, tree.children(parent, traversal)?, filter)
+}
+
+fn position_in_siblings<T: Tree>(
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+    siblings: impl IntoIterator<Item = T::Id>,
+    filter: Option<&SelectorList>,
+) -> Result<Option<usize>> {
+    let id = context.subject();
+    let mut position = 0;
+    for sibling in siblings {
+        if sibling_matches_filter(tree, context.with_subject(sibling), filter)? {
+            position += 1;
+            if sibling == id {
+                return Ok(Some(position));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn reverse_position_in_siblings<T: Tree>(
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+    siblings: impl IntoIterator<Item = T::Id>,
+    filter: Option<&SelectorList>,
+) -> Result<Option<usize>> {
+    let id = context.subject();
+    let mut filtered = Vec::new();
+    for sibling in siblings {
+        if sibling_matches_filter(tree, context.with_subject(sibling), filter)? {
+            filtered.push(sibling);
+        }
+    }
+    Ok(filtered
+        .iter()
+        .rev()
+        .position(|sibling| *sibling == id)
+        .map(|index| index + 1))
+}
+
+fn sibling_matches_filter<T: Tree>(
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+    filter: Option<&SelectorList>,
+) -> Result<bool> {
+    match filter {
+        Some(filter) => filter.matches(tree, context),
+        None => Ok(true),
+    }
+}
+
+fn type_position<T: Tree>(tree: &T, id: T::Id, traversal: Traversal) -> Result<Option<usize>> {
+    let Some(tag) = tree.node(id)?.tag else {
+        return Ok(None);
+    };
+    let Some(parent) = tree.parent(id, traversal)? else {
+        return Ok(None);
+    };
+    let mut position = 0;
+    for sibling in tree.children(parent, traversal)? {
+        if tree.node(sibling)?.tag.as_ref() == Some(&tag) {
+            position += 1;
+            if sibling == id {
+                return Ok(Some(position));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn reverse_type_position<T: Tree>(
+    tree: &T,
+    id: T::Id,
+    traversal: Traversal,
+) -> Result<Option<usize>> {
+    let Some(tag) = tree.node(id)?.tag else {
+        return Ok(None);
+    };
+    let Some(parent) = tree.parent(id, traversal)? else {
+        return Ok(None);
+    };
+    let siblings: Vec<_> = tree.children(parent, traversal)?.collect();
+    let mut position = 0;
+    for sibling in siblings.into_iter().rev() {
+        if tree.node(sibling)?.tag.as_ref() == Some(&tag) {
+            position += 1;
+            if sibling == id {
+                return Ok(Some(position));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn node_is_empty<T: Tree>(tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
+    let node = tree.node(id)?;
+    if node.text {
+        return Ok(false);
+    }
+    Ok(tree.children(id, traversal)?.next().is_none())
 }
 
 fn complex_matches<T: Tree>(
@@ -1429,6 +1700,195 @@ mod tests {
     }
 
     #[test]
+    fn structural_selectors_match_child_and_type_positions() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("root").children([1, 2, 3, 4]),
+            TestNode::new(1).tag("button"),
+            TestNode::new(2).tag("label"),
+            TestNode::new(3).tag("button"),
+            TestNode::new(4).tag("button"),
+        ]);
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::FirstChild,
+            ))
+            .matches(&tree, 1, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::LastChild
+            ))
+            .matches(&tree, 4, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::NthOfType(NthPattern::integer(2)),
+            ))
+            .matches(&tree, 3, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::NthLastOfType(NthPattern::integer(1)),
+            ))
+            .matches(&tree, 4, Traversal::Canonical)
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn compound_selectors_can_combine_tag_and_structural_pseudo_classes() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("ul").children([1, 2]),
+            TestNode::new(1).tag("li"),
+            TestNode::new(2).tag("li"),
+        ]);
+        let selector = Selector::compound()
+            .tag("li")
+            .unwrap()
+            .pseudo(PseudoClassSelector::structural(
+                StructuralSelector::NthChild(NthSelector::new(NthPattern::integer(2), None)),
+            ))
+            .selector();
+
+        assert!(selector.matches(&tree, 2, Traversal::Canonical).unwrap());
+        assert_eq!(selector.specificity(), SelectorSpecificity::new(0, 1, 1));
+    }
+
+    #[test]
+    fn structural_selectors_cover_only_empty_reverse_filtered_and_type_edge_cases() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("root").children([1, 2, 3, 4, 5]),
+            TestNode::new(1).tag("button").class("candidate"),
+            TestNode::new(2).tag("button").class("candidate"),
+            TestNode::new(3).tag("label"),
+            TestNode::new(4).tag("button").class("candidate"),
+            TestNode::new(5),
+            TestNode::new(6).tag("empty"),
+            TestNode::new(7).tag("text").text(),
+            TestNode::new(8).tag("single-parent").children([9]),
+            TestNode::new(9).tag("only"),
+        ]);
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::OnlyChild,
+            ))
+            .matches(&tree, 9, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(StructuralSelector::Empty))
+                .matches(&tree, 6, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::structural(StructuralSelector::Empty))
+                .matches(&tree, 7, Traversal::Canonical)
+                .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::FirstOfType,
+            ))
+            .matches(&tree, 1, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::LastOfType,
+            ))
+            .matches(&tree, 4, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::OnlyOfType,
+            ))
+            .matches(&tree, 3, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::structural(
+                StructuralSelector::FirstOfType,
+            ))
+            .matches(&tree, 5, Traversal::Canonical)
+            .unwrap()
+        );
+
+        let filter = SelectorList::try_new([Selector::class("candidate").unwrap()]).unwrap();
+        let nth_last = Selector::pseudo(PseudoClassSelector::structural(
+            StructuralSelector::NthLastChild(NthSelector::new(
+                NthPattern::integer(2),
+                Some(filter),
+            )),
+        ));
+        assert!(nth_last.matches(&tree, 2, Traversal::Canonical).unwrap());
+        assert!(!nth_last.matches(&tree, 1, Traversal::Canonical).unwrap());
+    }
+
+    #[test]
+    fn nth_child_can_filter_siblings_by_selector_list() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("root").children([1, 2, 3, 4]),
+            TestNode::new(1).tag("button").class("candidate"),
+            TestNode::new(2).tag("button"),
+            TestNode::new(3).tag("button").class("candidate"),
+            TestNode::new(4).tag("button").class("candidate"),
+        ]);
+        let filter = SelectorList::try_new([Selector::class("candidate").unwrap()]).unwrap();
+        let selector = Selector::pseudo(PseudoClassSelector::structural(
+            StructuralSelector::NthChild(NthSelector::new(NthPattern::integer(2), Some(filter))),
+        ));
+
+        assert!(selector.matches(&tree, 3, Traversal::Canonical).unwrap());
+        assert!(!selector.matches(&tree, 4, Traversal::Canonical).unwrap());
+    }
+
+    #[test]
+    fn nth_patterns_match_signed_css_an_plus_b_positions() {
+        assert!(NthPattern::odd().matches(1));
+        assert!(NthPattern::odd().matches(3));
+        assert!(!NthPattern::odd().matches(2));
+
+        assert!(NthPattern::even().matches(2));
+        assert!(NthPattern::even().matches(4));
+        assert!(!NthPattern::even().matches(3));
+
+        assert!(NthPattern::integer(3).matches(3));
+        assert!(!NthPattern::integer(3).matches(2));
+
+        let two_n_plus_one = NthPattern::new(2, 1);
+        assert!(two_n_plus_one.matches(5));
+        assert!(!two_n_plus_one.matches(6));
+
+        let negative_n_plus_three = NthPattern::new(-1, 3);
+        assert!(negative_n_plus_three.matches(1));
+        assert!(negative_n_plus_three.matches(3));
+        assert!(!negative_n_plus_three.matches(4));
+
+        assert!(!NthPattern::integer(0).matches(1));
+        assert!(!NthPattern::integer(-1).matches(1));
+    }
+
+    #[test]
+    fn nth_child_filter_specificity_adds_filter_max_specificity() {
+        let filter = SelectorList::try_new([
+            Selector::tag("button").unwrap(),
+            Selector::key("primary").unwrap(),
+        ])
+        .unwrap();
+        let selector = Selector::pseudo(PseudoClassSelector::structural(
+            StructuralSelector::NthChild(NthSelector::new(NthPattern::odd(), Some(filter))),
+        ));
+
+        assert_eq!(selector.specificity(), SelectorSpecificity::new(1, 1, 0));
+    }
+
+    #[test]
     fn complex_selector_rejects_invalid_part_ordering() {
         assert_eq!(
             ComplexSelector::try_new([]).unwrap_err().code(),
@@ -1463,6 +1923,7 @@ mod tests {
         attributes: Vec<StyleAttribute>,
         role: StyleRole,
         state: StyleState,
+        text: bool,
         children: Vec<usize>,
     }
 
@@ -1476,6 +1937,7 @@ mod tests {
                 attributes: Vec::new(),
                 role: StyleRole::default(),
                 state: StyleState::default(),
+                text: false,
                 children: Vec::new(),
             }
         }
@@ -1505,6 +1967,11 @@ mod tests {
 
         fn state(mut self, state: StyleState) -> Self {
             self.state = state;
+            self
+        }
+
+        fn text(mut self) -> Self {
+            self.text = true;
             self
         }
 
@@ -1543,7 +2010,7 @@ mod tests {
                 attributes: node.attributes.clone(),
                 role: node.role.clone(),
                 state: node.state.clone(),
-                text: false,
+                text: node.text,
             })
         }
 
