@@ -3,13 +3,13 @@ use surgeist_style::{
     AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, AuthoredTokens,
     Change, Color, Combinator, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
-    GridTrackList, LayerOrder, Length, NthPattern, NthSelector, Opacity, Property,
+    GridTrackList, LayerOrder, Length, Node, NthPattern, NthSelector, Opacity, Property,
     PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList,
-    RulePrecedence, RuleTarget, RuntimePseudoClass, Selector, SelectorList,
+    RulePrecedence, RuleTarget, RuntimePseudoClass, Selector, SelectorList, Context,
     SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag,
-    StructuralSelector, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleState,
-    TypedDeclaration, Value, VariableDependentValue, VariableExpression, VariableFallback,
-    VariableReference,
+    StructuralSelector, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole,
+    StyleState, StyleTag, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
+    VariableExpression, VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -106,6 +106,8 @@ fn main() -> surgeist_style::Result<()> {
         Declarations::new(),
     );
     assert_eq!(targeted_sheet.rule_count(), 2);
+    let tree = PublicTree;
+    let _before_context = Context::new(&tree, 0).style_bucket(StyleBucket::Before);
 
     let selector_change = Change::from_selector_fact_change(SelectorFactChange::Class);
     assert!(selector_change.rematch);
@@ -202,4 +204,51 @@ fn main() -> surgeist_style::Result<()> {
     )?)?;
     assert!(authored.len() >= 2);
     Ok(())
+}
+
+struct PublicTree;
+
+impl Tree for PublicTree {
+    type Id = usize;
+
+    fn version_hint(&self) -> Option<u64> {
+        None
+    }
+
+    fn node(&self, id: Self::Id) -> surgeist_style::Result<Node<Self::Id>> {
+        Ok(Node {
+            id,
+            tag: Some(StyleTag::new("button")?),
+            key: None,
+            classes: Vec::new(),
+            attributes: Vec::new(),
+            role: StyleRole::default(),
+            state: StyleState::default(),
+            text: false,
+        })
+    }
+
+    fn parent(
+        &self,
+        _id: Self::Id,
+        _traversal: Traversal,
+    ) -> surgeist_style::Result<Option<Self::Id>> {
+        Ok(None)
+    }
+
+    fn children(
+        &self,
+        _id: Self::Id,
+        _traversal: Traversal,
+    ) -> surgeist_style::Result<impl Iterator<Item = Self::Id> + '_> {
+        Ok(std::iter::empty())
+    }
+
+    fn previous_sibling(
+        &self,
+        _id: Self::Id,
+        _traversal: Traversal,
+    ) -> surgeist_style::Result<Option<Self::Id>> {
+        Ok(None)
+    }
 }

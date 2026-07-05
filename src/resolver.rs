@@ -5,8 +5,9 @@ use std::{
 
 use super::{
     Condition, Container, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges, Length,
-    PointerEvents, Property, Result, RulePrecedence, SelectorMatchContext, Sheet, Size, Transform,
-    Traversal, Tree, Value, Version, Viewport, Visibility, declaration::hash_value,
+    PointerEvents, Property, Result, RulePrecedence, SelectorMatchContext, Sheet, Size,
+    StyleBucket, Transform, Traversal, Tree, Value, Version, Viewport, Visibility,
+    declaration::hash_value,
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -283,6 +284,7 @@ pub struct Context<'a, T: Tree> {
     pub parent: Option<&'a Resolved>,
     pub local: Option<&'a Declarations>,
     pub animated: Option<&'a Declarations>,
+    style_bucket: StyleBucket,
     selector_root: Option<T::Id>,
     selector_scope: Option<T::Id>,
 }
@@ -299,6 +301,7 @@ impl<'a, T: Tree> Context<'a, T> {
             parent: None,
             local: None,
             animated: None,
+            style_bucket: StyleBucket::Element,
             selector_root: None,
             selector_scope: None,
         }
@@ -337,6 +340,12 @@ impl<'a, T: Tree> Context<'a, T> {
     #[must_use]
     pub const fn animated(mut self, animated: &'a Declarations) -> Self {
         self.animated = Some(animated);
+        self
+    }
+
+    #[must_use]
+    pub const fn style_bucket(mut self, bucket: StyleBucket) -> Self {
+        self.style_bucket = bucket;
         self
     }
 
@@ -422,6 +431,9 @@ impl Resolver {
         let mut custom_candidates =
             BTreeMap::<CustomPropertyName, Vec<CustomPropertyCandidate>>::new();
         for rule in self.sheet.candidate_rules(context.tree, context.node)? {
+            if rule.style_bucket() != context.style_bucket {
+                continue;
+            }
             if !Condition::matches_all(rule.conditions(), context.viewport, context.container) {
                 continue;
             }
@@ -526,6 +538,7 @@ impl Resolver {
             .animated
             .map(Declarations::fingerprint)
             .hash(&mut hasher);
+        context.style_bucket.hash(&mut hasher);
         context.selector_root.hash(&mut hasher);
         context.selector_scope.hash(&mut hasher);
         Ok(Some(CacheKey {
@@ -1136,9 +1149,9 @@ mod tests {
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
         Color, Combinator, ComplexSelectorPart, CssWideKeyword, CustomPropertyName,
-        CustomPropertyValue, Error, ErrorCode, LayerOrder, Node, RulePrecedence, Selector,
-        SelectorSpecificity, SourceOrder, StyleClass, StyleRole, StyleState, StyleTag,
-        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        CustomPropertyValue, Error, ErrorCode, LayerOrder, Node, RulePrecedence, RuleTarget,
+        Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState,
+        StyleTag, VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -2047,6 +2060,146 @@ mod tests {
             .unwrap();
 
         assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+    }
+
+    #[test]
+    fn resolver_defaults_to_element_bucket() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button").class("badge")]);
+        let sheet = Sheet::new()
+            .rule(
+                Selector::class("badge").unwrap(),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .unwrap(),
+            )
+            .targeted_rule(
+                RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
+                Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            );
+        let mut resolver = Resolver::new(sheet);
+
+        let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
+
+        assert_eq!(resolved.text_color(), Color::rgba(0.1, 0.2, 0.3, 1.0));
+    }
+
+    #[test]
+    fn resolver_applies_only_requested_style_bucket() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button").class("badge")]);
+        let sheet = Sheet::new()
+            .rule(
+                Selector::class("badge").unwrap(),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .unwrap(),
+            )
+            .targeted_rule(
+                RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.8, 0.7, 0.6, 1.0))
+                    .unwrap(),
+            );
+        let mut resolver = Resolver::new(sheet);
+
+        let element = resolver.resolve(Context::new(&tree, 0)).unwrap();
+        let before = resolver
+            .resolve(Context::new(&tree, 0).style_bucket(StyleBucket::Before))
+            .unwrap();
+
+        assert_eq!(element.text_color(), Color::rgba(0.1, 0.2, 0.3, 1.0));
+        assert_eq!(before.text_color(), Color::rgba(0.8, 0.7, 0.6, 1.0));
+    }
+
+    #[test]
+    fn resolver_cache_key_includes_style_bucket() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button").class("badge")]);
+        let sheet = Sheet::new()
+            .rule(
+                Selector::class("badge").unwrap(),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .unwrap(),
+            )
+            .targeted_rule(
+                RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.8, 0.7, 0.6, 1.0))
+                    .unwrap(),
+            );
+        let mut resolver = Resolver::new(sheet);
+
+        let element = resolver.resolve(Context::new(&tree, 0)).unwrap();
+        let before = resolver
+            .resolve(Context::new(&tree, 0).style_bucket(StyleBucket::Before))
+            .unwrap();
+        let before_again = resolver
+            .resolve(Context::new(&tree, 0).style_bucket(StyleBucket::Before))
+            .unwrap();
+
+        assert_eq!(element.text_color(), Color::rgba(0.1, 0.2, 0.3, 1.0));
+        assert_eq!(before.text_color(), Color::rgba(0.8, 0.7, 0.6, 1.0));
+        assert_eq!(before_again.text_color(), Color::rgba(0.8, 0.7, 0.6, 1.0));
+        assert_eq!(resolver.cache_hits(), 1);
+    }
+
+    #[test]
+    fn pseudo_bucket_inherits_from_supplied_parent_style() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button").class("badge")]);
+        let sheet = Sheet::new().targeted_rule(
+            RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
+            Declarations::new()
+                .try_set(Property::Width, Value::Length(Length::Px(32.0)))
+                .unwrap(),
+        );
+        let parent = parent_color(Color::rgba(0.4, 0.5, 0.6, 1.0));
+        let mut resolver = Resolver::new(sheet);
+
+        let before = resolver
+            .resolve(
+                Context::new(&tree, 0)
+                    .style_bucket(StyleBucket::Before)
+                    .parent(&parent),
+            )
+            .unwrap();
+
+        assert_eq!(before.text_color(), Color::rgba(0.4, 0.5, 0.6, 1.0));
+        assert_eq!(before.width(), Length::Px(32.0));
+    }
+
+    #[test]
+    fn local_and_animated_overlays_apply_to_requested_bucket() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button").class("badge")]);
+        let sheet = Sheet::new()
+            .rule(
+                Selector::class("badge").unwrap(),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .unwrap(),
+            )
+            .targeted_rule(
+                RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
+                Declarations::new()
+                    .try_text_color(Color::rgba(0.4, 0.5, 0.6, 1.0))
+                    .unwrap(),
+            );
+        let local = Declarations::new()
+            .try_text_color(Color::rgba(0.7, 0.8, 0.9, 1.0))
+            .unwrap();
+        let animated = Declarations::new()
+            .try_text_color(Color::TRANSPARENT)
+            .unwrap();
+        let mut resolver = Resolver::new(sheet);
+
+        let before = resolver
+            .resolve(
+                Context::new(&tree, 0)
+                    .style_bucket(StyleBucket::Before)
+                    .local(&local)
+                    .animated(&animated),
+            )
+            .unwrap();
+
+        assert_eq!(before.text_color(), Color::TRANSPARENT);
     }
 
     #[test]
