@@ -4,9 +4,13 @@ use std::{
 };
 
 use super::{
-    Condition, Container, Corners, Cursor, Declarations, Display, Edges, Length, PointerEvents,
-    Property, Result, Sheet, Size, Transform, Traversal, Tree, Value, Version, Viewport,
-    Visibility, declaration::hash_value,
+    Condition, Container, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges, Length,
+    PointerEvents, Property, Result, RulePrecedence, Sheet, Size, Transform, Traversal, Tree,
+    Value, Version, Viewport, Visibility, declaration::hash_value,
+};
+use crate::{
+    authored::AuthoredCascadeValue,
+    sheet::{RuleDeclarationOrigin, RuleDeclarationValue},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -217,7 +221,7 @@ impl Resolved {
     fn apply(&mut self, declarations: &Declarations, parent: Option<&Self>) -> Result<()> {
         for declaration in declarations.iter() {
             declaration.property.validate_value(&declaration.value)?;
-            let value = resolve_keyword(declaration.property, &declaration.value, parent);
+            let value = resolve_legacy_value(declaration.property, &declaration.value, parent);
             self.values.insert(declaration.property, value);
         }
         Ok(())
@@ -359,6 +363,7 @@ impl Resolver {
             resolved.inherit_from(parent);
         }
 
+        let mut rule_candidates = BTreeMap::<Property, Vec<RuleCandidate>>::new();
         for rule in self.sheet.candidate_rules(context.tree, context.node)? {
             if !Condition::matches_all(rule.conditions(), context.viewport, context.container) {
                 continue;
@@ -366,10 +371,25 @@ impl Resolver {
             if rule
                 .selector()
                 .matches(context.tree, context.node, context.traversal)?
-                && let Some(declarations) = rule.legacy_declarations()
             {
-                resolved.apply(declarations, context.parent)?;
+                for declaration in rule.declaration_items() {
+                    let candidate = RuleCandidate::try_from_declaration(
+                        declaration.property(),
+                        rule.precedence(),
+                        declaration.origin(),
+                        declaration.value(),
+                    )?;
+                    rule_candidates
+                        .entry(candidate.property)
+                        .or_default()
+                        .push(candidate);
+                }
             }
+        }
+        for (property, candidates) in &mut rule_candidates {
+            candidates.sort_by_key(|candidate| candidate.precedence);
+            let value = resolve_rule_candidates(*property, candidates, context.parent);
+            resolved.values.insert(*property, value);
         }
 
         if let Some(local) = context.local {
@@ -427,22 +447,154 @@ impl Resolver {
     }
 }
 
-fn resolve_keyword(property: Property, value: &Value, parent: Option<&Resolved>) -> Value {
-    match value {
-        Value::Keyword(super::Keyword::Initial) => property.metadata().default().clone(),
-        Value::Keyword(super::Keyword::Inherit) => parent
-            .map(|parent| parent.get(property).clone())
-            .unwrap_or_else(|| property.metadata().default().clone()),
-        Value::Keyword(super::Keyword::Unset) => {
-            if property.metadata().is_inherited() {
-                parent
-                    .map(|parent| parent.get(property).clone())
-                    .unwrap_or_else(|| property.metadata().default().clone())
-            } else {
-                property.metadata().default().clone()
+#[derive(Clone, Debug)]
+struct RuleCandidate {
+    property: Property,
+    precedence: RulePrecedence,
+    origin: RuleDeclarationOrigin,
+    value: RuleCandidateValue,
+}
+
+impl RuleCandidate {
+    fn try_from_declaration(
+        property: Property,
+        precedence: RulePrecedence,
+        origin: RuleDeclarationOrigin,
+        value: RuleDeclarationValue<'_>,
+    ) -> Result<Self> {
+        let value = match value {
+            RuleDeclarationValue::Value(value) => {
+                property.validate_value(value)?;
+                RuleCandidateValue::Value(value.clone())
             }
+            RuleDeclarationValue::Authored(value) => match value {
+                AuthoredCascadeValue::Value(value) => {
+                    property.validate_value(value)?;
+                    RuleCandidateValue::Value(value.clone())
+                }
+                AuthoredCascadeValue::CssWideKeyword(keyword) => {
+                    RuleCandidateValue::CssWideKeyword(*keyword)
+                }
+            },
+        };
+        Ok(Self {
+            property,
+            precedence,
+            origin,
+            value,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum RuleCandidateValue {
+    Value(Value),
+    CssWideKeyword(CssWideKeyword),
+}
+
+fn resolve_legacy_value(property: Property, value: &Value, parent: Option<&Resolved>) -> Value {
+    match value {
+        Value::Keyword(super::Keyword::Initial) => {
+            resolve_css_wide_keyword(property, CssWideKeyword::Initial, parent, None, None, None)
+        }
+        Value::Keyword(super::Keyword::Inherit) => {
+            resolve_css_wide_keyword(property, CssWideKeyword::Inherit, parent, None, None, None)
+        }
+        Value::Keyword(super::Keyword::Unset) => {
+            resolve_css_wide_keyword(property, CssWideKeyword::Unset, parent, None, None, None)
         }
         _ => value.clone(),
+    }
+}
+
+fn resolve_rule_candidates(
+    property: Property,
+    candidates: &[RuleCandidate],
+    parent: Option<&Resolved>,
+) -> Value {
+    let Some(index) = candidates.len().checked_sub(1) else {
+        return property.metadata().default().clone();
+    };
+    let mut visited = BTreeSet::new();
+    resolve_rule_candidate_at(property, candidates, index, parent, &mut visited)
+}
+
+fn resolve_rule_candidate_at(
+    property: Property,
+    candidates: &[RuleCandidate],
+    index: usize,
+    parent: Option<&Resolved>,
+    visited: &mut BTreeSet<usize>,
+) -> Value {
+    if !visited.insert(index) {
+        return resolve_unset(property, parent);
+    }
+    let candidate = &candidates[index];
+    let value = match &candidate.value {
+        RuleCandidateValue::Value(value) => resolve_legacy_value(property, value, parent),
+        RuleCandidateValue::CssWideKeyword(keyword) => {
+            if matches!(keyword, CssWideKeyword::RevertLayer) {
+                debug_assert_eq!(candidate.origin, RuleDeclarationOrigin::Authored);
+            }
+            resolve_css_wide_keyword(
+                property,
+                *keyword,
+                parent,
+                Some(candidates),
+                Some(index),
+                Some(visited),
+            )
+        }
+    };
+    visited.remove(&index);
+    value
+}
+
+// Style-owned CSS-wide keyword resolution over root-supplied layer/source precedence.
+fn resolve_css_wide_keyword(
+    property: Property,
+    keyword: CssWideKeyword,
+    parent: Option<&Resolved>,
+    candidates: Option<&[RuleCandidate]>,
+    index: Option<usize>,
+    visited: Option<&mut BTreeSet<usize>>,
+) -> Value {
+    match keyword {
+        CssWideKeyword::Initial => property.metadata().default().clone(),
+        CssWideKeyword::Inherit => resolve_inherit(property, parent),
+        CssWideKeyword::Unset => resolve_unset(property, parent),
+        CssWideKeyword::RevertLayer => {
+            let (Some(candidates), Some(index)) = (candidates, index) else {
+                return resolve_unset(property, parent);
+            };
+            let Some(visited) = visited else {
+                return resolve_unset(property, parent);
+            };
+            let layer = candidates[index].precedence.layer_order();
+            candidates
+                .iter()
+                .enumerate()
+                .rev()
+                .find(|(_, candidate)| candidate.precedence.layer_order() < layer)
+                .map(|(lower_index, _)| {
+                    resolve_rule_candidate_at(property, candidates, lower_index, parent, visited)
+                })
+                .unwrap_or_else(|| resolve_unset(property, parent))
+        }
+    }
+}
+
+fn resolve_inherit(property: Property, parent: Option<&Resolved>) -> Value {
+    parent
+        .map(|parent| parent.get(property).clone())
+        .unwrap_or_else(|| property.metadata().default().clone())
+}
+
+fn resolve_unset(property: Property, parent: Option<&Resolved>) -> Value {
+    if property.metadata().is_inherited() {
+        resolve_inherit(property, parent)
+    } else {
+        property.metadata().default().clone()
     }
 }
 
@@ -474,4 +626,385 @@ fn hash_node<T: Hash>(node: &T) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     node.hash(&mut hasher);
     hasher.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
+        CssWideKeyword, Error, ErrorCode, LayerOrder, Node, RulePrecedence, Selector, SourceOrder,
+        StyleRole, StyleState, StyleTag,
+    };
+
+    fn precedence(layer: u32, source: u32) -> RulePrecedence {
+        RulePrecedence::new(LayerOrder::new(layer), SourceOrder::new(source))
+    }
+
+    fn authored_color(value: Color) -> AuthoredDeclarations {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Color),
+                    AuthoredValue::Value(Value::Color(value)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        declarations
+    }
+
+    fn authored_width(value: Length) -> AuthoredDeclarations {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Width),
+                    AuthoredValue::Value(Value::Length(value)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        declarations
+    }
+
+    fn authored_keyword(property: Property, keyword: CssWideKeyword) -> AuthoredDeclarations {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(property),
+            keyword,
+        ));
+        declarations
+    }
+
+    fn resolve_child(sheet: Sheet, parent: Option<&Resolved>) -> Resolved {
+        let tree = TestTree::new(vec![
+            TestNode::new(0, "stack").children([1]),
+            TestNode::new(1, "button"),
+        ]);
+        let mut resolver = Resolver::new(sheet);
+        let context = Context::new(&tree, 1);
+        let context = if let Some(parent) = parent {
+            context.parent(parent)
+        } else {
+            context
+        };
+
+        resolver.resolve(context).unwrap()
+    }
+
+    fn parent_color(color: Color) -> Resolved {
+        let mut parent = Resolved::new();
+        parent
+            .apply(&Declarations::new().try_text_color(color).unwrap(), None)
+            .unwrap();
+        parent
+    }
+
+    fn push_authored(
+        sheet: &mut Sheet,
+        declarations: AuthoredDeclarations,
+        precedence: RulePrecedence,
+    ) {
+        sheet
+            .push_authored_rule(Selector::tag("button").unwrap(), declarations, precedence)
+            .unwrap();
+    }
+
+    #[test]
+    fn higher_layer_wins_over_later_source_order() {
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+            precedence(1, 100),
+        );
+        push_authored(&mut sheet, authored_color(Color::BLACK), precedence(2, 0));
+        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn source_order_wins_within_same_layer() {
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+            precedence(7, 0),
+        );
+        push_authored(&mut sheet, authored_color(Color::BLACK), precedence(7, 1));
+        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn inherit_uses_parent_value() {
+        let parent = parent_color(Color::BLACK);
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Color, CssWideKeyword::Inherit),
+            precedence(1, 0),
+        );
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn initial_uses_property_default() {
+        let mut parent = Resolved::new();
+        parent
+            .apply(
+                &Declarations::new()
+                    .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                    .unwrap(),
+                None,
+            )
+            .unwrap();
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Color, CssWideKeyword::Initial),
+            precedence(1, 0),
+        );
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn unset_inherits_inherited_properties_and_initializes_non_inherited_properties() {
+        let mut parent = Resolved::new();
+        parent
+            .apply(
+                &Declarations::new()
+                    .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                    .unwrap()
+                    .try_set(Property::Width, Value::Length(Length::Px(88.0)))
+                    .unwrap(),
+                None,
+            )
+            .unwrap();
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Color, CssWideKeyword::Unset),
+            precedence(1, 0),
+        );
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Width, CssWideKeyword::Unset),
+            precedence(1, 1),
+        );
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::rgba(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(resolved.width(), Length::Auto);
+    }
+
+    #[test]
+    fn revert_layer_uses_lower_layer_candidate() {
+        let mut sheet = Sheet::new();
+        push_authored(&mut sheet, authored_color(Color::BLACK), precedence(1, 0));
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Color, CssWideKeyword::RevertLayer),
+            precedence(2, 0),
+        );
+        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn revert_layer_ignores_same_layer_earlier_source_order() {
+        let mut sheet = Sheet::new();
+        push_authored(&mut sheet, authored_color(Color::BLACK), precedence(1, 0));
+        push_authored(
+            &mut sheet,
+            authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+            precedence(2, 0),
+        );
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Color, CssWideKeyword::RevertLayer),
+            precedence(2, 1),
+        );
+        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn revert_layer_resolves_as_unset_without_lower_layer() {
+        let mut parent = Resolved::new();
+        parent
+            .apply(
+                &Declarations::new()
+                    .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                    .unwrap()
+                    .try_set(Property::Width, Value::Length(Length::Px(88.0)))
+                    .unwrap(),
+                None,
+            )
+            .unwrap();
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Color, CssWideKeyword::RevertLayer),
+            precedence(2, 0),
+        );
+        push_authored(
+            &mut sheet,
+            authored_keyword(Property::Width, CssWideKeyword::RevertLayer),
+            precedence(2, 1),
+        );
+
+        let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::rgba(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(resolved.width(), Length::Auto);
+    }
+
+    #[test]
+    fn local_declarations_still_override_sheet_rules() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            authored_width(Length::Px(24.0)),
+            precedence(2, 0),
+        );
+        let local = Declarations::new()
+            .try_set(Property::Width, Value::Length(Length::Px(48.0)))
+            .unwrap();
+        let mut resolver = Resolver::new(sheet);
+
+        let resolved = resolver
+            .resolve(Context::new(&tree, 0).local(&local))
+            .unwrap();
+
+        assert_eq!(resolved.width(), Length::Px(48.0));
+    }
+
+    #[test]
+    fn legacy_sheet_rules_keep_flat_source_order() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut sheet = Sheet::new();
+        sheet.push_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new()
+                .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                .unwrap(),
+        );
+        sheet.push_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[derive(Clone, Debug)]
+    struct TestNode {
+        id: usize,
+        tag: StyleTag,
+        children: Vec<usize>,
+    }
+
+    impl TestNode {
+        fn new(id: usize, tag: &str) -> Self {
+            Self {
+                id,
+                tag: StyleTag::new(tag).unwrap(),
+                children: Vec::new(),
+            }
+        }
+
+        fn children(mut self, children: impl IntoIterator<Item = usize>) -> Self {
+            self.children = children.into_iter().collect();
+            self
+        }
+    }
+
+    struct TestTree {
+        nodes: Vec<TestNode>,
+    }
+
+    impl TestTree {
+        fn new(nodes: Vec<TestNode>) -> Self {
+            Self { nodes }
+        }
+    }
+
+    impl Tree for TestTree {
+        type Id = usize;
+
+        fn version_hint(&self) -> Option<u64> {
+            Some(1)
+        }
+
+        fn node(&self, id: Self::Id) -> Result<Node<Self::Id>> {
+            let node = self
+                .nodes
+                .get(id)
+                .ok_or_else(|| Error::new(ErrorCode::MissingNode, "missing test node"))?;
+            Ok(Node {
+                id: node.id,
+                tag: Some(node.tag.clone()),
+                key: None,
+                classes: Vec::new(),
+                attributes: Vec::new(),
+                role: StyleRole::default(),
+                state: StyleState::default(),
+                text: false,
+            })
+        }
+
+        fn parent(&self, id: Self::Id, _traversal: Traversal) -> Result<Option<Self::Id>> {
+            Ok(self
+                .nodes
+                .iter()
+                .find(|node| node.children.contains(&id))
+                .map(|node| node.id))
+        }
+
+        fn children(
+            &self,
+            id: Self::Id,
+            _traversal: Traversal,
+        ) -> Result<impl Iterator<Item = Self::Id> + '_> {
+            Ok(self.nodes[id].children.iter().copied())
+        }
+
+        fn previous_sibling(&self, id: Self::Id, traversal: Traversal) -> Result<Option<Self::Id>> {
+            let Some(parent) = self.parent(id, traversal)? else {
+                return Ok(None);
+            };
+            let siblings = &self.nodes[parent].children;
+            Ok(siblings
+                .iter()
+                .position(|sibling| *sibling == id)
+                .and_then(|index| index.checked_sub(1))
+                .map(|index| siblings[index]))
+        }
+    }
 }

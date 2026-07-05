@@ -4,10 +4,13 @@ use std::{
 };
 
 use super::{
-    AuthoredDeclarations, Change, Condition, Declarations, Result, RulePrecedence, Selector,
-    SourceOrder, Tree, selector::PrimaryKey,
+    AuthoredDeclarations, Change, Condition, Declarations, Property, Result, RulePrecedence,
+    Selector, SourceOrder, Tree, Value, selector::PrimaryKey,
 };
-use crate::{StyleClass, StyleKey, StyleTag, authored::AuthoredCanonicalDeclarations};
+use crate::{
+    StyleClass, StyleKey, StyleTag,
+    authored::{AuthoredCanonicalDeclarations, AuthoredCascadeValue},
+};
 
 static NEXT_VERSION: AtomicU64 = AtomicU64::new(1);
 
@@ -89,6 +92,32 @@ impl Rule {
     }
 
     #[must_use]
+    pub(crate) fn declaration_items(&self) -> Vec<RuleDeclarationItem<'_>> {
+        match &self.declarations {
+            RuleDeclarations::Legacy(declarations) => declarations
+                .iter()
+                .map(|declaration| {
+                    RuleDeclarationItem::new(
+                        declaration.property(),
+                        RuleDeclarationOrigin::Legacy,
+                        RuleDeclarationValue::Value(declaration.value()),
+                    )
+                })
+                .collect(),
+            RuleDeclarations::Authored(declarations) => declarations
+                .iter()
+                .map(|(property, value)| {
+                    RuleDeclarationItem::new(
+                        property,
+                        RuleDeclarationOrigin::Authored,
+                        RuleDeclarationValue::Authored(value),
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    #[must_use]
     pub fn conditions(&self) -> &[Condition] {
         &self.conditions
     }
@@ -104,7 +133,7 @@ impl Rule {
     }
 
     #[must_use]
-    fn declaration_origin(&self) -> RuleDeclarationOrigin {
+    const fn declaration_origin(&self) -> RuleDeclarationOrigin {
         self.declarations.origin()
     }
 }
@@ -126,9 +155,52 @@ impl RuleDeclarations {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RuleDeclarationOrigin {
+pub(crate) enum RuleDeclarationOrigin {
     Legacy,
     Authored,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RuleDeclarationItem<'a> {
+    property: Property,
+    origin: RuleDeclarationOrigin,
+    value: RuleDeclarationValue<'a>,
+}
+
+impl<'a> RuleDeclarationItem<'a> {
+    #[must_use]
+    const fn new(
+        property: Property,
+        origin: RuleDeclarationOrigin,
+        value: RuleDeclarationValue<'a>,
+    ) -> Self {
+        Self {
+            property,
+            origin,
+            value,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn property(self) -> Property {
+        self.property
+    }
+
+    #[must_use]
+    pub(crate) const fn origin(self) -> RuleDeclarationOrigin {
+        self.origin
+    }
+
+    #[must_use]
+    pub(crate) const fn value(self) -> RuleDeclarationValue<'a> {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum RuleDeclarationValue<'a> {
+    Value(&'a Value),
+    Authored(&'a AuthoredCascadeValue),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
