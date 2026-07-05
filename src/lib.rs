@@ -5,6 +5,7 @@
 //! parsing is specified separately and does not live in this first contract.
 
 mod authored;
+mod bucket;
 mod calc;
 mod condition;
 mod custom;
@@ -24,6 +25,7 @@ mod value;
 pub use authored::{
     AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, CssWideKeyword,
 };
+pub use bucket::{PseudoElement, StyleBucket, StyleBucketPolicy};
 pub use calc::{CalcLength, CalcLengthTerm, CalcOperator};
 pub use condition::{Condition, Container, Viewport};
 pub use custom::{

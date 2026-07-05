@@ -4,11 +4,11 @@ use surgeist_style::{
     Change, Color, Combinator, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
     GridTrackList, LayerOrder, Length, NthPattern, NthSelector, Opacity, Property,
-    PseudoClassSelector, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence,
-    RuntimePseudoClass, Selector, SelectorList, SelectorListPseudoClass, SelectorSpecificity,
-    SelectorFactChange, SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue,
-    StyleState, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
-    VariableFallback, VariableReference,
+    PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList,
+    RulePrecedence, RuntimePseudoClass, Selector, SelectorList, SelectorListPseudoClass,
+    SelectorSpecificity, SelectorFactChange, SourceOrder, StateFlag, StructuralSelector,
+    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleState, TypedDeclaration, Value,
+    VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -87,6 +87,16 @@ fn main() -> surgeist_style::Result<()> {
     );
     let state = StyleState::default().with_range_state(Some(RangeState::InRange));
     assert!(state.has_flag(StateFlag::InRange));
+
+    let before_bucket = StyleBucket::Before;
+    assert_eq!(before_bucket.policy(), StyleBucketPolicy::GeneratedContentBox);
+    let nested_marker_bucket =
+        StyleBucket::from_pseudo_elements([PseudoElement::Before, PseudoElement::Marker])?;
+    assert_eq!(nested_marker_bucket, StyleBucket::BeforeMarker);
+    assert_eq!(
+        StyleBucket::BeforeMarker.policy(),
+        StyleBucketPolicy::GeneratedContentMarker
+    );
 
     let selector_change = Change::from_selector_fact_change(SelectorFactChange::Class);
     assert!(selector_change.rematch);
