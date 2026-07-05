@@ -4,6 +4,7 @@
 //! metadata, selector matching, sheets, resolution, and invalidation facts. CSS
 //! parsing is specified separately and does not live in this first contract.
 
+mod authored;
 mod calc;
 mod condition;
 mod declaration;
@@ -19,6 +20,9 @@ mod state;
 mod tree;
 mod value;
 
+pub use authored::{
+    AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, CssWideKeyword,
+};
 pub use calc::{CalcLength, CalcLengthTerm, CalcOperator};
 pub use condition::{Condition, Container, Viewport};
 pub use declaration::{Declaration, Declarations, Fingerprint, TypedDeclaration};

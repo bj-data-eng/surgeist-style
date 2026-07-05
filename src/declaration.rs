@@ -472,10 +472,43 @@ impl Declarations {
     }
 }
 
-fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> {
+pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
+    match property {
+        Property::MinSize => vec![Property::MinWidth, Property::MinHeight],
+        Property::MaxSize => vec![Property::MaxWidth, Property::MaxHeight],
+        Property::Overflow => vec![Property::OverflowX, Property::OverflowY],
+        Property::Align => vec![Property::AlignItems, Property::AlignSelf],
+        Property::Justify => vec![Property::JustifyItems, Property::JustifySelf],
+        Property::Gap => vec![Property::RowGap, Property::ColumnGap],
+        Property::GridTemplate => vec![
+            Property::GridTemplateRows,
+            Property::GridTemplateColumns,
+            Property::GridTemplateAreas,
+        ],
+        Property::Grid => vec![
+            Property::GridTemplateRows,
+            Property::GridTemplateColumns,
+            Property::GridTemplateAreas,
+            Property::GridAutoRows,
+            Property::GridAutoColumns,
+            Property::GridAutoFlow,
+        ],
+        Property::GridRow => vec![Property::GridRowStart, Property::GridRowEnd],
+        Property::GridColumn => vec![Property::GridColumnStart, Property::GridColumnEnd],
+        Property::GridArea => vec![
+            Property::GridRowStart,
+            Property::GridColumnStart,
+            Property::GridRowEnd,
+            Property::GridColumnEnd,
+        ],
+        property => vec![property],
+    }
+}
+
+pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> {
     match (property, value) {
         (Property::MinSize, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::MinWidth, Property::MinHeight],
+            canonical_properties(Property::MinSize),
             Value::Keyword(keyword),
         ),
         (Property::MinSize, value) => vec![
@@ -483,7 +516,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             Declaration::new(Property::MinHeight, value),
         ],
         (Property::MaxSize, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::MaxWidth, Property::MaxHeight],
+            canonical_properties(Property::MaxSize),
             Value::Keyword(keyword),
         ),
         (Property::MaxSize, value) => vec![
@@ -491,7 +524,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             Declaration::new(Property::MaxHeight, value),
         ],
         (Property::Overflow, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::OverflowX, Property::OverflowY],
+            canonical_properties(Property::Overflow),
             Value::Keyword(keyword),
         ),
         (Property::Overflow, Value::OverflowAxes(axes)) => vec![
@@ -503,7 +536,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             Declaration::new(Property::OverflowY, value),
         ],
         (Property::Align, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::AlignItems, Property::AlignSelf],
+            canonical_properties(Property::Align),
             Value::Keyword(keyword),
         ),
         (Property::Align, value) => vec![
@@ -511,27 +544,22 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             Declaration::new(Property::AlignSelf, value),
         ],
         (Property::Justify, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::JustifyItems, Property::JustifySelf],
+            canonical_properties(Property::Justify),
             Value::Keyword(keyword),
         ),
         (Property::Justify, value) => vec![
             Declaration::new(Property::JustifyItems, value.clone()),
             Declaration::new(Property::JustifySelf, value),
         ],
-        (Property::Gap, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::RowGap, Property::ColumnGap],
-            Value::Keyword(keyword),
-        ),
+        (Property::Gap, Value::Keyword(keyword)) => {
+            same_value_declarations(canonical_properties(Property::Gap), Value::Keyword(keyword))
+        }
         (Property::Gap, value) => vec![
             Declaration::new(Property::RowGap, value.clone()),
             Declaration::new(Property::ColumnGap, value),
         ],
         (Property::GridTemplate, Value::Keyword(keyword)) => same_value_declarations(
-            [
-                Property::GridTemplateRows,
-                Property::GridTemplateColumns,
-                Property::GridTemplateAreas,
-            ],
+            canonical_properties(Property::GridTemplate),
             Value::Keyword(keyword),
         ),
         (Property::GridTemplate, Value::GridTemplate(template)) => {
@@ -547,14 +575,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             ]
         }
         (Property::Grid, Value::Keyword(keyword)) => same_value_declarations(
-            [
-                Property::GridTemplateRows,
-                Property::GridTemplateColumns,
-                Property::GridTemplateAreas,
-                Property::GridAutoRows,
-                Property::GridAutoColumns,
-                Property::GridAutoFlow,
-            ],
+            canonical_properties(Property::Grid),
             Value::Keyword(keyword),
         ),
         (Property::Grid, Value::GridDefinition(grid)) => {
@@ -582,7 +603,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             ]
         }
         (Property::GridRow, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::GridRowStart, Property::GridRowEnd],
+            canonical_properties(Property::GridRow),
             Value::Keyword(keyword),
         ),
         (Property::GridRow, Value::GridPlacement(placement)) => {
@@ -594,7 +615,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             ]
         }
         (Property::GridColumn, Value::Keyword(keyword)) => same_value_declarations(
-            [Property::GridColumnStart, Property::GridColumnEnd],
+            canonical_properties(Property::GridColumn),
             Value::Keyword(keyword),
         ),
         (Property::GridColumn, Value::GridPlacement(placement)) => {
@@ -606,12 +627,7 @@ fn canonical_declarations(property: Property, value: Value) -> Vec<Declaration> 
             ]
         }
         (Property::GridArea, Value::Keyword(keyword)) => same_value_declarations(
-            [
-                Property::GridRowStart,
-                Property::GridColumnStart,
-                Property::GridRowEnd,
-                Property::GridColumnEnd,
-            ],
+            canonical_properties(Property::GridArea),
             Value::Keyword(keyword),
         ),
         (Property::GridArea, Value::GridAreaPlacement(area)) => {
@@ -661,10 +677,7 @@ fn grid_area_omitted_line(reference: &GridLine) -> GridLine {
     }
 }
 
-fn same_value_declarations<const N: usize>(
-    properties: [Property; N],
-    value: Value,
-) -> Vec<Declaration> {
+fn same_value_declarations(properties: Vec<Property>, value: Value) -> Vec<Declaration> {
     properties
         .into_iter()
         .map(|property| Declaration::new(property, value.clone()))
