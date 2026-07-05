@@ -368,16 +368,154 @@ style implementation plans and root lowering work.
 
 | CSS selector surface | Classification | Owner | Style implication | Later plan |
 | --- | --- | --- | --- | --- |
+| Tag selectors | `Existing style model` | `style` | `Selector::Tag` and `Node::tag` can receive simple CSS type selectors, but root still must lower CSS tag identifiers and any namespace semantics are unsupported. | Selector lowering and matching integration |
+| Key selectors | `Existing style model` | `style` | `Selector::Key` and `Node::key` can receive CSS ID selectors, but CSS ID uniqueness and document-specific semantics remain root/integration concerns. | Selector lowering and matching integration |
+| Class selectors | `Existing style model` | `style` | `Selector::Class` and `Node::classes` can receive simple class selectors, but root still lowers CSS class tokens into style classes. | Selector lowering and matching integration |
+| Compound selectors | `Existing style model` | `style` | `Compound` can combine tag, key, classes, states, simple attributes, and one position selector, but it lacks CSS pseudo-element, selector-list pseudo-class, type-filtered structural, and attribute matcher semantics. | Selector lowering and matching integration |
+| Complex selectors | `Existing style model` | `style` | `Selector::Complex(Vec<Part>)` can receive ordered compound selector parts, but root must translate CSS subject ordering and unsupported pseudo-element/relative-selector semantics. | Selector lowering and matching integration |
+| Descendant combinator | `Existing style model` | `style` | `Combinator::Descendant` and tree parent traversal support descendant matching over root-provided tree facts. | Selector lowering and matching integration |
+| Child combinator | `Existing style model` | `style` | `Combinator::Child` and tree parent traversal support direct-child matching over root-provided tree facts. | Selector lowering and matching integration |
+| Adjacent sibling combinator | `Existing style model` | `style` | `Combinator::Adjacent` and `Tree::previous_sibling` support adjacent sibling matching over root-provided tree facts. | Selector lowering and matching integration |
+| Subsequent sibling combinator | `Existing style model` | `style` | `Combinator::Sibling` can receive CSS subsequent-sibling selectors, but matching depends on root-provided sibling traversal. | Selector lowering and matching integration |
+| Selector lists | `New style model needed` | `style` | Style lacks a first-class selector-list receiving model for CSS comma-separated selectors and list-specific invalidation/cache keys. | Selector lowering and matching integration |
+| Attribute exists matcher | `Existing style model` | `style` | `AttributeSelector::Exists` can receive `[name]`, but root must lower CSS attribute names and document attribute normalization is not modeled. | Selector lowering and matching integration |
+| Attribute equality matcher | `Existing style model` | `style` | `AttributeSelector::Equals` can receive `[name=value]`, but CSS value normalization and case-sensitivity modifiers are not modeled. | Selector lowering and matching integration |
+| Attribute includes matcher | `New style model needed` | `style` | Style lacks whitespace-token attribute matching for `[name~=value]`. | Selector lowering and matching integration |
+| Attribute dash-match matcher | `New style model needed` | `style` | Style lacks language/dash-prefix attribute matching for `[name|=value]`. | Selector lowering and matching integration |
+| Attribute prefix matcher | `New style model needed` | `style` | Style lacks prefix attribute matching for `[name^=value]`. | Selector lowering and matching integration |
+| Attribute suffix matcher | `New style model needed` | `style` | Style lacks suffix attribute matching for `[name$=value]`. | Selector lowering and matching integration |
+| Attribute substring matcher | `New style model needed` | `style` | Style lacks substring attribute matching for `[name*=value]`. | Selector lowering and matching integration |
+| Attribute case sensitivity | `New style model needed` | `style` | Style lacks document-default, ASCII-insensitive, and explicit-sensitive attribute comparison modes. | Selector lowering and matching integration |
+| `:root` | `New style model needed` | `style` | Style lacks a root-node selector fact distinct from generic tree traversal. | Selector lowering and matching integration |
+| `:scope` | `New style model needed` | `style` | Style lacks scoped selector anchor state and scope-root matching semantics. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `:hover` | `Existing style model` | `style` | `StateFlag::Hovered` is an exact runtime fact for `:hover`. | Selector lowering and matching integration |
+| `:active` | `Existing style model` | `style` | `StateFlag::Active` is an exact runtime fact for `:active`. | Selector lowering and matching integration |
+| `:focus` | `Existing style model` | `style` | `StateFlag::Focused` is an exact runtime fact for `:focus`. | Selector lowering and matching integration |
+| `:focus-visible` | `New style model needed` | `style` | Style lacks a focus-visible runtime state separate from focused. | Selector lowering and matching integration |
+| `:focus-within` | `Existing style model` | `style` | `StateFlag::FocusWithin` is an exact runtime fact for `:focus-within`. | Selector lowering and matching integration |
+| `:disabled` | `Existing style model` | `style` | `StateFlag::Disabled` is an exact runtime fact for `:disabled`. | Selector lowering and matching integration |
+| `:enabled` | `New style model needed` | `style` | Style lacks an enabled runtime fact and selector semantics for elements that participate in enabled/disabled state. | Selector lowering and matching integration |
+| `:checked` | `Existing style model` | `style` | `StateFlag::Checked` is an exact true-state fact for `:checked`; indeterminate remains separate and unsupported. | Selector lowering and matching integration |
+| `:required` | `New style model needed` | `style` | Style lacks form requirement state facts. | Selector lowering and matching integration |
+| `:optional` | `New style model needed` | `style` | Style lacks form optionality state facts. | Selector lowering and matching integration |
+| `:valid` | `New style model needed` | `style` | Style lacks form validity state facts. | Selector lowering and matching integration |
+| `:invalid` | `New style model needed` | `style` | Style lacks form invalidity state facts. | Selector lowering and matching integration |
+| `:placeholder-shown` | `New style model needed` | `style` | Style lacks placeholder-visible runtime state facts. | Selector lowering and matching integration |
+| `:modal` | `New style model needed` | `style` | Style lacks modal top-layer/dialog state facts. | Selector lowering and matching integration |
+| `:fullscreen` | `New style model needed` | `style` | Style lacks fullscreen runtime state facts. | Selector lowering and matching integration |
+| `:popover-open` | `New style model needed` | `style` | Style lacks popover-open runtime state facts. | Selector lowering and matching integration |
+| `:default` | `New style model needed` | `style` | Style lacks default-button/default-option state facts. | Selector lowering and matching integration |
+| `:indeterminate` | `New style model needed` | `style` | Style has checked true-state matching but lacks indeterminate state facts. | Selector lowering and matching integration |
+| `:read-only` | `New style model needed` | `style` | Style lacks editability state facts for read-only controls. | Selector lowering and matching integration |
+| `:read-write` | `New style model needed` | `style` | Style lacks editability state facts for read-write controls. | Selector lowering and matching integration |
+| `:in-range` | `New style model needed` | `style` | Style lacks range-validity state facts. | Selector lowering and matching integration |
+| `:out-of-range` | `New style model needed` | `style` | Style lacks range-invalidity state facts. | Selector lowering and matching integration |
+| `:first-child` | `Existing style model` | `style` | `PositionSelector::First` supports simple first-child matching, but root still must map CSS structural pseudo-class lowering and traversal policy. | Selector lowering and matching integration |
+| `:last-child` | `Existing style model` | `style` | `PositionSelector::Last` supports simple last-child matching, but root still must map CSS structural pseudo-class lowering and traversal policy. | Selector lowering and matching integration |
+| `:only-child` | `New style model needed` | `style` | Style lacks an only-child selector distinct from separate first/last matching. | Selector lowering and matching integration |
+| `:empty` | `New style model needed` | `style` | Style has a `Node::text` fact but lacks CSS empty-child/text semantics. | Selector lowering and matching integration |
+| `:nth-child()` | `Existing style model` | `style` | `PositionSelector::Nth` supports simple child index matching, but CSS `An+B` lowering, odd/even, and `of <selector-list>` semantics need explicit receiving contracts. | Selector lowering and matching integration |
+| `:nth-last-child()` | `New style model needed` | `style` | Style lacks reverse child-index matching and CSS `of <selector-list>` filtering. | Selector lowering and matching integration |
+| `:first-of-type` | `New style model needed` | `style` | Style lacks type-filtered structural matching over sibling tags. | Selector lowering and matching integration |
+| `:last-of-type` | `New style model needed` | `style` | Style lacks reverse type-filtered structural matching over sibling tags. | Selector lowering and matching integration |
+| `:only-of-type` | `New style model needed` | `style` | Style lacks only-of-type structural matching over sibling tags. | Selector lowering and matching integration |
+| `:nth-of-type()` | `New style model needed` | `style` | Style lacks type-filtered nth matching over sibling tags. | Selector lowering and matching integration |
+| `:nth-last-of-type()` | `New style model needed` | `style` | Style lacks reverse type-filtered nth matching over sibling tags. | Selector lowering and matching integration |
+| `:not()` | `New style model needed` | `style` | Style lacks selector-list negation matching and invalidation support. | Selector lowering and matching integration |
+| `:is()` | `New style model needed` | `style` | Style lacks selector-list alternation matching and specificity/lowering contracts. | Selector lowering and matching integration |
+| `:where()` | `New style model needed` | `style` | Style lacks zero-specificity selector-list matching contracts. | Selector lowering and matching integration |
+| Relative selectors | `New style model needed` | `style` | Style lacks relative selector-list inputs whose subject is anchored by a leading combinator. | Selector lowering and matching integration |
+| `:has()` | `New style model needed` | `style` | Style lacks relative selector matching, dependency tracking, and invalidation for ancestor/subject queries. | Selector lowering and matching integration |
+| `::before` | `New style model needed` | `style` | Pseudo-elements require generated-box style targets; they must not be modeled as tree nodes. | Generated content, counters, lists, and marker policy |
+| `::after` | `New style model needed` | `style` | Pseudo-elements require generated-box style targets; they must not be modeled as tree nodes. | Generated content, counters, lists, and marker policy |
+| `::marker` | `New style model needed` | `style` | Marker pseudo-elements need list-marker style targets and must not be modeled as tree nodes. | Generated content, counters, lists, and marker policy |
+| `::selection` | `New style model needed` | `style` | Selection pseudo-elements need highlight/selection style targets and must not be modeled as tree nodes. | Paint, color, and effect property family expansion |
+| `::backdrop` | `New style model needed` | `style` | Backdrop pseudo-elements need top-layer style targets and must not be modeled as tree nodes. | Paint, color, and effect property family expansion |
+| `::before::marker` | `New style model needed` | `style` | Before-marker pseudo-element sequences need generated marker targets and must not be modeled as tree nodes. | Generated content, counters, lists, and marker policy |
+| `::after::marker` | `New style model needed` | `style` | After-marker pseudo-element sequences need generated marker targets and must not be modeled as tree nodes. | Generated content, counters, lists, and marker policy |
 
 ## Condition, Layer, Scope, And Environment Ledger
 
 | CSS surface | Classification | Owner | Style implication | Later plan |
 | --- | --- | --- | --- | --- |
+| Media query list | `New style model needed` | `style` | Style lacks a disjunctive media query list model and cache key for CSS `@media` lists. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Typed media query | `New style model needed` | `style` | Style lacks a typed media query receiving model with modifier, media type, and optional condition. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Condition-only media query | `New style model needed` | `style` | Style lacks condition-only media queries independent of `screen`/`print` media types. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media type | `New style model needed` | `style` | Style lacks media type matching over root-provided output mode facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media modifier `not` | `New style model needed` | `style` | Style lacks negated media query semantics. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media modifier `only` | `New style model needed` | `style` | Style lacks an explicit compatibility/legacy `only` modifier contract for media queries. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Typed media query `and` condition attachment | `New style model needed` | `style` | Style lacks typed media queries with attached `and` condition trees. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media condition list | `New style model needed` | `style` | Style lacks n-ary media condition grouping. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media condition `not` | `New style model needed` | `style` | Style lacks media condition negation. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media condition `and` | `New style model needed` | `style` | Style lacks media condition conjunction. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media condition `or` | `New style model needed` | `style` | Style lacks media condition disjunction. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media feature queries | `New style model needed` | `style` | Style lacks a general media feature query enum over root-provided environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container names | `New style model needed` | `style` | Style lacks named container registration and lookup for container query matching. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container condition lists | `New style model needed` | `style` | Style lacks n-ary container condition grouping. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container condition `not` | `New style model needed` | `style` | Style lacks container condition negation. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container condition `and` | `New style model needed` | `style` | Style lacks container condition conjunction. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container condition `or` | `New style model needed` | `style` | Style lacks container condition disjunction. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container feature queries | `New style model needed` | `style` | Style lacks a general container feature query enum beyond current width/height min/max helpers. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container style queries | `New style model needed` | `style` | Style lacks style-query evaluation against computed container custom properties. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container style custom property presence query | `New style model needed` | `style` | Style lacks custom property presence matching for container style queries. | Custom properties and variable substitution |
+| Container style custom property value query | `New style model needed` | `style` | Style lacks authored custom property value matching for container style queries. | Custom properties and variable substitution |
+| Container width | `Existing style model` | `style` | `Container` carries current width plus min/max width query helpers; exact/equality range syntax, names, and units still need CSS-specific receiving models. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container height | `Existing style model` | `style` | `Container` carries current height plus min/max height query helpers; exact/equality range syntax, names, and units still need CSS-specific receiving models. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container inline-size | `New style model needed` | `style` | Style lacks inline-size container facts and writing-mode-aware matching. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container block-size | `New style model needed` | `style` | Style lacks block-size container facts and writing-mode-aware matching. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container aspect-ratio | `New style model needed` | `style` | Style lacks container aspect-ratio facts and ratio range matching. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Container orientation | `New style model needed` | `style` | Style lacks container orientation facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media width | `Existing style model` | `style` | `Viewport` carries current width plus min/max width query helpers; exact/equality range syntax and CSS query units still need CSS-specific receiving models. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media height | `Existing style model` | `style` | `Viewport` carries current height plus min/max height query helpers; exact/equality range syntax and CSS query units still need CSS-specific receiving models. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media resolution | `New style model needed` | `style` | Style lacks resolution environment facts and dpi/dpcm/dppx matching. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media color | `New style model needed` | `style` | Style lacks color-depth environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media monochrome | `New style model needed` | `style` | Style lacks monochrome bit-depth environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Media orientation | `New style model needed` | `style` | Style lacks viewport orientation media feature matching distinct from raw width/height. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `prefers-color-scheme` | `New style model needed` | `style` | Style lacks root-provided color-scheme preference facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `prefers-reduced-motion` | `New style model needed` | `style` | Style lacks root-provided reduced-motion preference facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `prefers-reduced-transparency` | `New style model needed` | `style` | Style lacks root-provided reduced-transparency preference facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `prefers-contrast` | `New style model needed` | `style` | Style lacks root-provided contrast preference facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `forced-colors` | `New style model needed` | `style` | Style lacks forced-colors environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `hover` | `New style model needed` | `style` | Style lacks primary hover-capability environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `any-hover` | `New style model needed` | `style` | Style lacks aggregate hover-capability environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `pointer` | `New style model needed` | `style` | Style lacks primary pointer-capability environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `any-pointer` | `New style model needed` | `style` | Style lacks aggregate pointer-capability environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| `display-mode` | `New style model needed` | `style` | Style lacks display-mode environment facts. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Range feature without comparison | `New style model needed` | `style` | Style lacks CSS range-feature presence/equality syntax beyond ad hoc min/max width/height helpers. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Range comparison less-than | `New style model needed` | `style` | Style lacks generic `<` range comparison queries. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Range comparison less-than-or-equal | `New style model needed` | `style` | Style only has ad hoc max-width/max-height helpers; it lacks generic `<=` comparison support across query features. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Range comparison equal | `New style model needed` | `style` | Style lacks exact equality range comparison support. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Range comparison greater-than-or-equal | `New style model needed` | `style` | Style only has ad hoc min-width/min-height helpers; it lacks generic `>=` comparison support across query features. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Range comparison greater-than | `New style model needed` | `style` | Style lacks generic `>` range comparison queries. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Scoped rule order | `New style model needed` | `style` | Style lacks scoped cascade order metadata for `@scope` rule application. | Conditions, layers, scope, resolver cache, and invalidation integration |
+| Layer order | `New style model needed` | `style` | Style lacks named layer registration and cascade order metadata. | Authored declarations, cascade metadata, and CSS-wide keywords |
+| Unlayered order | `New style model needed` | `style` | Style lacks explicit unlayered-vs-layered cascade ordering metadata. | Authored declarations, cascade metadata, and CSS-wide keywords |
 
 ## Symbolic Data Ledger
 
 | Symbolic surface | Classification | Owner | Style implication | Later plan |
 | --- | --- | --- | --- | --- |
+| Custom property names | `New style model needed` | `style` | Style needs a custom property name type/store compatible with CSS `--*` names without importing CSS syntax types. | Custom properties and variable substitution |
+| Custom property authored values | `New style model needed` | `style` | Style needs to preserve authored custom property token text and nested variable references until computed-value time. | Custom properties and variable substitution |
+| Variable references | `New style model needed` | `style` | Style needs a `var(...)` reference graph over custom property names. | Custom properties and variable substitution |
+| Variable fallbacks | `New style model needed` | `style` | Style needs fallback authored-value preservation and recursive variable reference tracking for `var(name, fallback)`. | Custom properties and variable substitution |
+| Variable-dependent ordinary declaration values | `New style model needed` | `style` | Style needs a receiving path for ordinary property values whose final typed value depends on variable substitution. | Custom properties and variable substitution |
+| `currentColor` | `Typed symbolic style data` | `style` | Style should preserve `currentColor` as symbolic color data until property-aware computed color resolution. | Paint, color, and effect property family expansion |
+| System colors | `Typed symbolic style data` | `style` | Style should preserve system color identifiers until host/theme environment resolution. | Paint, color, and effect property family expansion |
+| `hsl()` | `Typed symbolic style data` | `style` | Style should preserve typed HSL color data instead of collapsing symbolic color syntax to RGBA. | Paint, color, and effect property family expansion |
+| `hwb()` | `Typed symbolic style data` | `style` | Style should preserve typed HWB color data instead of collapsing symbolic color syntax to RGBA. | Paint, color, and effect property family expansion |
+| `lab()` | `Typed symbolic style data` | `style` | Style should preserve typed Lab color data until color-space conversion policy exists. | Paint, color, and effect property family expansion |
+| `lch()` | `Typed symbolic style data` | `style` | Style should preserve typed LCH color data until color-space conversion policy exists. | Paint, color, and effect property family expansion |
+| `oklab()` | `Typed symbolic style data` | `style` | Style should preserve typed Oklab color data until color-space conversion policy exists. | Paint, color, and effect property family expansion |
+| `oklch()` | `Typed symbolic style data` | `style` | Style should preserve typed Oklch color data until color-space conversion policy exists. | Paint, color, and effect property family expansion |
+| `color()` with predefined color spaces | `Typed symbolic style data` | `style` | Style should preserve predefined color-space components rather than coercing to sRGB/RGBA at lowering time. | Paint, color, and effect property family expansion |
+| `color-mix()` | `Typed symbolic style data` | `style` | Style should preserve interpolation space, hue interpolation, component colors, and percentages until color resolution. | Paint, color, and effect property family expansion |
+| Relative colors | `Typed symbolic style data` | `style` | Style should preserve relative color source and component expressions until color resolution. | Paint, color, and effect property family expansion |
+| Color component expressions with variable references | `Typed symbolic style data` | `style` | Style should preserve authored color component expressions and variable references until substitution and color resolution. | Custom properties and variable substitution |
+| Transform function arguments | `Typed symbolic style data` | `style` | Style should preserve authored transform function arguments where current typed transform values cannot fully resolve CSS syntax. | Paint, color, and effect property family expansion |
+| Filter function arguments | `Typed symbolic style data` | `style` | Style should preserve authored filter function arguments until a typed effect model and resource policy exist. | Paint, color, and effect property family expansion |
+| Basic shape arguments | `Typed symbolic style data` | `style` | Style should preserve authored basic-shape arguments for clip-path until geometric resolution exists. | Paint, color, and effect property family expansion |
+| Easing function arguments | `Typed symbolic style data` | `style` | Style should preserve authored cubic-bezier and steps arguments until timing-function resolution exists. | Timing, animation, and keyframe style data |
 
 ## Current Style Surface Summary
 
