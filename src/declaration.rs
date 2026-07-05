@@ -4,13 +4,13 @@ use std::{
 };
 
 use super::{
-    AspectRatio, CalcLength, CalcLengthTerm, Color, ContentVisibility, Corners, Cursor,
-    DimensionLength, Display, DurationSeconds, Edges, FlexFactor, GridAreaPlacement, GridAutoFlow,
-    GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreas,
-    GridTrackComponent, GridTrackList, LayoutPosition, Length, MaxTrackSizing, MinTrackSizing,
-    Opacity, Order, PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size,
-    SubgridLineNameComponent, TextSlant, TrackRepeatCount, TrackSizing, Transform, Value,
-    Visibility, ZIndex,
+    AlignContent, AspectRatio, CalcLength, CalcLengthTerm, Color, ContentVisibility, Corners,
+    Cursor, DimensionLength, Display, DurationSeconds, Edges, Flex, FlexFactor, GridAreaPlacement,
+    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
+    GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, MaxTrackSizing,
+    MinTrackSizing, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents,
+    Property, Result, ScrollbarWidth, Shadow, Size, SubgridLineNameComponent, TextSlant,
+    TrackRepeatCount, TrackSizing, Transform, Value, Visibility, ZIndex,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -356,6 +356,10 @@ impl Declarations {
         self.try_set(Property::FlexShrink, Value::FlexFactor(value))
     }
 
+    pub fn try_flex(self, value: Flex) -> Result<Self> {
+        self.try_set(Property::Flex, Value::Flex(value))
+    }
+
     pub fn try_aspect_ratio(self, value: AspectRatio) -> Result<Self> {
         self.try_set(Property::AspectRatio, Value::AspectRatio(value))
     }
@@ -456,6 +460,31 @@ impl Declarations {
 
     pub fn try_grid_area(self, area: GridAreaPlacement) -> Result<Self> {
         self.try_set(Property::GridArea, Value::GridAreaPlacement(area))
+    }
+
+    #[must_use]
+    pub fn place_content(self, value: PlaceContentAlignment) -> Self {
+        self.set(Property::PlaceContent, Value::PlaceContentAlignment(value))
+    }
+
+    #[must_use]
+    pub fn place_items(self, value: PlaceItemsAlignment) -> Self {
+        self.set(Property::PlaceItems, Value::PlaceItemsAlignment(value))
+    }
+
+    #[must_use]
+    pub fn place_self(self, value: PlaceItemsAlignment) -> Self {
+        self.set(Property::PlaceSelf, Value::PlaceItemsAlignment(value))
+    }
+
+    #[must_use]
+    pub fn align_tracks(self, value: AlignContent) -> Self {
+        self.set(Property::AlignTracks, Value::AlignContent(value))
+    }
+
+    #[must_use]
+    pub fn justify_tracks(self, value: AlignContent) -> Self {
+        self.set(Property::JustifyTracks, Value::AlignContent(value))
     }
 
     #[must_use]
@@ -627,6 +656,14 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
         Property::Overflow => vec![Property::OverflowX, Property::OverflowY],
         Property::Align => vec![Property::AlignItems, Property::AlignSelf],
         Property::Justify => vec![Property::JustifyItems, Property::JustifySelf],
+        Property::PlaceContent => vec![Property::AlignContent, Property::JustifyContent],
+        Property::PlaceItems => vec![Property::AlignItems, Property::JustifyItems],
+        Property::PlaceSelf => vec![Property::AlignSelf, Property::JustifySelf],
+        Property::Flex => vec![
+            Property::FlexGrow,
+            Property::FlexShrink,
+            Property::FlexBasis,
+        ],
         Property::Gap => vec![Property::RowGap, Property::ColumnGap],
         Property::GridTemplate => vec![
             Property::GridTemplateRows,
@@ -743,6 +780,38 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Declaration::new(Property::JustifyItems, value.clone()),
             Declaration::new(Property::JustifySelf, value),
         ],
+        (Property::PlaceContent, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::PlaceContent),
+            Value::Keyword(keyword),
+        ),
+        (Property::PlaceContent, Value::PlaceContentAlignment(value)) => vec![
+            Declaration::new(Property::AlignContent, Value::AlignContent(value.first())),
+            Declaration::new(
+                Property::JustifyContent,
+                Value::AlignContent(value.second()),
+            ),
+        ],
+        (Property::PlaceItems, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::PlaceItems),
+            Value::Keyword(keyword),
+        ),
+        (Property::PlaceItems, Value::PlaceItemsAlignment(value)) => vec![
+            Declaration::new(Property::AlignItems, Value::AlignItems(value.first())),
+            Declaration::new(Property::JustifyItems, Value::AlignItems(value.second())),
+        ],
+        (Property::PlaceSelf, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::PlaceSelf),
+            Value::Keyword(keyword),
+        ),
+        (Property::PlaceSelf, Value::PlaceItemsAlignment(value)) => vec![
+            Declaration::new(Property::AlignSelf, Value::AlignItems(value.first())),
+            Declaration::new(Property::JustifySelf, Value::AlignItems(value.second())),
+        ],
+        (Property::Flex, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Flex),
+            Value::Keyword(keyword),
+        ),
+        (Property::Flex, Value::Flex(value)) => flex_declarations(value),
         (Property::Gap, Value::Keyword(keyword)) => {
             same_value_declarations(canonical_properties(Property::Gap), Value::Keyword(keyword))
         }
@@ -855,6 +924,28 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
     }
 }
 
+fn flex_declarations(value: Flex) -> Vec<Declaration> {
+    let (grow, shrink, basis) = match value {
+        Flex::None => (FlexFactor::zero(), FlexFactor::zero(), Length::Auto),
+        Flex::Auto => (FlexFactor::one(), FlexFactor::one(), Length::Auto),
+        Flex::Components {
+            grow,
+            shrink,
+            basis,
+        } => (
+            grow,
+            shrink.unwrap_or_else(FlexFactor::one),
+            basis.unwrap_or(Length::ZERO),
+        ),
+    };
+
+    vec![
+        Declaration::new(Property::FlexGrow, Value::FlexFactor(grow)),
+        Declaration::new(Property::FlexShrink, Value::FlexFactor(shrink)),
+        Declaration::new(Property::FlexBasis, Value::Length(basis)),
+    ]
+}
+
 fn grid_placement_end_for_shorthand(start: &GridLine, end: GridLine) -> GridLine {
     match (&start, end) {
         (GridLine::BareIdent(name), GridLine::Auto) => GridLine::BareIdent(name.clone()),
@@ -959,6 +1050,10 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             43u8.hash(state);
             value.get().to_bits().hash(state);
         }
+        Value::Flex(value) => {
+            47u8.hash(state);
+            hash_flex(value, state);
+        }
         Value::AspectRatio(value) => {
             44u8.hash(state);
             match value.as_ratio() {
@@ -1013,6 +1108,14 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         }
         Value::AlignContent(value) => {
             37u8.hash(state);
+            value.hash(state);
+        }
+        Value::PlaceContentAlignment(value) => {
+            48u8.hash(state);
+            value.hash(state);
+        }
+        Value::PlaceItemsAlignment(value) => {
+            49u8.hash(state);
             value.hash(state);
         }
         Value::Number(value) => {
@@ -1161,6 +1264,28 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::Visibility(value) => {
             15u8.hash(state);
             value.hash(state);
+        }
+    }
+}
+
+fn hash_flex(value: &Flex, state: &mut DefaultHasher) {
+    match value {
+        Flex::None => 0u8.hash(state),
+        Flex::Auto => 1u8.hash(state),
+        Flex::Components {
+            grow,
+            shrink,
+            basis,
+        } => {
+            2u8.hash(state);
+            grow.get().to_bits().hash(state);
+            shrink.map(FlexFactor::get).map(f32::to_bits).hash(state);
+            if let Some(basis) = basis {
+                true.hash(state);
+                hash_length(basis, state);
+            } else {
+                false.hash(state);
+            }
         }
     }
 }
@@ -1442,7 +1567,7 @@ fn hash_f32(value: f32, state: &mut DefaultHasher) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, GridFlowTolerance};
+    use crate::{AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, GridFlowTolerance};
 
     fn value_hash(value: &Value) -> u64 {
         let mut hasher = DefaultHasher::new();
@@ -1483,6 +1608,119 @@ mod tests {
         );
 
         Declaration::try_new(Property::Width, Value::Length(Length::Calc(calc))).unwrap();
+    }
+
+    #[test]
+    fn flex_shorthand_lowers_to_grow_shrink_and_basis() {
+        let declarations = Declarations::new().try_flex(Flex::none()).unwrap();
+        assert_eq!(declarations.get(Property::Flex), None);
+        assert_eq!(
+            declarations.get(Property::FlexGrow),
+            Some(&Value::FlexFactor(FlexFactor::zero()))
+        );
+        assert_eq!(
+            declarations.get(Property::FlexShrink),
+            Some(&Value::FlexFactor(FlexFactor::zero()))
+        );
+        assert_eq!(
+            declarations.get(Property::FlexBasis),
+            Some(&Value::Length(Length::Auto))
+        );
+
+        let declarations = Declarations::new().try_flex(Flex::auto()).unwrap();
+        assert_eq!(
+            declarations.get(Property::FlexGrow),
+            Some(&Value::FlexFactor(FlexFactor::one()))
+        );
+        assert_eq!(
+            declarations.get(Property::FlexShrink),
+            Some(&Value::FlexFactor(FlexFactor::one()))
+        );
+        assert_eq!(
+            declarations.get(Property::FlexBasis),
+            Some(&Value::Length(Length::Auto))
+        );
+
+        let declarations = Declarations::new()
+            .try_flex(Flex::components(FlexFactor::new(2.0).unwrap(), None, None))
+            .unwrap();
+        assert_eq!(
+            declarations.get(Property::FlexGrow),
+            Some(&Value::FlexFactor(FlexFactor::new(2.0).unwrap()))
+        );
+        assert_eq!(
+            declarations.get(Property::FlexShrink),
+            Some(&Value::FlexFactor(FlexFactor::one()))
+        );
+        assert_eq!(
+            declarations.get(Property::FlexBasis),
+            Some(&Value::Length(Length::ZERO))
+        );
+    }
+
+    #[test]
+    fn flex_shorthand_validates_canonical_basis_domain() {
+        assert!(
+            Declarations::new()
+                .try_flex(Flex::components(
+                    FlexFactor::one(),
+                    None,
+                    Some(Length::Normal),
+                ))
+                .is_err()
+        );
+        assert!(
+            Declarations::new()
+                .try_flex(Flex::components(
+                    FlexFactor::one(),
+                    None,
+                    Some(Length::Px(-1.0)),
+                ))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn place_shorthands_lower_to_axis_longhands() {
+        let declarations = Declarations::new().place_content(PlaceContentAlignment::new(
+            AlignContent::Center,
+            AlignContent::SpaceBetween,
+        ));
+        assert_eq!(declarations.get(Property::PlaceContent), None);
+        assert_eq!(
+            declarations.get(Property::AlignContent),
+            Some(&Value::AlignContent(AlignContent::Center))
+        );
+        assert_eq!(
+            declarations.get(Property::JustifyContent),
+            Some(&Value::AlignContent(AlignContent::SpaceBetween))
+        );
+
+        let declarations = Declarations::new()
+            .place_items(PlaceItemsAlignment::new(
+                AlignItems::Start,
+                AlignItems::Stretch,
+            ))
+            .place_self(PlaceItemsAlignment::new(
+                AlignItems::End,
+                AlignItems::Center,
+            ));
+        assert_eq!(
+            declarations.get(Property::AlignItems),
+            Some(&Value::AlignItems(AlignItems::Start))
+        );
+        assert_eq!(
+            declarations.get(Property::JustifyItems),
+            Some(&Value::AlignItems(AlignItems::Stretch))
+        );
+        assert_eq!(
+            declarations.get(Property::AlignSelf),
+            Some(&Value::AlignItems(AlignItems::End))
+        );
+        assert_eq!(
+            declarations.get(Property::JustifySelf),
+            Some(&Value::AlignItems(AlignItems::Center))
+        );
     }
 
     #[test]

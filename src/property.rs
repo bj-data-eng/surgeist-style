@@ -1,8 +1,9 @@
 use super::{
     AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, CalcLength, CalcOperator,
-    Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, FlexDirection,
-    FlexFactor, FlexWrap, Float, FontFamilyList, GridFlowTolerance, LayoutPosition, Length, Order,
-    Overflow, Result, ScrollbarWidth, StyleTextAlign, Value, Visibility, WritingMode, ZIndex,
+    Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, Flex,
+    FlexDirection, FlexFactor, FlexWrap, Float, FontFamilyList, GridFlowTolerance, LayoutPosition,
+    Length, Order, Overflow, PlaceContentAlignment, PlaceItemsAlignment, Result, ScrollbarWidth,
+    StyleTextAlign, Value, Visibility, WritingMode, ZIndex,
 };
 
 #[non_exhaustive]
@@ -48,6 +49,7 @@ pub enum Property {
     Clear,
     FlexDirection,
     FlexWrap,
+    Flex,
     Order,
     FlexGrow,
     FlexShrink,
@@ -56,10 +58,15 @@ pub enum Property {
     AlignItems,
     AlignSelf,
     AlignContent,
+    PlaceContent,
     Justify,
     JustifyItems,
     JustifySelf,
     JustifyContent,
+    PlaceItems,
+    PlaceSelf,
+    JustifyTracks,
+    AlignTracks,
     Gap,
     RowGap,
     ColumnGap,
@@ -161,6 +168,7 @@ impl Property {
         Self::Clear,
         Self::FlexDirection,
         Self::FlexWrap,
+        Self::Flex,
         Self::Order,
         Self::FlexGrow,
         Self::FlexShrink,
@@ -169,10 +177,15 @@ impl Property {
         Self::AlignItems,
         Self::AlignSelf,
         Self::AlignContent,
+        Self::PlaceContent,
         Self::Justify,
         Self::JustifyItems,
         Self::JustifySelf,
         Self::JustifyContent,
+        Self::PlaceItems,
+        Self::PlaceSelf,
+        Self::JustifyTracks,
+        Self::AlignTracks,
         Self::Gap,
         Self::RowGap,
         Self::ColumnGap,
@@ -246,6 +259,10 @@ impl Property {
                 | Self::Overflow
                 | Self::Align
                 | Self::Justify
+                | Self::PlaceContent
+                | Self::PlaceItems
+                | Self::PlaceSelf
+                | Self::Flex
                 | Self::GridTemplate
                 | Self::Grid
                 | Self::GridRow
@@ -361,6 +378,7 @@ impl Property {
                 Metadata::new(Value::GridFlowTolerance(super::GridFlowTolerance::default()))
                     .impact(Impact::empty().layout())
             }
+            Self::Flex => Metadata::new(Value::Flex(Flex::none())).impact(Impact::empty().layout()),
             Self::FlexGrow => Metadata::new(Value::FlexFactor(FlexFactor::zero()))
                 .impact(Impact::empty().layout())
                 .interpolation(Interpolation::Number),
@@ -478,12 +496,24 @@ impl Property {
             }
             Self::AlignContent => Metadata::new(Value::AlignContent(AlignContent::default()))
                 .impact(Impact::empty().layout()),
+            Self::PlaceContent => Metadata::new(Value::PlaceContentAlignment(
+                PlaceContentAlignment::all(AlignContent::default()),
+            ))
+            .impact(Impact::empty().layout()),
             Self::Justify | Self::JustifyItems | Self::JustifySelf => {
                 Metadata::new(Value::AlignItems(AlignItems::default()))
                     .impact(Impact::empty().layout())
             }
             Self::JustifyContent => Metadata::new(Value::AlignContent(AlignContent::default()))
                 .impact(Impact::empty().layout()),
+            Self::PlaceItems | Self::PlaceSelf => Metadata::new(Value::PlaceItemsAlignment(
+                PlaceItemsAlignment::all(AlignItems::default()),
+            ))
+            .impact(Impact::empty().layout()),
+            Self::AlignTracks | Self::JustifyTracks => {
+                Metadata::new(Value::AlignContent(AlignContent::default()))
+                    .impact(Impact::empty().layout())
+            }
             Self::ZIndex => Metadata::new(Value::ZIndex(ZIndex::default()))
                 .impact(Impact::empty().layout().paint()),
             Self::BorderStyle | Self::Filter => {
@@ -533,15 +563,19 @@ impl Property {
             Self::FlexDirection => matches!(value, Value::FlexDirection(_)),
             Self::FlexWrap => matches!(value, Value::FlexWrap(_)),
             Self::Order => matches!(value, Value::Order(_)),
+            Self::Flex => matches!(value, Value::Flex(_)),
             Self::FlexGrow | Self::FlexShrink => matches!(value, Value::FlexFactor(_)),
             Self::Align | Self::AlignItems | Self::AlignSelf => {
                 matches!(value, Value::AlignItems(_))
             }
             Self::AlignContent => matches!(value, Value::AlignContent(_)),
+            Self::PlaceContent => matches!(value, Value::PlaceContentAlignment(_)),
             Self::Justify | Self::JustifyItems | Self::JustifySelf => {
                 matches!(value, Value::AlignItems(_))
             }
             Self::JustifyContent => matches!(value, Value::AlignContent(_)),
+            Self::PlaceItems | Self::PlaceSelf => matches!(value, Value::PlaceItemsAlignment(_)),
+            Self::AlignTracks | Self::JustifyTracks => matches!(value, Value::AlignContent(_)),
             Self::Inset | Self::Margin | Self::Padding | Self::BorderWidth => {
                 matches!(value, Value::Edges(_))
             }
@@ -851,6 +885,7 @@ fn value_kind(value: &Value) -> &'static str {
         Value::ContentVisibility(_) => "content visibility",
         Value::Order(_) => "order",
         Value::FlexFactor(_) => "flex factor",
+        Value::Flex(_) => "flex shorthand",
         Value::AspectRatio(_) => "aspect ratio",
         Value::Direction(_) => "direction",
         Value::Overflow(_) => "overflow",
@@ -863,6 +898,8 @@ fn value_kind(value: &Value) -> &'static str {
         Value::FlexWrap(_) => "flex wrap",
         Value::AlignItems(_) => "alignment",
         Value::AlignContent(_) => "content alignment",
+        Value::PlaceContentAlignment(_) => "place content alignment",
+        Value::PlaceItemsAlignment(_) => "place items alignment",
         Value::Number(_) => "number",
         Value::Length(_) => "length",
         Value::Size(_) => "size",
@@ -1057,7 +1094,8 @@ impl Impact {
 mod tests {
     use super::*;
     use crate::{
-        AspectRatio, ContentVisibility, FlexFactor, LayoutPosition, Order, ScrollbarWidth, ZIndex,
+        AlignContent, AlignItems, AspectRatio, ContentVisibility, Declarations, FlexFactor,
+        LayoutPosition, Order, ScrollbarWidth, ZIndex,
     };
 
     #[test]
@@ -1109,6 +1147,26 @@ mod tests {
         assert!(
             Property::ScrollbarWidth
                 .validate_value(&Value::Number(1.0))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn track_alignment_uses_content_alignment_value() {
+        Property::AlignTracks
+            .validate_value(&Value::AlignContent(AlignContent::Center))
+            .unwrap();
+        Property::JustifyTracks
+            .validate_value(&Value::AlignContent(AlignContent::SpaceAround))
+            .unwrap();
+        assert!(
+            Property::AlignTracks
+                .validate_value(&Value::AlignItems(AlignItems::Center))
+                .is_err()
+        );
+        assert!(
+            Declarations::new()
+                .try_set(Property::AlignTracks, Value::AlignItems(AlignItems::Center))
                 .is_err()
         );
     }

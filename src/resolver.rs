@@ -4,8 +4,8 @@ use std::{
 };
 
 use super::{
-    AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword, Cursor,
-    Declarations, Display, Edges, FlexFactor, LayoutPosition, Length, Order, PointerEvents,
+    AlignContent, AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword,
+    Cursor, Declarations, Display, Edges, FlexFactor, LayoutPosition, Length, Order, PointerEvents,
     Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet, Size,
     StyleBucket, Transform, Traversal, Tree, Value, Version, Viewport, Visibility, ZIndex,
     declaration::hash_value,
@@ -300,6 +300,22 @@ impl Resolved {
         match self.get(Property::FlexShrink) {
             Value::FlexFactor(value) => *value,
             _ => FlexFactor::one(),
+        }
+    }
+
+    #[must_use]
+    pub fn align_tracks(&self) -> AlignContent {
+        match self.get(Property::AlignTracks) {
+            Value::AlignContent(value) => *value,
+            _ => AlignContent::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn justify_tracks(&self) -> AlignContent {
+        match self.get(Property::JustifyTracks) {
+            Value::AlignContent(value) => *value,
+            _ => AlignContent::default(),
         }
     }
 

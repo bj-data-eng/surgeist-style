@@ -186,6 +186,62 @@ impl FlexFactor {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Flex {
+    None,
+    Auto,
+    Components {
+        grow: FlexFactor,
+        shrink: Option<FlexFactor>,
+        basis: Option<Length>,
+    },
+}
+
+impl Flex {
+    #[must_use]
+    pub const fn none() -> Self {
+        Self::None
+    }
+
+    #[must_use]
+    pub const fn auto() -> Self {
+        Self::Auto
+    }
+
+    #[must_use]
+    pub const fn components(
+        grow: FlexFactor,
+        shrink: Option<FlexFactor>,
+        basis: Option<Length>,
+    ) -> Self {
+        Self::Components {
+            grow,
+            shrink,
+            basis,
+        }
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::None | Self::Auto => Ok(()),
+            Self::Components {
+                grow,
+                shrink,
+                basis,
+            } => {
+                grow.validate()?;
+                if let Some(shrink) = shrink {
+                    shrink.validate()?;
+                }
+                if let Some(basis) = basis {
+                    basis.validate()?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AspectRatio(AspectRatioKind);
 
@@ -508,6 +564,7 @@ pub enum Value {
     ContentVisibility(ContentVisibility),
     Order(Order),
     FlexFactor(FlexFactor),
+    Flex(Flex),
     AspectRatio(AspectRatio),
     Direction(Direction),
     Overflow(Overflow),
@@ -520,6 +577,8 @@ pub enum Value {
     FlexWrap(FlexWrap),
     AlignItems(AlignItems),
     AlignContent(AlignContent),
+    PlaceContentAlignment(PlaceContentAlignment),
+    PlaceItemsAlignment(PlaceItemsAlignment),
     Number(f32),
     Length(Length),
     Size(Size),
@@ -569,6 +628,7 @@ impl Value {
             | Self::ScrollbarWidth(_)
             | Self::ContentVisibility(_)
             | Self::Order(_)
+            | Self::Flex(_)
             | Self::Direction(_)
             | Self::Overflow(_)
             | Self::OverflowAxes(_)
@@ -580,6 +640,8 @@ impl Value {
             | Self::FlexWrap(_)
             | Self::AlignItems(_)
             | Self::AlignContent(_)
+            | Self::PlaceContentAlignment(_)
+            | Self::PlaceItemsAlignment(_)
             | Self::GridTrackList(_)
             | Self::GridTemplateAreas(_)
             | Self::GridTemplate(_)
@@ -619,9 +681,12 @@ impl Value {
             | Self::FlexDirection(_)
             | Self::FlexWrap(_)
             | Self::AlignItems(_)
-            | Self::AlignContent(_) => Ok(()),
+            | Self::AlignContent(_)
+            | Self::PlaceContentAlignment(_)
+            | Self::PlaceItemsAlignment(_) => Ok(()),
             Self::Number(value) => validate_finite(*value, "number"),
             Self::FlexFactor(value) => value.validate(),
+            Self::Flex(value) => value.validate(),
             Self::AspectRatio(value) => value.validate(),
             Self::Length(value) => value.validate(),
             Self::Size(value) => value.validate(),
@@ -806,6 +871,62 @@ pub enum AlignContent {
     SpaceBetween,
     SpaceEvenly,
     SpaceAround,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PlaceContentAlignment {
+    first: AlignContent,
+    second: AlignContent,
+}
+
+impl PlaceContentAlignment {
+    #[must_use]
+    pub const fn new(first: AlignContent, second: AlignContent) -> Self {
+        Self { first, second }
+    }
+
+    #[must_use]
+    pub const fn all(value: AlignContent) -> Self {
+        Self::new(value, value)
+    }
+
+    #[must_use]
+    pub const fn first(self) -> AlignContent {
+        self.first
+    }
+
+    #[must_use]
+    pub const fn second(self) -> AlignContent {
+        self.second
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PlaceItemsAlignment {
+    first: AlignItems,
+    second: AlignItems,
+}
+
+impl PlaceItemsAlignment {
+    #[must_use]
+    pub const fn new(first: AlignItems, second: AlignItems) -> Self {
+        Self { first, second }
+    }
+
+    #[must_use]
+    pub const fn all(value: AlignItems) -> Self {
+        Self::new(value, value)
+    }
+
+    #[must_use]
+    pub const fn first(self) -> AlignItems {
+        self.first
+    }
+
+    #[must_use]
+    pub const fn second(self) -> AlignItems {
+        self.second
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]

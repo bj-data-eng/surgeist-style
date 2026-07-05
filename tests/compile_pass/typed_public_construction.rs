@@ -1,15 +1,17 @@
 use surgeist_style::{
-    AnimationNameList, AspectRatio, AttributeCaseSensitivity, AttributeMatcher, AttributeSelector,
-    AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
-    Change, Color, Combinator, ContentVisibility, Context, CssPx, CssWideKeyword,
-    CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
-    DimensionLength, DurationSeconds, FlexFactor, FontFamilyList, GridTrackList, LayerOrder,
-    LayoutPosition, Length, Node, NthPattern, NthSelector, Opacity, Order, Property,
-    PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList,
-    RulePrecedence, RuleTarget, RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList,
-    SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag,
-    StructuralSelector, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState,
-    StyleTag, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
+    AlignContent, AlignItems, AnimationNameList, AspectRatio, AttributeCaseSensitivity,
+    AttributeMatcher, AttributeSelector, AuthoredDeclaration, AuthoredDeclarations,
+    AuthoredProperty, AuthoredTokens, AuthoredValue, Change, Color, Combinator,
+    ContentVisibility, Context, CssPx, CssWideKeyword, CustomPropertyName,
+    CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
+    DurationSeconds, Flex, FlexFactor, FontFamilyList, GridTrackList, LayerOrder,
+    LayoutPosition, Length, Node, NthPattern, NthSelector, Opacity, Order,
+    PlaceContentAlignment, PlaceItemsAlignment, Property, PseudoClassSelector, PseudoElement,
+    RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
+    RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
+    SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
+    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState, StyleTag,
+    Traversal, Tree, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
     VariableFallback, VariableReference, ZIndex,
 };
 
@@ -56,6 +58,22 @@ fn main() -> surgeist_style::Result<()> {
         .try_flex_shrink(FlexFactor::new(0.0)?)?
         .try_aspect_ratio(AspectRatio::ratio(16.0 / 9.0)?)?;
     assert_eq!(declarations.len(), 8);
+
+    let declarations = Declarations::new()
+        .try_flex(Flex::components(
+            FlexFactor::new(2.0)?,
+            None,
+            Some(Length::Px(10.0)),
+        ))?
+        .place_content(PlaceContentAlignment::all(AlignContent::Center))
+        .place_items(PlaceItemsAlignment::new(
+            AlignItems::Start,
+            AlignItems::Stretch,
+        ))
+        .place_self(PlaceItemsAlignment::all(AlignItems::Center))
+        .align_tracks(AlignContent::SpaceBetween)
+        .justify_tracks(AlignContent::SpaceAround);
+    assert_eq!(declarations.len(), 11);
 
     let precedence = RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(8));
     assert_eq!(precedence.layer_order(), LayerOrder::new(2));
