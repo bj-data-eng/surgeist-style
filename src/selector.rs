@@ -9,6 +9,53 @@ pub(crate) enum PrimaryKey {
     Tag(StyleTag),
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct SelectorSpecificity {
+    ids: u16,
+    classes: u16,
+    elements: u16,
+}
+
+impl SelectorSpecificity {
+    #[must_use]
+    pub const fn new(ids: u16, classes: u16, elements: u16) -> Self {
+        Self {
+            ids,
+            classes,
+            elements,
+        }
+    }
+
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self::new(0, 0, 0)
+    }
+
+    #[must_use]
+    pub const fn ids(self) -> u16 {
+        self.ids
+    }
+
+    #[must_use]
+    pub const fn classes(self) -> u16 {
+        self.classes
+    }
+
+    #[must_use]
+    pub const fn elements(self) -> u16 {
+        self.elements
+    }
+
+    #[must_use]
+    pub const fn saturating_add(self, other: Self) -> Self {
+        Self::new(
+            self.ids.saturating_add(other.ids),
+            self.classes.saturating_add(other.classes),
+            self.elements.saturating_add(other.elements),
+        )
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Selector {
     Any,
@@ -19,7 +66,8 @@ pub enum Selector {
     Attribute(AttributeSelector),
     Position(PositionSelector),
     Compound(Compound),
-    Complex(Vec<Part>),
+    Complex(ComplexSelector),
+    List(SelectorList),
 }
 
 impl Selector {
@@ -63,17 +111,35 @@ impl Selector {
         Compound::new()
     }
 
-    pub fn complex(parts: impl IntoIterator<Item = Part>) -> Result<Self> {
+    pub fn complex(parts: impl IntoIterator<Item = ComplexSelectorPart>) -> Result<Self> {
         Self::try_complex(parts)
     }
 
-    pub fn try_complex(parts: impl IntoIterator<Item = Part>) -> Result<Self> {
-        let parts: Vec<_> = parts.into_iter().collect();
-        validate_complex_parts(&parts)?;
-        Ok(Self::Complex(parts))
+    pub fn try_complex(parts: impl IntoIterator<Item = ComplexSelectorPart>) -> Result<Self> {
+        Ok(Self::Complex(ComplexSelector::try_new(parts)?))
+    }
+
+    #[must_use]
+    pub const fn complex_selector(selector: ComplexSelector) -> Self {
+        Self::Complex(selector)
+    }
+
+    #[must_use]
+    pub const fn list(list: SelectorList) -> Self {
+        Self::List(list)
     }
 
     pub fn matches<T: Tree>(&self, tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
+        self.matches_with_context(tree, SelectorMatchContext::new(id, traversal))
+    }
+
+    pub fn matches_with_context<T: Tree>(
+        &self,
+        tree: &T,
+        context: SelectorMatchContext<T::Id>,
+    ) -> Result<bool> {
+        let id = context.subject();
+        let traversal = context.traversal();
         match self {
             Self::Any => Ok(true),
             Self::Tag(tag) => Ok(tree.node(id)?.tag.as_ref() == Some(tag)),
@@ -83,10 +149,23 @@ impl Selector {
             Self::Attribute(attribute) => attribute.matches(tree, id),
             Self::Position(position) => position.matches(tree, id, traversal),
             Self::Compound(compound) => compound.matches(tree, id, traversal),
-            Self::Complex(parts) => {
-                validate_complex_parts(parts)?;
-                complex_matches(parts, tree, id, traversal)
+            Self::Complex(complex) => complex.matches(tree, id, traversal),
+            Self::List(list) => list.matches(tree, context),
+        }
+    }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        match self {
+            Self::Any => SelectorSpecificity::zero(),
+            Self::Tag(_) => SelectorSpecificity::new(0, 0, 1),
+            Self::Class(_) | Self::State(_) | Self::Attribute(_) | Self::Position(_) => {
+                SelectorSpecificity::new(0, 1, 0)
             }
+            Self::Key(_) => SelectorSpecificity::new(1, 0, 0),
+            Self::Compound(compound) => compound.specificity(),
+            Self::Complex(complex) => complex.specificity(),
+            Self::List(list) => list.max_specificity(),
         }
     }
 
@@ -96,18 +175,107 @@ impl Selector {
             Self::Class(class) => PrimaryKey::Class(class.clone()),
             Self::Key(key) => PrimaryKey::Key(key.clone()),
             Self::Compound(compound) => compound.primary_key(),
-            Self::Complex(parts) => parts
+            Self::Complex(complex) => complex
+                .parts()
                 .last()
-                .map(|part| part.selector.primary_key())
+                .map(|part| part.selector().primary_key())
                 .unwrap_or(PrimaryKey::Universal),
-            Self::Any | Self::State(_) | Self::Attribute(_) | Self::Position(_) => {
+            Self::Any | Self::State(_) | Self::Attribute(_) | Self::Position(_) | Self::List(_) => {
                 PrimaryKey::Universal
             }
         }
     }
 }
 
-fn validate_complex_parts(parts: &[Part]) -> Result<()> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectorList {
+    selectors: Vec<Selector>,
+}
+
+impl SelectorList {
+    pub fn try_new(selectors: impl IntoIterator<Item = Selector>) -> Result<Self> {
+        let selectors: Vec<_> = selectors.into_iter().collect();
+        if selectors.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidSelector,
+                "selector list must not be empty",
+            ));
+        }
+        Ok(Self { selectors })
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[Selector] {
+        &self.selectors
+    }
+
+    pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+        for selector in &self.selectors {
+            if selector.matches_with_context(tree, context)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    #[must_use]
+    pub fn max_specificity(&self) -> SelectorSpecificity {
+        self.selectors
+            .iter()
+            .map(Selector::specificity)
+            .max()
+            .unwrap_or_else(SelectorSpecificity::zero)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SelectorMatchContext<Id> {
+    subject: Id,
+    traversal: Traversal,
+    root: Option<Id>,
+    scope: Option<Id>,
+}
+
+impl<Id: Copy> SelectorMatchContext<Id> {
+    #[must_use]
+    pub const fn new(subject: Id, traversal: Traversal) -> Self {
+        Self {
+            subject,
+            traversal,
+            root: None,
+            scope: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn for_subject(subject: Id) -> Self {
+        Self::new(subject, Traversal::Canonical)
+    }
+
+    #[must_use]
+    pub const fn with_root(mut self, root: Id) -> Self {
+        self.root = Some(root);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_scope(mut self, scope: Id) -> Self {
+        self.scope = Some(scope);
+        self
+    }
+
+    #[must_use]
+    pub const fn subject(self) -> Id {
+        self.subject
+    }
+
+    #[must_use]
+    pub const fn traversal(self) -> Traversal {
+        self.traversal
+    }
+}
+
+fn validate_complex_parts(parts: &[ComplexSelectorPart]) -> Result<()> {
     let Some((first, rest)) = parts.split_first() else {
         return Err(Error::new(
             ErrorCode::InvalidSelector,
@@ -244,15 +412,72 @@ impl Compound {
             PrimaryKey::Universal
         }
     }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        let mut specificity = SelectorSpecificity::zero();
+        if self.key.is_some() {
+            specificity = specificity.saturating_add(SelectorSpecificity::new(1, 0, 0));
+        }
+        if self.tag.is_some() {
+            specificity = specificity.saturating_add(SelectorSpecificity::new(0, 0, 1));
+        }
+        for _ in &self.classes {
+            specificity = specificity.saturating_add(SelectorSpecificity::new(0, 1, 0));
+        }
+        for _ in &self.states {
+            specificity = specificity.saturating_add(SelectorSpecificity::new(0, 1, 0));
+        }
+        for _ in &self.attributes {
+            specificity = specificity.saturating_add(SelectorSpecificity::new(0, 1, 0));
+        }
+        if self.position.is_some() {
+            specificity = specificity.saturating_add(SelectorSpecificity::new(0, 1, 0));
+        }
+        specificity
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Part {
-    pub combinator: Option<Combinator>,
-    pub selector: Compound,
+pub struct ComplexSelector {
+    parts: Vec<ComplexSelectorPart>,
 }
 
-impl Part {
+impl ComplexSelector {
+    pub fn try_new(parts: impl IntoIterator<Item = ComplexSelectorPart>) -> Result<Self> {
+        let parts: Vec<_> = parts.into_iter().collect();
+        validate_complex_parts(&parts)?;
+        Ok(Self { parts })
+    }
+
+    #[must_use]
+    pub fn parts(&self) -> &[ComplexSelectorPart] {
+        &self.parts
+    }
+
+    pub fn matches<T: Tree>(&self, tree: &T, id: T::Id, traversal: Traversal) -> Result<bool> {
+        complex_matches(&self.parts, tree, id, traversal)
+    }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        self.parts
+            .iter()
+            .map(|part| part.selector.specificity())
+            .fold(
+                SelectorSpecificity::zero(),
+                SelectorSpecificity::saturating_add,
+            )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComplexSelectorPart {
+    combinator: Option<Combinator>,
+    selector: Compound,
+}
+
+impl ComplexSelectorPart {
     #[must_use]
     pub const fn root(selector: Compound) -> Self {
         Self {
@@ -267,6 +492,16 @@ impl Part {
             combinator: Some(combinator),
             selector,
         }
+    }
+
+    #[must_use]
+    pub const fn combinator(&self) -> Option<Combinator> {
+        self.combinator
+    }
+
+    #[must_use]
+    pub const fn selector(&self) -> &Compound {
+        &self.selector
     }
 }
 
@@ -405,7 +640,7 @@ impl Nth {
 }
 
 fn complex_matches<T: Tree>(
-    parts: &[Part],
+    parts: &[ComplexSelectorPart],
     tree: &T,
     id: T::Id,
     traversal: Traversal,
@@ -421,7 +656,7 @@ fn complex_matches<T: Tree>(
 }
 
 fn complex_prefix_matches<T: Tree>(
-    parts: &[Part],
+    parts: &[ComplexSelectorPart],
     index: usize,
     tree: &T,
     current: T::Id,
@@ -597,6 +832,97 @@ mod tests {
             );
 
         assert_eq!(sheet.candidate_rule_count(&tree, 0).unwrap(), 3);
+    }
+
+    #[test]
+    fn selector_list_matches_any_selector_and_rejects_empty_lists() {
+        let tree = TestTree::new(vec![TestNode::new(0).tag("button").class("primary")]);
+        let list = SelectorList::try_new([
+            Selector::tag("label").unwrap(),
+            Selector::class("primary").unwrap(),
+        ])
+        .unwrap();
+
+        assert!(
+            list.matches(&tree, SelectorMatchContext::for_subject(0))
+                .unwrap()
+        );
+        assert_eq!(
+            SelectorList::try_new([]).unwrap_err().code(),
+            ErrorCode::InvalidSelector
+        );
+    }
+
+    #[test]
+    fn selector_specificity_uses_css_lowering_contract() {
+        let key = Selector::key("submit").unwrap();
+        let class = Selector::class("primary").unwrap();
+        let attr = Selector::attribute_exists("data-mode").unwrap();
+        let tag = Selector::tag("button").unwrap();
+
+        assert_eq!(key.specificity(), SelectorSpecificity::new(1, 0, 0));
+        assert_eq!(class.specificity(), SelectorSpecificity::new(0, 1, 0));
+        assert_eq!(attr.specificity(), SelectorSpecificity::new(0, 1, 0));
+        assert_eq!(tag.specificity(), SelectorSpecificity::new(0, 0, 1));
+    }
+
+    #[test]
+    fn selector_specificity_sums_compound_and_complex_and_uses_list_max() {
+        let compound = Selector::compound()
+            .tag("button")
+            .unwrap()
+            .key("submit")
+            .unwrap()
+            .class("primary")
+            .unwrap()
+            .attribute_exists("data-mode")
+            .unwrap()
+            .selector();
+        let complex = Selector::complex([
+            ComplexSelectorPart::root(Selector::compound().tag("form").unwrap()),
+            ComplexSelectorPart::related(
+                Combinator::Descendant,
+                Selector::compound().class("primary").unwrap(),
+            ),
+        ])
+        .unwrap();
+        let list = Selector::list(
+            SelectorList::try_new([
+                Selector::tag("button").unwrap(),
+                Selector::key("submit").unwrap(),
+            ])
+            .unwrap(),
+        );
+
+        assert_eq!(compound.specificity(), SelectorSpecificity::new(1, 2, 1));
+        assert_eq!(complex.specificity(), SelectorSpecificity::new(0, 1, 1));
+        assert_eq!(list.specificity(), SelectorSpecificity::new(1, 0, 0));
+    }
+
+    #[test]
+    fn complex_selector_rejects_invalid_part_ordering() {
+        assert_eq!(
+            ComplexSelector::try_new([]).unwrap_err().code(),
+            ErrorCode::InvalidSelector
+        );
+        assert_eq!(
+            ComplexSelector::try_new([ComplexSelectorPart::related(
+                Combinator::Child,
+                Selector::compound().tag("button").unwrap(),
+            )])
+            .unwrap_err()
+            .code(),
+            ErrorCode::InvalidSelector
+        );
+        assert_eq!(
+            ComplexSelector::try_new([
+                ComplexSelectorPart::root(Selector::compound().tag("form").unwrap()),
+                ComplexSelectorPart::root(Selector::compound().tag("button").unwrap()),
+            ])
+            .unwrap_err()
+            .code(),
+            ErrorCode::InvalidSelector
+        );
     }
 
     #[derive(Clone, Debug)]

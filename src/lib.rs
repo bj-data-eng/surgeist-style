@@ -42,7 +42,8 @@ pub use precedence::{LayerOrder, RulePrecedence, SourceOrder};
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
 pub use selector::{
-    AttributeSelector, Combinator, Compound, Nth, Part, Position, PositionSelector, Selector,
+    AttributeSelector, Combinator, ComplexSelector, ComplexSelectorPart, Compound, Nth, Position,
+    PositionSelector, Selector, SelectorList, SelectorMatchContext, SelectorSpecificity,
 };
 pub use sheet::{Rule, Sheet, Version};
 pub use state::StateFlag;

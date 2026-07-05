@@ -2,9 +2,9 @@ use surgeist_style::{
     AnimationNameList, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue,
     AuthoredTokens, Color, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
-    GridTrackList, LayerOrder, Length, Opacity, Property, RulePrecedence, SourceOrder,
-    TypedDeclaration, Value, VariableDependentValue, VariableExpression, VariableFallback,
-    VariableReference,
+    GridTrackList, LayerOrder, Length, Opacity, Property, RulePrecedence, Selector, SelectorList,
+    SelectorSpecificity, SourceOrder, TypedDeclaration, Value, VariableDependentValue,
+    VariableExpression, VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -35,6 +35,14 @@ fn main() -> surgeist_style::Result<()> {
 
     let precedence = RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(8));
     assert_eq!(precedence.layer_order(), LayerOrder::new(2));
+
+    let specificity = SelectorSpecificity::new(0, 1, 0);
+    assert!(specificity > SelectorSpecificity::new(0, 0, 1));
+    let selector_list = SelectorList::try_new([
+        Selector::tag("button")?,
+        Selector::class("primary")?,
+    ])?;
+    assert_eq!(selector_list.selectors().len(), 2);
 
     let custom_name = CustomPropertyName::try_new("--brand")?;
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");
