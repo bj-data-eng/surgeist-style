@@ -239,6 +239,111 @@ impl SelectorList {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SelectorListPseudoClass {
+    Not(SelectorList),
+    Is(SelectorList),
+    Where(SelectorList),
+}
+
+impl SelectorListPseudoClass {
+    pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+        match self {
+            Self::Not(list) => Ok(!list.matches(tree, context)?),
+            Self::Is(list) | Self::Where(list) => list.matches(tree, context),
+        }
+    }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        match self {
+            Self::Not(list) | Self::Is(list) => list.max_specificity(),
+            Self::Where(_) => SelectorSpecificity::zero(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RelativeSelector {
+    combinator: Combinator,
+    selector: Box<Selector>,
+}
+
+impl RelativeSelector {
+    #[must_use]
+    pub fn new(combinator: Combinator, selector: Selector) -> Self {
+        Self {
+            combinator,
+            selector: Box::new(selector),
+        }
+    }
+
+    #[must_use]
+    pub const fn combinator(&self) -> Combinator {
+        self.combinator
+    }
+
+    #[must_use]
+    pub fn selector(&self) -> &Selector {
+        &self.selector
+    }
+
+    pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+        for candidate in relative_candidates(self.combinator, tree, context)? {
+            if relative_selector_matches_at_candidate(self.selector(), tree, context, candidate)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        self.selector.specificity()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RelativeSelectorList {
+    selectors: Vec<RelativeSelector>,
+}
+
+impl RelativeSelectorList {
+    pub fn try_new(selectors: impl IntoIterator<Item = RelativeSelector>) -> Result<Self> {
+        let selectors: Vec<_> = selectors.into_iter().collect();
+        if selectors.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidSelector,
+                "relative selector list must not be empty",
+            ));
+        }
+        Ok(Self { selectors })
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[RelativeSelector] {
+        &self.selectors
+    }
+
+    pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
+        for selector in &self.selectors {
+            if selector.matches(tree, context)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    #[must_use]
+    pub fn max_specificity(&self) -> SelectorSpecificity {
+        self.selectors
+            .iter()
+            .map(RelativeSelector::specificity)
+            .max()
+            .unwrap_or_else(SelectorSpecificity::zero)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SelectorMatchContext<Id> {
     subject: Id,
@@ -591,6 +696,8 @@ pub enum Combinator {
 pub enum PseudoClassSelector {
     Runtime(RuntimePseudoClass),
     Structural(StructuralSelector),
+    SelectorList(SelectorListPseudoClass),
+    Has(RelativeSelectorList),
 }
 
 impl PseudoClassSelector {
@@ -604,6 +711,16 @@ impl PseudoClassSelector {
         Self::Structural(selector)
     }
 
+    #[must_use]
+    pub const fn selector_list(selector: SelectorListPseudoClass) -> Self {
+        Self::SelectorList(selector)
+    }
+
+    #[must_use]
+    pub const fn has(selectors: RelativeSelectorList) -> Self {
+        Self::Has(selectors)
+    }
+
     pub fn matches<T: Tree>(&self, tree: &T, context: SelectorMatchContext<T::Id>) -> Result<bool> {
         let id = context.subject();
         match self {
@@ -611,6 +728,8 @@ impl PseudoClassSelector {
                 runtime_state_matches(tree, id, pseudo_class.state_flag())
             }
             Self::Structural(selector) => selector.matches(tree, context),
+            Self::SelectorList(selector) => selector.matches(tree, context),
+            Self::Has(selectors) => selectors.matches(tree, context),
         }
     }
 
@@ -619,6 +738,8 @@ impl PseudoClassSelector {
         match self {
             Self::Runtime(_) => SelectorSpecificity::new(0, 1, 0),
             Self::Structural(selector) => selector.specificity(),
+            Self::SelectorList(selector) => selector.specificity(),
+            Self::Has(selectors) => selectors.max_specificity(),
         }
     }
 }
@@ -1370,6 +1491,127 @@ fn related_candidates<T: Tree>(
     }
 }
 
+fn relative_selector_matches_at_candidate<T: Tree>(
+    selector: &Selector,
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+    candidate: T::Id,
+) -> Result<bool> {
+    let candidate_context = context.with_subject(candidate);
+    match selector {
+        Selector::Complex(complex) => {
+            complex_matches_from_anchor(complex.parts(), tree, candidate_context)
+        }
+        _ => selector.matches_with_context(tree, candidate_context),
+    }
+}
+
+fn complex_matches_from_anchor<T: Tree>(
+    parts: &[ComplexSelectorPart],
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+) -> Result<bool> {
+    let Some(first) = parts.first() else {
+        return Ok(false);
+    };
+    if !first.selector.matches_with_context(tree, context)? {
+        return Ok(false);
+    }
+    complex_suffix_matches(parts, 1, tree, context)
+}
+
+fn complex_suffix_matches<T: Tree>(
+    parts: &[ComplexSelectorPart],
+    index: usize,
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+) -> Result<bool> {
+    let Some(part) = parts.get(index) else {
+        return Ok(true);
+    };
+    let combinator = part.combinator.ok_or_else(|| {
+        Error::new(
+            ErrorCode::InvalidSelector,
+            "complex selector part is missing a combinator",
+        )
+    })?;
+    for candidate in forward_related_candidates(combinator, &part.selector, tree, context)? {
+        if complex_suffix_matches(parts, index + 1, tree, context.with_subject(candidate))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn forward_related_candidates<T: Tree>(
+    combinator: Combinator,
+    selector: &Compound,
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+) -> Result<Vec<T::Id>> {
+    let mut candidates = Vec::new();
+    for candidate in relative_candidates(combinator, tree, context)? {
+        if selector.matches_with_context(tree, context.with_subject(candidate))? {
+            candidates.push(candidate);
+        }
+    }
+    Ok(candidates)
+}
+
+fn relative_candidates<T: Tree>(
+    combinator: Combinator,
+    tree: &T,
+    context: SelectorMatchContext<T::Id>,
+) -> Result<Vec<T::Id>> {
+    let id = context.subject();
+    let traversal = context.traversal();
+    match combinator {
+        Combinator::Child => Ok(tree.children(id, traversal)?.collect()),
+        Combinator::Descendant => {
+            let mut candidates = Vec::new();
+            collect_descendants(tree, id, traversal, &mut candidates)?;
+            Ok(candidates)
+        }
+        Combinator::Adjacent => Ok(next_sibling(tree, id, traversal)?.into_iter().collect()),
+        Combinator::Sibling => {
+            let Some(parent) = tree.parent(id, traversal)? else {
+                return Ok(Vec::new());
+            };
+            let siblings: Vec<_> = tree.children(parent, traversal)?.collect();
+            let Some(index) = siblings.iter().position(|sibling| *sibling == id) else {
+                return Ok(Vec::new());
+            };
+            Ok(siblings[index + 1..].to_vec())
+        }
+    }
+}
+
+fn collect_descendants<T: Tree>(
+    tree: &T,
+    id: T::Id,
+    traversal: Traversal,
+    descendants: &mut Vec<T::Id>,
+) -> Result<()> {
+    let children: Vec<_> = tree.children(id, traversal)?.collect();
+    for child in children {
+        descendants.push(child);
+        collect_descendants(tree, child, traversal, descendants)?;
+    }
+    Ok(())
+}
+
+fn next_sibling<T: Tree>(tree: &T, id: T::Id, traversal: Traversal) -> Result<Option<T::Id>> {
+    let Some(parent) = tree.parent(id, traversal)? else {
+        return Ok(None);
+    };
+    let children: Vec<_> = tree.children(parent, traversal)?.collect();
+    Ok(children
+        .iter()
+        .position(|child| *child == id)
+        .and_then(|index| children.get(index + 1))
+        .copied())
+}
+
 fn tag_from_str(value: &str) -> Result<StyleTag> {
     StyleTag::new(value).map_err(|error| Error::new(ErrorCode::InvalidSelector, error.to_string()))
 }
@@ -1481,6 +1723,51 @@ mod tests {
     }
 
     #[test]
+    fn selector_list_pseudo_classes_match_over_nested_selector_lists() {
+        let tree = TestTree::new(vec![TestNode::new(0).tag("button").class("primary")]);
+        let primary = SelectorList::try_new([Selector::class("primary").unwrap()]).unwrap();
+        let danger = SelectorList::try_new([Selector::class("danger").unwrap()]).unwrap();
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Is(primary.clone()),
+            ))
+            .matches(&tree, 0, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Where(primary),
+            ))
+            .matches(&tree, 0, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Not(danger,)
+            ))
+            .matches(&tree, 0, Traversal::Canonical)
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn compound_selectors_can_combine_class_and_selector_list_pseudo_classes() {
+        let tree = TestTree::new(vec![TestNode::new(0).tag("button").class("item")]);
+        let disabled = SelectorList::try_new([Selector::class("disabled").unwrap()]).unwrap();
+        let selector = Selector::compound()
+            .class("item")
+            .unwrap()
+            .pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Not(disabled),
+            ))
+            .selector();
+
+        assert!(selector.matches(&tree, 0, Traversal::Canonical).unwrap());
+        assert_eq!(selector.specificity(), SelectorSpecificity::new(0, 2, 0));
+    }
+
+    #[test]
     fn selector_specificity_uses_css_lowering_contract() {
         let key = Selector::key("submit").unwrap();
         let class = Selector::class("primary").unwrap();
@@ -1524,6 +1811,43 @@ mod tests {
         assert_eq!(compound.specificity(), SelectorSpecificity::new(1, 2, 1));
         assert_eq!(complex.specificity(), SelectorSpecificity::new(0, 1, 1));
         assert_eq!(list.specificity(), SelectorSpecificity::new(1, 0, 0));
+    }
+
+    #[test]
+    fn selector_list_pseudo_class_specificity_uses_argument_rules() {
+        let key_list = SelectorList::try_new([Selector::key("primary").unwrap()]).unwrap();
+        let class_list = SelectorList::try_new([Selector::class("primary").unwrap()]).unwrap();
+        let relative_key = RelativeSelectorList::try_new([RelativeSelector::new(
+            Combinator::Descendant,
+            Selector::key("target").unwrap(),
+        )])
+        .unwrap();
+
+        assert_eq!(
+            Selector::pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Where(key_list.clone()),
+            ))
+            .specificity(),
+            SelectorSpecificity::zero()
+        );
+        assert_eq!(
+            Selector::pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Is(key_list),
+            ))
+            .specificity(),
+            SelectorSpecificity::new(1, 0, 0)
+        );
+        assert_eq!(
+            Selector::pseudo(PseudoClassSelector::selector_list(
+                SelectorListPseudoClass::Not(class_list),
+            ))
+            .specificity(),
+            SelectorSpecificity::new(0, 1, 0)
+        );
+        assert_eq!(
+            Selector::pseudo(PseudoClassSelector::has(relative_key)).specificity(),
+            SelectorSpecificity::new(1, 0, 0)
+        );
     }
 
     #[test]
@@ -1756,6 +2080,115 @@ mod tests {
 
         assert!(selector.matches(&tree, 2, Traversal::Canonical).unwrap());
         assert_eq!(selector.specificity(), SelectorSpecificity::new(0, 1, 1));
+    }
+
+    #[test]
+    fn has_matches_relative_descendant_child_and_sibling_selectors() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("section").children([1, 2, 3, 4]),
+            TestNode::new(1).tag("button").class("primary"),
+            TestNode::new(2).tag("label"),
+            TestNode::new(3).tag("button").class("later"),
+            TestNode::new(4).tag("input").class("adjacent-target"),
+        ]);
+
+        let descendant =
+            RelativeSelector::new(Combinator::Descendant, Selector::class("primary").unwrap());
+        let child = RelativeSelector::new(Combinator::Child, Selector::tag("label").unwrap());
+        let sibling = RelativeSelector::new(Combinator::Sibling, Selector::class("later").unwrap());
+        let adjacent = RelativeSelector::new(
+            Combinator::Adjacent,
+            Selector::class("adjacent-target").unwrap(),
+        );
+        let wrong_adjacent =
+            RelativeSelector::new(Combinator::Adjacent, Selector::class("later").unwrap());
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([descendant]).unwrap(),
+            ))
+            .matches(&tree, 0, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([child]).unwrap(),
+            ))
+            .matches(&tree, 0, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([sibling]).unwrap(),
+            ))
+            .matches(&tree, 1, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([adjacent]).unwrap(),
+            ))
+            .matches(&tree, 3, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            !Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([wrong_adjacent]).unwrap(),
+            ))
+            .matches(&tree, 3, Traversal::Canonical)
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn has_matches_complex_relative_selectors_from_child_and_adjacent_anchors() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("section").children([1, 4, 3]),
+            TestNode::new(1).tag("div").class("card").children([2]),
+            TestNode::new(2).tag("span").class("target"),
+            TestNode::new(3).tag("aside").class("panel").children([5]),
+            TestNode::new(4).tag("div").class("before-panel"),
+            TestNode::new(5).tag("span").class("target"),
+        ]);
+        let child_complex = Selector::complex([
+            ComplexSelectorPart::root(Selector::compound().class("card").unwrap()),
+            ComplexSelectorPart::related(
+                Combinator::Descendant,
+                Selector::compound().class("target").unwrap(),
+            ),
+        ])
+        .unwrap();
+        let adjacent_complex = Selector::complex([
+            ComplexSelectorPart::root(Selector::compound().class("panel").unwrap()),
+            ComplexSelectorPart::related(
+                Combinator::Descendant,
+                Selector::compound().class("target").unwrap(),
+            ),
+        ])
+        .unwrap();
+
+        assert!(
+            Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([RelativeSelector::new(
+                    Combinator::Child,
+                    child_complex,
+                )])
+                .unwrap(),
+            ))
+            .matches(&tree, 0, Traversal::Canonical)
+            .unwrap()
+        );
+        assert!(
+            Selector::pseudo(PseudoClassSelector::has(
+                RelativeSelectorList::try_new([RelativeSelector::new(
+                    Combinator::Adjacent,
+                    adjacent_complex,
+                )])
+                .unwrap(),
+            ))
+            .matches(&tree, 4, Traversal::Canonical)
+            .unwrap()
+        );
     }
 
     #[test]

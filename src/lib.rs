@@ -44,8 +44,9 @@ pub use resolver::{Context, Resolved, Resolver};
 pub use selector::{
     AttributeCaseSensitivity, AttributeMatcher, AttributeSelector, Combinator, ComplexSelector,
     ComplexSelectorPart, Compound, Nth, NthPattern, NthSelector, Position, PositionSelector,
-    PseudoClassSelector, RuntimePseudoClass, Selector, SelectorList, SelectorMatchContext,
-    SelectorSpecificity, StructuralSelector,
+    PseudoClassSelector, RelativeSelector, RelativeSelectorList, RuntimePseudoClass, Selector,
+    SelectorList, SelectorListPseudoClass, SelectorMatchContext, SelectorSpecificity,
+    StructuralSelector,
 };
 pub use sheet::{Rule, Sheet, Version};
 pub use state::StateFlag;

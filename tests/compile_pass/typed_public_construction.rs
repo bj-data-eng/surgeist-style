@@ -1,13 +1,13 @@
 use surgeist_style::{
     AnimationNameList, AttributeCaseSensitivity, AttributeMatcher, AttributeSelector,
     AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, AuthoredTokens,
-    Color, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
+    Color, Combinator, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
     GridTrackList, LayerOrder, Length, NthPattern, NthSelector, Opacity, Property,
-    PseudoClassSelector, RangeState, RulePrecedence, RuntimePseudoClass, Selector, SelectorList,
-    SelectorSpecificity, SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue,
-    StyleState, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
-    VariableFallback, VariableReference,
+    PseudoClassSelector, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence,
+    RuntimePseudoClass, Selector, SelectorList, SelectorListPseudoClass, SelectorSpecificity,
+    SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue, StyleState, TypedDeclaration,
+    Value, VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -69,6 +69,20 @@ fn main() -> surgeist_style::Result<()> {
     assert_eq!(
         structural_selector.specificity(),
         SelectorSpecificity::new(0, 2, 0)
+    );
+    let has_child = Selector::pseudo(PseudoClassSelector::has(RelativeSelectorList::try_new(
+        [RelativeSelector::new(
+            Combinator::Child,
+            Selector::class("child")?,
+        )],
+    )?));
+    assert_eq!(has_child.specificity(), SelectorSpecificity::new(0, 1, 0));
+    let not_disabled = Selector::pseudo(PseudoClassSelector::selector_list(
+        SelectorListPseudoClass::Not(SelectorList::try_new([Selector::class("disabled")?])?),
+    ));
+    assert_eq!(
+        not_disabled.specificity(),
+        SelectorSpecificity::new(0, 1, 0)
     );
     let state = StyleState::default().with_range_state(Some(RangeState::InRange));
     assert!(state.has_flag(StateFlag::InRange));
