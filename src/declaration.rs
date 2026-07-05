@@ -1093,40 +1093,37 @@ fn flex_declarations(value: Flex) -> Vec<Declaration> {
 }
 
 fn font_declarations(font: Font) -> Vec<Declaration> {
-    let mut declarations = Vec::new();
-    declarations.push(Declaration::new(
-        Property::FontStyle,
-        Value::TextSlant(font.style().unwrap_or_default()),
-    ));
-    declarations.push(Declaration::new(
-        Property::FontVariant,
-        Value::FontVariant(font.variant().unwrap_or_default()),
-    ));
-    declarations.push(Declaration::new(
-        Property::FontWeight,
-        Value::FontWeight(font.weight().unwrap_or_default()),
-    ));
-    declarations.push(Declaration::new(
-        Property::FontStretch,
-        Value::FontStretch(font.stretch().unwrap_or_default()),
-    ));
-    declarations.push(Declaration::new(
-        Property::FontSize,
-        Value::Length(font.size().clone()),
-    ));
-    declarations.push(Declaration::new(
-        Property::LineHeight,
-        Value::Length(
-            font.line_height()
-                .cloned()
-                .unwrap_or_else(default_line_height),
+    vec![
+        Declaration::new(
+            Property::FontStyle,
+            Value::TextSlant(font.style().unwrap_or_default()),
         ),
-    ));
-    declarations.push(Declaration::new(
-        Property::FontFamily,
-        Value::FontFamilyList(font.family().clone()),
-    ));
-    declarations
+        Declaration::new(
+            Property::FontVariant,
+            Value::FontVariant(font.variant().unwrap_or_default()),
+        ),
+        Declaration::new(
+            Property::FontWeight,
+            Value::FontWeight(font.weight().unwrap_or_default()),
+        ),
+        Declaration::new(
+            Property::FontStretch,
+            Value::FontStretch(font.stretch().unwrap_or_default()),
+        ),
+        Declaration::new(Property::FontSize, Value::Length(font.size().clone())),
+        Declaration::new(
+            Property::LineHeight,
+            Value::Length(
+                font.line_height()
+                    .cloned()
+                    .unwrap_or_else(default_line_height),
+            ),
+        ),
+        Declaration::new(
+            Property::FontFamily,
+            Value::FontFamilyList(font.family().clone()),
+        ),
+    ]
 }
 
 fn text_decoration_declarations(value: TextDecoration) -> Vec<Declaration> {
