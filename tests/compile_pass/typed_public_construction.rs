@@ -1,7 +1,7 @@
 use surgeist_style::{
-    AlignContent, AlignItems, AnimationNameList, AspectRatio, AttributeCaseSensitivity,
+    AlignContent, AlignItems, Alpha, AnimationNameList, AspectRatio, AttributeCaseSensitivity,
     AttributeMatcher, AttributeSelector, AuthoredDeclaration, AuthoredDeclarations,
-    AuthoredProperty, AuthoredTokens, AuthoredValue, Change, Color, Combinator,
+    AuthoredProperty, AuthoredTokens, AuthoredValue, Change, Color, ColorComponent, Combinator,
     ContentVisibility, Context, CssPx, CssWideKeyword, CustomPropertyName,
     CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
     DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
@@ -11,7 +11,7 @@ use surgeist_style::{
     PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
     RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
-    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState, StyleTag,
+    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole, StyleState, StyleTag,
     TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
     TextDecorationStyle, TextDecorationThickness, TextDecorationThicknessLength, TextIndent,
     TextOverflow, TextSlant, TextTransform, TextWrap, Traversal, Tree, TypedDeclaration, Value,
@@ -22,7 +22,9 @@ use surgeist_style::{
 fn main() -> surgeist_style::Result<()> {
     let width = TypedDeclaration::width(DimensionLength::px(CssPx::new(120.0)?)?);
     let opacity = TypedDeclaration::opacity(Opacity::new(0.75)?);
-    let color = TypedDeclaration::try_text_color(Color::try_rgba(0.0, 0.0, 0.0, 1.0)?)?;
+    let color = TypedDeclaration::try_text_color(StyleColor::rgba(Color::try_rgba(
+        0.0, 0.0, 0.0, 1.0,
+    )?))?;
 
     let declarations = Declarations::from_typed([width, opacity, color])?;
     assert_eq!(declarations.len(), 3);
@@ -111,6 +113,7 @@ fn main() -> surgeist_style::Result<()> {
         TextDecorationThickness::Length(text_decoration_thickness_length);
     let text_decoration = TextDecoration::try_new(
         Some(text_decoration_line.clone()),
+        None,
         Some(TextDecorationStyle::Double),
         Some(text_decoration_thickness.clone()),
     )?;
@@ -122,7 +125,19 @@ fn main() -> surgeist_style::Result<()> {
         .try_text_decoration_line(text_decoration_line)?
         .text_decoration_style(TextDecorationStyle::Wavy)
         .try_text_decoration_thickness(text_decoration_thickness)?;
-    assert_eq!(declarations.len(), 3);
+    assert_eq!(declarations.len(), 4);
+
+    let alpha = Alpha::new(0.5)?;
+    let color = StyleColor::Hsl {
+        hue: ColorComponent::new(Some(210.0))?,
+        saturation: ColorComponent::new(Some(60.0))?,
+        lightness: ColorComponent::new(Some(40.0))?,
+        alpha: Some(alpha),
+    };
+    let declarations = Declarations::new()
+        .try_text_color(color.clone())?
+        .try_text_decoration_color(StyleColor::current_color())?;
+    assert_eq!(declarations.len(), 2);
 
     let declarations = Declarations::new()
         .try_inset_top(Length::Auto)?
@@ -282,7 +297,7 @@ fn main() -> surgeist_style::Result<()> {
                     CustomPropertyName::try_new("--fallback-brand")?,
                     Some(VariableFallback::new(
                         AuthoredTokens::new("black"),
-                        VariableExpression::Value(Value::Color(Color::BLACK)),
+                        VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                     )),
                 )),
             )),
@@ -296,7 +311,7 @@ fn main() -> surgeist_style::Result<()> {
             CustomPropertyName::try_new("--brand")?,
             Some(VariableFallback::new(
                 AuthoredTokens::new("black"),
-                VariableExpression::Value(Value::Color(Color::BLACK)),
+                VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
             )),
         )),
     )?)?;
@@ -320,7 +335,7 @@ fn main() -> surgeist_style::Result<()> {
     )?)?;
     authored.try_push(AuthoredDeclaration::try_new(
         AuthoredProperty::Property(Property::Color),
-        AuthoredValue::Value(Value::Color(Color::BLACK)),
+        AuthoredValue::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
     )?)?;
     assert!(authored.len() >= 2);
     Ok(())

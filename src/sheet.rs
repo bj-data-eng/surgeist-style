@@ -627,7 +627,7 @@ mod precedence_tests {
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
         CssWideKeyword, LayerOrder, Property, RulePrecedence, Selector, SelectorSpecificity,
-        SourceOrder, Value, Viewport,
+        SourceOrder, StyleColor, Value, Viewport,
     };
 
     fn authored_color(color: Color) -> AuthoredDeclarations {
@@ -636,7 +636,7 @@ mod precedence_tests {
             .try_push(
                 AuthoredDeclaration::try_new(
                     AuthoredProperty::Property(Property::Color),
-                    AuthoredValue::Value(Value::Color(color)),
+                    AuthoredValue::Value(Value::StyleColor(StyleColor::rgba(color))),
                 )
                 .unwrap(),
             )
@@ -649,7 +649,9 @@ mod precedence_tests {
         let mut sheet = Sheet::new();
         sheet.push_rule(
             Selector::tag("button").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
 
         let rule = &sheet.rules()[0];
@@ -666,12 +668,14 @@ mod precedence_tests {
         let sheet = Sheet::new()
             .rule(
                 Selector::tag("button").unwrap(),
-                Declarations::new().try_text_color(Color::BLACK).unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::BLACK)
+                    .unwrap(),
             )
             .rule(
                 Selector::class("primary").unwrap(),
                 Declarations::new()
-                    .try_text_color(Color::TRANSPARENT)
+                    .try_concrete_text_color(Color::TRANSPARENT)
                     .unwrap(),
             );
 
@@ -688,7 +692,9 @@ mod precedence_tests {
     fn rule_new_derives_specificity_from_selector() {
         let rule = Rule::new(
             Selector::key("submit").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
 
         assert_eq!(
@@ -702,12 +708,14 @@ mod precedence_tests {
         let mut sheet = Sheet::new();
         sheet.push_rule(
             Selector::tag("button").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
         sheet.push_conditional_rule(
             Selector::class("primary").unwrap(),
             Declarations::new()
-                .try_text_color(Color::TRANSPARENT)
+                .try_concrete_text_color(Color::TRANSPARENT)
                 .unwrap(),
             [Condition::viewport(Viewport::min_width(320.0))],
         );
@@ -738,7 +746,9 @@ mod precedence_tests {
     fn rule_new_defaults_to_element_bucket() {
         let rule = Rule::new(
             Selector::tag("button").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
 
         assert_eq!(rule.style_bucket(), StyleBucket::Element);
@@ -754,12 +764,14 @@ mod precedence_tests {
         let target = RuleTarget::new(selector.clone(), StyleBucket::BeforeMarker);
         let rule = Rule::targeted(
             target.clone(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
         let sheet = Sheet::new().targeted_rule(
             target.clone(),
             Declarations::new()
-                .try_text_color(Color::TRANSPARENT)
+                .try_concrete_text_color(Color::TRANSPARENT)
                 .unwrap(),
         );
 
@@ -775,7 +787,9 @@ mod precedence_tests {
         let mut sheet = Sheet::new();
         sheet.push_targeted_rule(
             RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::After),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
 
         let class = StyleClass::new("badge").unwrap();
@@ -825,7 +839,9 @@ mod precedence_tests {
         let authored_precedence = RulePrecedence::new(LayerOrder::new(9), SourceOrder::new(20));
         let legacy_rule = Rule::new(
             Selector::tag("button").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
         let mut authored_sheet = Sheet::new();
         authored_sheet
@@ -840,7 +856,9 @@ mod precedence_tests {
         let mut sheet = Sheet::new();
         sheet.push_rule(
             Selector::key("root").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
         sheet.extend([legacy_rule, authored_rule]);
 

@@ -1,3 +1,7 @@
+use std::collections::BTreeSet;
+
+use crate::{AuthoredTokens, CustomPropertyName, VariableReference};
+
 use super::{
     CalcLength, CalcOperator, Error, ErrorCode, Interpolation, Property, Result,
     error::{validate_finite, validate_non_negative},
@@ -5,25 +9,45 @@ use super::{
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Color {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
 }
 
 impl Color {
-    pub const BLACK: Self = Self::rgba(0.0, 0.0, 0.0, 1.0);
-    pub const TRANSPARENT: Self = Self::rgba(0.0, 0.0, 0.0, 0.0);
+    pub const BLACK: Self = Self::raw_rgba(0.0, 0.0, 0.0, 1.0);
+    pub const TRANSPARENT: Self = Self::raw_rgba(0.0, 0.0, 0.0, 0.0);
 
     #[must_use]
-    pub const fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
+    pub(crate) const fn raw_rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
 
     pub fn try_rgba(r: f32, g: f32, b: f32, a: f32) -> Result<Self> {
-        let color = Self::rgba(r, g, b, a);
+        let color = Self::raw_rgba(r, g, b, a);
         color.validate()?;
         Ok(color)
+    }
+
+    #[must_use]
+    pub const fn r(self) -> f32 {
+        self.r
+    }
+
+    #[must_use]
+    pub const fn g(self) -> f32 {
+        self.g
+    }
+
+    #[must_use]
+    pub const fn b(self) -> f32 {
+        self.b
+    }
+
+    #[must_use]
+    pub const fn a(self) -> f32 {
+        self.a
     }
 
     pub fn validate(self) -> Result<()> {
@@ -42,7 +66,504 @@ impl Default for Color {
 
 impl From<Color> for peniko::Color {
     fn from(color: Color) -> Self {
-        Self::new([color.r, color.g, color.b, color.a])
+        Self::new([color.r(), color.g(), color.b(), color.a()])
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Alpha(f32);
+
+impl Alpha {
+    pub fn new(value: f32) -> Result<Self> {
+        validate_finite(value, "alpha")?;
+        if (0.0..=1.0).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "alpha must be between 0 and 1",
+            ))
+        }
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColorComponent(Option<f32>);
+
+impl ColorComponent {
+    pub fn new(value: Option<f32>) -> Result<Self> {
+        if value.is_some_and(|value| !value.is_finite()) {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "color component must be finite",
+            ))
+        } else {
+            Ok(Self(value))
+        }
+    }
+
+    #[must_use]
+    pub const fn get(self) -> Option<f32> {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SystemColor {
+    Canvas,
+    CanvasText,
+    LinkText,
+    VisitedText,
+    ActiveText,
+    ButtonFace,
+    ButtonText,
+    ButtonBorder,
+    Field,
+    FieldText,
+    Highlight,
+    HighlightText,
+    Mark,
+    MarkText,
+    GrayText,
+    SelectedItem,
+    SelectedItemText,
+    AccentColor,
+    AccentColorText,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PredefinedColorSpace {
+    Srgb,
+    SrgbLinear,
+    DisplayP3,
+    DisplayP3Linear,
+    A98Rgb,
+    ProphotoRgb,
+    Rec2020,
+    XyzD50,
+    XyzD65,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ColorInterpolationSpace {
+    Predefined(PredefinedColorSpace),
+    Hsl,
+    Hwb,
+    Lab,
+    Lch,
+    Oklab,
+    Oklch,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum HueInterpolationMethod {
+    Shorter,
+    Longer,
+    Increasing,
+    Decreasing,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ColorInterpolationMethod {
+    space: ColorInterpolationSpace,
+    hue: Option<HueInterpolationMethod>,
+}
+
+impl ColorInterpolationMethod {
+    #[must_use]
+    pub const fn new(space: ColorInterpolationSpace, hue: Option<HueInterpolationMethod>) -> Self {
+        Self { space, hue }
+    }
+
+    #[must_use]
+    pub const fn space(self) -> ColorInterpolationSpace {
+        self.space
+    }
+
+    #[must_use]
+    pub const fn hue(self) -> Option<HueInterpolationMethod> {
+        self.hue
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum StyleColor {
+    CurrentColor,
+    Rgba(Color),
+    System(SystemColor),
+    Hsl {
+        hue: ColorComponent,
+        saturation: ColorComponent,
+        lightness: ColorComponent,
+        alpha: Option<Alpha>,
+    },
+    Hwb {
+        hue: ColorComponent,
+        whiteness: ColorComponent,
+        blackness: ColorComponent,
+        alpha: Option<Alpha>,
+    },
+    Lab {
+        lightness: ColorComponent,
+        a: ColorComponent,
+        b: ColorComponent,
+        alpha: Option<Alpha>,
+    },
+    Lch {
+        lightness: ColorComponent,
+        chroma: ColorComponent,
+        hue: ColorComponent,
+        alpha: Option<Alpha>,
+    },
+    Oklab {
+        lightness: ColorComponent,
+        a: ColorComponent,
+        b: ColorComponent,
+        alpha: Option<Alpha>,
+    },
+    Oklch {
+        lightness: ColorComponent,
+        chroma: ColorComponent,
+        hue: ColorComponent,
+        alpha: Option<Alpha>,
+    },
+    ColorFunction(ColorFunction),
+    ColorMix(Box<ColorMix>),
+    Relative(Box<RelativeColor>),
+}
+
+impl StyleColor {
+    #[must_use]
+    pub const fn current_color() -> Self {
+        Self::CurrentColor
+    }
+
+    #[must_use]
+    pub const fn rgba(color: Color) -> Self {
+        Self::Rgba(color)
+    }
+
+    #[must_use]
+    pub const fn system(color: SystemColor) -> Self {
+        Self::System(color)
+    }
+
+    #[must_use]
+    pub fn color_mix(value: ColorMix) -> Self {
+        Self::ColorMix(Box::new(value))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::CurrentColor | Self::System(_) => Ok(()),
+            Self::Rgba(color) => color.validate(),
+            Self::ColorFunction(value) => value.validate(),
+            Self::ColorMix(value) => value.validate(),
+            Self::Relative(value) => value.validate(),
+            Self::Hsl {
+                hue,
+                saturation,
+                lightness,
+                alpha,
+            }
+            | Self::Hwb {
+                hue,
+                whiteness: saturation,
+                blackness: lightness,
+                alpha,
+            }
+            | Self::Lab {
+                lightness: hue,
+                a: saturation,
+                b: lightness,
+                alpha,
+            }
+            | Self::Lch {
+                lightness: hue,
+                chroma: saturation,
+                hue: lightness,
+                alpha,
+            }
+            | Self::Oklab {
+                lightness: hue,
+                a: saturation,
+                b: lightness,
+                alpha,
+            }
+            | Self::Oklch {
+                lightness: hue,
+                chroma: saturation,
+                hue: lightness,
+                alpha,
+            } => validate_color_components([*hue, *saturation, *lightness], *alpha),
+        }
+    }
+}
+
+impl From<Color> for StyleColor {
+    fn from(value: Color) -> Self {
+        Self::rgba(value)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColorFunction {
+    space: PredefinedColorSpace,
+    components: [ColorComponent; 3],
+    alpha: Option<Alpha>,
+}
+
+impl ColorFunction {
+    #[must_use]
+    pub const fn new(
+        space: PredefinedColorSpace,
+        components: [ColorComponent; 3],
+        alpha: Option<Alpha>,
+    ) -> Self {
+        Self {
+            space,
+            components,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn space(&self) -> PredefinedColorSpace {
+        self.space
+    }
+
+    #[must_use]
+    pub const fn components(&self) -> &[ColorComponent; 3] {
+        &self.components
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<Alpha> {
+        self.alpha
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        validate_color_components(self.components, self.alpha)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColorMixComponent {
+    color: StyleColor,
+    percentage: Option<f32>,
+}
+
+impl ColorMixComponent {
+    pub fn try_new(color: StyleColor, percentage: Option<f32>) -> Result<Self> {
+        if percentage.is_some_and(|value| !value.is_finite() || !(0.0..=100.0).contains(&value)) {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "color mix percentage must be between 0 and 100",
+            ));
+        }
+        color.validate()?;
+        Ok(Self { color, percentage })
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> &StyleColor {
+        &self.color
+    }
+
+    #[must_use]
+    pub const fn percentage(&self) -> Option<f32> {
+        self.percentage
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColorMix {
+    interpolation: ColorInterpolationMethod,
+    left: ColorMixComponent,
+    right: ColorMixComponent,
+}
+
+impl ColorMix {
+    #[must_use]
+    pub const fn new(
+        interpolation: ColorInterpolationMethod,
+        left: ColorMixComponent,
+        right: ColorMixComponent,
+    ) -> Self {
+        Self {
+            interpolation,
+            left,
+            right,
+        }
+    }
+
+    #[must_use]
+    pub const fn interpolation(&self) -> ColorInterpolationMethod {
+        self.interpolation
+    }
+
+    #[must_use]
+    pub const fn left(&self) -> &ColorMixComponent {
+        &self.left
+    }
+
+    #[must_use]
+    pub const fn right(&self) -> &ColorMixComponent {
+        &self.right
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.left.color.validate()?;
+        self.right.color.validate()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SymbolicComponentExpression {
+    authored: AuthoredTokens,
+    references: Vec<VariableReference>,
+}
+
+impl SymbolicComponentExpression {
+    pub fn new(
+        authored: AuthoredTokens,
+        references: impl IntoIterator<Item = VariableReference>,
+    ) -> Result<Self> {
+        if authored.as_css().trim().is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "symbolic component expression cannot be empty",
+            ))
+        } else {
+            Ok(Self {
+                authored,
+                references: references.into_iter().collect(),
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn authored(&self) -> &AuthoredTokens {
+        &self.authored
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[VariableReference] {
+        &self.references
+    }
+
+    #[must_use]
+    pub fn dependencies(&self) -> Vec<CustomPropertyName> {
+        let mut dependencies = BTreeSet::new();
+        for reference in &self.references {
+            dependencies.insert(reference.name().clone());
+            if let Some(fallback) = reference.fallback() {
+                dependencies.extend(fallback.expression().dependencies());
+            }
+        }
+        dependencies.into_iter().collect()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum RelativeColorFunction {
+    Rgb,
+    Hsl,
+    Hwb,
+    Lab,
+    Lch,
+    Oklab,
+    Oklch,
+    Color(PredefinedColorSpace),
+}
+
+impl RelativeColorFunction {
+    #[must_use]
+    pub const fn component_count(self) -> usize {
+        3
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RelativeColor {
+    function: RelativeColorFunction,
+    source: StyleColor,
+    components: Vec<SymbolicComponentExpression>,
+    alpha: Option<SymbolicComponentExpression>,
+}
+
+impl RelativeColor {
+    pub fn try_new(
+        function: RelativeColorFunction,
+        source: StyleColor,
+        components: Vec<SymbolicComponentExpression>,
+        alpha: Option<SymbolicComponentExpression>,
+    ) -> Result<Self> {
+        if components.len() != function.component_count() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "relative color component count does not match function",
+            ));
+        }
+        source.validate()?;
+        Ok(Self {
+            function,
+            source,
+            components,
+            alpha,
+        })
+    }
+
+    #[must_use]
+    pub const fn function(&self) -> RelativeColorFunction {
+        self.function
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &StyleColor {
+        &self.source
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[SymbolicComponentExpression] {
+        &self.components
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&SymbolicComponentExpression> {
+        self.alpha.as_ref()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.components.len() == self.function.component_count() {
+            self.source.validate()
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "relative color component count does not match function",
+            ))
+        }
+    }
+}
+
+fn validate_color_components(components: [ColorComponent; 3], alpha: Option<Alpha>) -> Result<()> {
+    for component in components {
+        component.validate()?;
+    }
+    if let Some(alpha) = alpha {
+        Alpha::new(alpha.get())?;
+    }
+    Ok(())
+}
+
+impl ColorComponent {
+    fn validate(self) -> Result<()> {
+        Self::new(self.0).map(|_| ())
     }
 }
 
@@ -873,6 +1394,7 @@ pub enum Value {
     GridAreaPlacement(GridAreaPlacement),
     GridAutoFlow(GridAutoFlow),
     GridFlowTolerance(GridFlowTolerance),
+    StyleColor(StyleColor),
     Color(Color),
     Corners(Corners),
     FontFamilyList(FontFamilyList),
@@ -901,6 +1423,7 @@ impl Value {
             Self::Length(_) => Interpolation::Length,
             Self::Size(_) => Interpolation::Length,
             Self::Edges(_) => Interpolation::Edges,
+            Self::StyleColor(_) => Interpolation::Color,
             Self::Color(_) => Interpolation::Color,
             Self::Corners(_) => Interpolation::Corners,
             Self::ShadowList(_) => Interpolation::ShadowList,
@@ -1022,6 +1545,7 @@ impl Value {
             Self::GridAreaPlacement(value) => value.validate(),
             Self::GridAutoFlow(_) => Ok(()),
             Self::GridFlowTolerance(value) => value.validate(),
+            Self::StyleColor(value) => value.validate(),
             Self::Color(value) => value.validate(),
             Self::Corners(value) => value.validate(),
             Self::FontFamilyList(values) => values.validate(),
@@ -1515,6 +2039,7 @@ impl TextDecorationThickness {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextDecoration {
     line: Option<TextDecorationLine>,
+    color: Option<StyleColor>,
     style: Option<TextDecorationStyle>,
     thickness: Option<TextDecorationThickness>,
 }
@@ -1522,10 +2047,11 @@ pub struct TextDecoration {
 impl TextDecoration {
     pub fn try_new(
         line: Option<TextDecorationLine>,
+        color: Option<StyleColor>,
         style: Option<TextDecorationStyle>,
         thickness: Option<TextDecorationThickness>,
     ) -> Result<Self> {
-        if line.is_none() && style.is_none() && thickness.is_none() {
+        if line.is_none() && color.is_none() && style.is_none() && thickness.is_none() {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
                 "text-decoration shorthand requires at least one component",
@@ -1533,6 +2059,7 @@ impl TextDecoration {
         }
         let value = Self {
             line,
+            color,
             style,
             thickness,
         };
@@ -1546,6 +2073,11 @@ impl TextDecoration {
     }
 
     #[must_use]
+    pub const fn color(&self) -> Option<&StyleColor> {
+        self.color.as_ref()
+    }
+
+    #[must_use]
     pub const fn style(&self) -> Option<TextDecorationStyle> {
         self.style
     }
@@ -1556,7 +2088,11 @@ impl TextDecoration {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.line.is_none() && self.style.is_none() && self.thickness.is_none() {
+        if self.line.is_none()
+            && self.color.is_none()
+            && self.style.is_none()
+            && self.thickness.is_none()
+        {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
                 "text-decoration shorthand requires at least one component",
@@ -1564,6 +2100,9 @@ impl TextDecoration {
         }
         if let Some(line) = &self.line {
             line.validate()?;
+        }
+        if let Some(color) = &self.color {
+            color.validate()?;
         }
         if let Some(thickness) = &self.thickness {
             thickness.validate()?;
@@ -2607,7 +3146,7 @@ impl Shadow {
             Length::Px(8.0),
             Length::Px(24.0),
             Length::Px(0.0),
-            Color::rgba(0.0, 0.0, 0.0, alpha),
+            Color::raw_rgba(0.0, 0.0, 0.0, alpha),
         )
     }
 
@@ -3401,7 +3940,7 @@ mod tests {
 
     #[test]
     fn decoration_rejects_non_finite_brush_channels() {
-        let error = Decoration::solid(Some(Color::rgba(0.0, f32::NAN, 0.0, 1.0))).unwrap_err();
+        let error = Decoration::solid(Some(Color::raw_rgba(0.0, f32::NAN, 0.0, 1.0))).unwrap_err();
 
         assert_eq!(error.code(), ErrorCode::InvalidValue);
         assert_eq!(error.message(), "text decoration brush g must be finite");

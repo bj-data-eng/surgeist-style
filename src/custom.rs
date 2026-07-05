@@ -391,7 +391,7 @@ fn invalid_name() -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Color, ErrorCode, Length, Property, Value};
+    use crate::{Color, ErrorCode, Length, Property, StyleColor, Value};
 
     #[test]
     fn custom_property_name_preserves_case_and_accepts_css_custom_shape() {
@@ -504,7 +504,7 @@ mod tests {
                 CustomPropertyName::try_new("--space").unwrap(),
                 Some(VariableFallback::new(
                     AuthoredTokens::new("black"),
-                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                 )),
             )),
         )
@@ -539,7 +539,7 @@ mod tests {
                 CustomPropertyName::try_new("--brand").unwrap(),
                 Some(VariableFallback::new(
                     AuthoredTokens::new("black"),
-                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                 )),
             )],
         );
@@ -605,7 +605,7 @@ mod tests {
     fn custom_property_typed_value_validates_literals_against_property() {
         let error = CustomPropertyTypedValue::try_new(
             Property::Width,
-            VariableExpression::Value(Value::Color(Color::BLACK)),
+            VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
         )
         .unwrap_err();
 
@@ -632,7 +632,7 @@ mod tests {
                 CustomPropertyName::try_new("--brand").unwrap(),
                 Some(VariableFallback::new(
                     AuthoredTokens::new("black"),
-                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                 )),
             )),
         )

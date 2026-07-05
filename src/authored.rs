@@ -341,7 +341,7 @@ mod tests {
     use super::*;
     use crate::{
         AuthoredTokens, Color, CustomPropertyName, CustomPropertyValue, Display, ErrorCode,
-        Keyword, Length, Property, Value, VariableDependentValue, VariableExpression,
+        Keyword, Length, Property, StyleColor, Value, VariableDependentValue, VariableExpression,
         VariableFallback, VariableReference,
     };
 
@@ -363,7 +363,7 @@ mod tests {
     fn ordinary_authored_declaration_rejects_property_value_mismatch() {
         let error = AuthoredDeclaration::try_new(
             AuthoredProperty::Property(Property::Width),
-            AuthoredValue::Value(Value::Color(Color::BLACK)),
+            AuthoredValue::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
         )
         .unwrap_err();
 
@@ -374,7 +374,7 @@ mod tests {
     fn all_rejects_ordinary_values() {
         let error = AuthoredDeclaration::try_new(
             AuthoredProperty::All,
-            AuthoredValue::Value(Value::Color(Color::BLACK)),
+            AuthoredValue::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
         )
         .unwrap_err();
 
@@ -697,7 +697,7 @@ mod tests {
     fn custom_property_rejects_ordinary_values() {
         let error = AuthoredDeclaration::try_new(
             AuthoredProperty::Custom(CustomPropertyName::try_new("--brand").unwrap()),
-            AuthoredValue::Value(Value::Color(Color::BLACK)),
+            AuthoredValue::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
         )
         .unwrap_err();
 
@@ -713,7 +713,7 @@ mod tests {
                 CustomPropertyName::try_new("--brand").unwrap(),
                 Some(VariableFallback::new(
                     AuthoredTokens::new("black"),
-                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                 )),
             )),
         )
@@ -737,7 +737,7 @@ mod tests {
                 CustomPropertyName::try_new("--brand").unwrap(),
                 Some(VariableFallback::new(
                     AuthoredTokens::new("black"),
-                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                 )),
             )),
         )
@@ -764,7 +764,7 @@ mod tests {
                 CustomPropertyName::try_new("--brand").unwrap(),
                 Some(VariableFallback::new(
                     AuthoredTokens::new("black"),
-                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(Color::BLACK))),
                 )),
             )),
         )

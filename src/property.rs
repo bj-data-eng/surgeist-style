@@ -4,7 +4,7 @@ use super::{
     FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
     FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
     Order, Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result,
-    ScrollbarWidth, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
+    ScrollbarWidth, StyleColor, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
     TextTransform, TextWrap, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
     ZIndex,
@@ -126,6 +126,7 @@ pub enum Property {
     TextOverflow,
     TextDecoration,
     TextDecorationLine,
+    TextDecorationColor,
     TextDecorationStyle,
     TextDecorationThickness,
     SelectionColor,
@@ -257,6 +258,7 @@ impl Property {
         Self::TextOverflow,
         Self::TextDecoration,
         Self::TextDecorationLine,
+        Self::TextDecorationColor,
         Self::TextDecorationStyle,
         Self::TextDecorationThickness,
         Self::SelectionColor,
@@ -305,15 +307,17 @@ impl Property {
     #[must_use]
     pub fn metadata(self) -> Metadata {
         match self {
-            Self::Color => Metadata::new(Value::Color(Color::BLACK))
+            Self::Color => Metadata::new(Value::StyleColor(StyleColor::rgba(Color::BLACK)))
                 .inherited(true)
                 .impact(Impact::empty().text().paint())
                 .interpolation(Interpolation::Color)
                 .animatable(true),
-            Self::Background => Metadata::new(Value::Color(Color::TRANSPARENT))
-                .impact(Impact::empty().paint())
-                .interpolation(Interpolation::Color)
-                .animatable(true),
+            Self::Background => {
+                Metadata::new(Value::StyleColor(StyleColor::rgba(Color::TRANSPARENT)))
+                    .impact(Impact::empty().paint())
+                    .interpolation(Interpolation::Color)
+                    .animatable(true)
+            }
             Self::Foreground => Metadata::new(Value::Color(Color::BLACK))
                 .impact(Impact::empty().paint())
                 .interpolation(Interpolation::Color)
@@ -495,12 +499,18 @@ impl Property {
             Self::TextOverflow => Metadata::new(Value::TextOverflow(TextOverflow::default()))
                 .impact(Impact::empty().text().layout()),
             Self::TextDecoration => Metadata::new(Value::TextDecoration(
-                TextDecoration::try_new(Some(TextDecorationLine::default()), None, None).unwrap(),
+                TextDecoration::try_new(Some(TextDecorationLine::default()), None, None, None)
+                    .unwrap(),
             ))
             .impact(Impact::empty().text().layout()),
             Self::TextDecorationLine => {
                 Metadata::new(Value::TextDecorationLine(TextDecorationLine::default()))
                     .impact(Impact::empty().text().layout())
+            }
+            Self::TextDecorationColor => {
+                Metadata::new(Value::StyleColor(StyleColor::current_color()))
+                    .impact(Impact::empty().paint().text())
+                    .interpolation(Interpolation::Color)
             }
             Self::TextDecorationStyle => {
                 Metadata::new(Value::TextDecorationStyle(TextDecorationStyle::default()))
@@ -655,6 +665,7 @@ impl Property {
             Self::TextTransform => matches!(value, Value::TextTransform(_)),
             Self::TextDecoration => matches!(value, Value::TextDecoration(_)),
             Self::TextDecorationLine => matches!(value, Value::TextDecorationLine(_)),
+            Self::TextDecorationColor => matches!(value, Value::StyleColor(_)),
             Self::TextDecorationStyle => matches!(value, Value::TextDecorationStyle(_)),
             Self::TextDecorationThickness => matches!(value, Value::TextDecorationThickness(_)),
             Self::TextWrap => matches!(value, Value::TextWrap(_)),
@@ -732,11 +743,10 @@ impl Property {
             Self::Opacity | Self::TransitionDuration | Self::TransitionDelay => {
                 matches!(value, Value::Number(_))
             }
-            Self::Background
-            | Self::Foreground
-            | Self::Color
-            | Self::BorderColor
-            | Self::SelectionColor => matches!(value, Value::Color(_)),
+            Self::Background | Self::Color => matches!(value, Value::StyleColor(_)),
+            Self::Foreground | Self::BorderColor | Self::SelectionColor => {
+                matches!(value, Value::Color(_))
+            }
             Self::Radius => matches!(value, Value::Corners(_)),
             Self::Shadow => matches!(value, Value::ShadowList(_)),
             Self::Visibility => matches!(value, Value::Visibility(_)),
@@ -1043,6 +1053,7 @@ fn value_kind(value: &Value) -> &'static str {
         Value::GridAreaPlacement(_) => "grid area placement",
         Value::GridAutoFlow(_) => "grid auto flow",
         Value::GridFlowTolerance(_) => "grid flow tolerance",
+        Value::StyleColor(_) => "style color",
         Value::Color(_) => "color",
         Value::Corners(_) => "corners",
         Value::FontFamilyList(_) => "font family list",

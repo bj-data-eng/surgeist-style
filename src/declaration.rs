@@ -4,17 +4,19 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, CalcLength, CalcLengthTerm, Color, ContentVisibility, Corners,
-    Cursor, DimensionLength, Display, DurationSeconds, Edges, Flex, FlexFactor, Font,
-    FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
-    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
-    GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
-    MaxTrackSizing, MinTrackSizing, Opacity, Order, OverflowWrap, PlaceContentAlignment,
-    PlaceItemsAlignment, PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size,
-    SubgridLineNameComponent, TextAlignLast, TextDecoration, TextDecorationLine,
-    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Value, VerticalAlign,
-    Visibility, WhiteSpace, WordBreak, ZIndex,
+    AlignContent, AspectRatio, CalcLength, CalcLengthTerm, Color, ColorFunction,
+    ColorInterpolationSpace, ColorMix, ContentVisibility, Corners, Cursor, DimensionLength,
+    Display, DurationSeconds, Edges, Flex, FlexFactor, Font, FontFamilyList, FontFeatureSettings,
+    FontStretch, FontVariant, FontWeight, GridAreaPlacement, GridAutoFlow, GridDefinition,
+    GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreas,
+    GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing, MaxTrackSizing,
+    MinTrackSizing, Opacity, Order, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
+    PointerEvents, Property, RelativeColor, Result, ScrollbarWidth, Shadow, Size, StyleColor,
+    SubgridLineNameComponent, SymbolicComponentExpression, TextAlignLast, TextDecoration,
+    TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
+    TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Value,
+    VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility, WhiteSpace,
+    WordBreak, ZIndex,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -65,11 +67,15 @@ impl TypedDeclaration {
         ))
     }
 
-    pub fn try_text_color(color: Color) -> Result<Self> {
+    pub fn try_text_color(color: StyleColor) -> Result<Self> {
         Ok(Self(Declaration::try_new(
             Property::Color,
-            Value::Color(color),
+            Value::StyleColor(color),
         )?))
+    }
+
+    pub fn try_concrete_text_color(color: Color) -> Result<Self> {
+        Self::try_text_color(StyleColor::rgba(color))
     }
 
     #[must_use]
@@ -190,12 +196,24 @@ impl Declarations {
         Fingerprint(hasher.finish())
     }
 
-    pub fn try_bg(self, color: Color) -> Result<Self> {
-        self.try_set(Property::Background, Value::Color(color))
+    pub fn try_bg(self, color: StyleColor) -> Result<Self> {
+        self.try_background_color(color)
     }
 
-    pub fn try_text_color(self, color: Color) -> Result<Self> {
-        self.try_set(Property::Color, Value::Color(color))
+    pub fn try_background_color(self, color: StyleColor) -> Result<Self> {
+        self.try_set(Property::Background, Value::StyleColor(color))
+    }
+
+    pub fn try_concrete_background_color(self, color: Color) -> Result<Self> {
+        self.try_background_color(StyleColor::rgba(color))
+    }
+
+    pub fn try_text_color(self, color: StyleColor) -> Result<Self> {
+        self.try_set(Property::Color, Value::StyleColor(color))
+    }
+
+    pub fn try_concrete_text_color(self, color: Color) -> Result<Self> {
+        self.try_text_color(StyleColor::rgba(color))
     }
 
     #[must_use]
@@ -410,6 +428,10 @@ impl Declarations {
         )
     }
 
+    pub fn try_text_decoration_color(self, color: StyleColor) -> Result<Self> {
+        self.try_set(Property::TextDecorationColor, Value::StyleColor(color))
+    }
+
     #[must_use]
     pub fn text_decoration_style(self, value: TextDecorationStyle) -> Self {
         self.set(
@@ -608,9 +630,9 @@ impl Declarations {
     }
 
     #[must_use]
-    pub fn background(&self) -> Option<Color> {
+    pub fn background(&self) -> Option<&StyleColor> {
         match self.get(Property::Background) {
-            Some(Value::Color(color)) => Some(*color),
+            Some(Value::StyleColor(color)) => Some(color),
             _ => None,
         }
     }
@@ -795,6 +817,7 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
         ],
         Property::TextDecoration => vec![
             Property::TextDecorationLine,
+            Property::TextDecorationColor,
             Property::TextDecorationStyle,
             Property::TextDecorationThickness,
         ],
@@ -1133,6 +1156,15 @@ fn text_decoration_declarations(value: TextDecoration) -> Vec<Declaration> {
             Value::TextDecorationLine(value.line().cloned().unwrap_or_default()),
         ),
         Declaration::new(
+            Property::TextDecorationColor,
+            Value::StyleColor(
+                value
+                    .color()
+                    .cloned()
+                    .unwrap_or_else(StyleColor::current_color),
+            ),
+        ),
+        Declaration::new(
             Property::TextDecorationStyle,
             Value::TextDecorationStyle(value.style().unwrap_or_default()),
         ),
@@ -1351,6 +1383,10 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::TextDecorationThickness(value) => {
             69u8.hash(state);
             hash_text_decoration_thickness(value, state);
+        }
+        Value::StyleColor(value) => {
+            70u8.hash(state);
+            hash_style_color(value, state);
         }
         Value::WritingMode(value) => {
             33u8.hash(state);
@@ -1607,6 +1643,12 @@ fn hash_text_decoration(value: &TextDecoration, state: &mut DefaultHasher) {
     if let Some(line) = value.line() {
         true.hash(state);
         line.hash(state);
+    } else {
+        false.hash(state);
+    }
+    if let Some(color) = value.color() {
+        true.hash(state);
+        hash_style_color(color, state);
     } else {
         false.hash(state);
     }
@@ -1888,10 +1930,198 @@ fn hash_transform_op(value: &super::TransformOp, state: &mut DefaultHasher) {
 }
 
 fn hash_color(value: Color, state: &mut DefaultHasher) {
-    hash_f32(value.r, state);
-    hash_f32(value.g, state);
-    hash_f32(value.b, state);
-    hash_f32(value.a, state);
+    hash_f32(value.r(), state);
+    hash_f32(value.g(), state);
+    hash_f32(value.b(), state);
+    hash_f32(value.a(), state);
+}
+
+pub(crate) fn hash_style_color(value: &StyleColor, state: &mut DefaultHasher) {
+    match value {
+        StyleColor::CurrentColor => 0u8.hash(state),
+        StyleColor::Rgba(color) => {
+            1u8.hash(state);
+            hash_color(*color, state);
+        }
+        StyleColor::System(color) => {
+            2u8.hash(state);
+            color.hash(state);
+        }
+        StyleColor::Hsl {
+            hue,
+            saturation,
+            lightness,
+            alpha,
+        } => {
+            3u8.hash(state);
+            hash_color_component(*hue, state);
+            hash_color_component(*saturation, state);
+            hash_color_component(*lightness, state);
+            hash_alpha(*alpha, state);
+        }
+        StyleColor::Hwb {
+            hue,
+            whiteness,
+            blackness,
+            alpha,
+        } => {
+            4u8.hash(state);
+            hash_color_component(*hue, state);
+            hash_color_component(*whiteness, state);
+            hash_color_component(*blackness, state);
+            hash_alpha(*alpha, state);
+        }
+        StyleColor::Lab {
+            lightness,
+            a,
+            b,
+            alpha,
+        } => {
+            5u8.hash(state);
+            hash_color_component(*lightness, state);
+            hash_color_component(*a, state);
+            hash_color_component(*b, state);
+            hash_alpha(*alpha, state);
+        }
+        StyleColor::Lch {
+            lightness,
+            chroma,
+            hue,
+            alpha,
+        } => {
+            6u8.hash(state);
+            hash_color_component(*lightness, state);
+            hash_color_component(*chroma, state);
+            hash_color_component(*hue, state);
+            hash_alpha(*alpha, state);
+        }
+        StyleColor::Oklab {
+            lightness,
+            a,
+            b,
+            alpha,
+        } => {
+            7u8.hash(state);
+            hash_color_component(*lightness, state);
+            hash_color_component(*a, state);
+            hash_color_component(*b, state);
+            hash_alpha(*alpha, state);
+        }
+        StyleColor::Oklch {
+            lightness,
+            chroma,
+            hue,
+            alpha,
+        } => {
+            8u8.hash(state);
+            hash_color_component(*lightness, state);
+            hash_color_component(*chroma, state);
+            hash_color_component(*hue, state);
+            hash_alpha(*alpha, state);
+        }
+        StyleColor::ColorFunction(value) => {
+            9u8.hash(state);
+            hash_color_function(value, state);
+        }
+        StyleColor::ColorMix(value) => {
+            10u8.hash(state);
+            hash_color_mix(value, state);
+        }
+        StyleColor::Relative(value) => {
+            11u8.hash(state);
+            hash_relative_color(value, state);
+        }
+    }
+}
+
+fn hash_color_component(value: super::ColorComponent, state: &mut DefaultHasher) {
+    value.get().map(f32::to_bits).hash(state);
+}
+
+fn hash_alpha(value: Option<super::Alpha>, state: &mut DefaultHasher) {
+    value.map(super::Alpha::get).map(f32::to_bits).hash(state);
+}
+
+fn hash_color_function(value: &ColorFunction, state: &mut DefaultHasher) {
+    value.space().hash(state);
+    for component in value.components() {
+        hash_color_component(*component, state);
+    }
+    hash_alpha(value.alpha(), state);
+}
+
+fn hash_color_interpolation_space(value: ColorInterpolationSpace, state: &mut DefaultHasher) {
+    value.hash(state);
+}
+
+fn hash_color_mix(value: &ColorMix, state: &mut DefaultHasher) {
+    hash_color_interpolation_space(value.interpolation().space(), state);
+    value.interpolation().hue().hash(state);
+    hash_color_mix_component(value.left(), state);
+    hash_color_mix_component(value.right(), state);
+}
+
+fn hash_color_mix_component(value: &super::ColorMixComponent, state: &mut DefaultHasher) {
+    hash_style_color(value.color(), state);
+    value.percentage().map(f32::to_bits).hash(state);
+}
+
+fn hash_relative_color(value: &RelativeColor, state: &mut DefaultHasher) {
+    value.function().hash(state);
+    hash_style_color(value.source(), state);
+    value.components().len().hash(state);
+    for component in value.components() {
+        hash_symbolic_component_expression(component, state);
+    }
+    if let Some(alpha) = value.alpha() {
+        true.hash(state);
+        hash_symbolic_component_expression(alpha, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_symbolic_component_expression(
+    value: &SymbolicComponentExpression,
+    state: &mut DefaultHasher,
+) {
+    value.authored().as_css().hash(state);
+    value.references().len().hash(state);
+    for reference in value.references() {
+        hash_variable_reference(reference, state);
+    }
+}
+
+fn hash_variable_reference(value: &VariableReference, state: &mut DefaultHasher) {
+    value.name().hash(state);
+    if let Some(fallback) = value.fallback() {
+        true.hash(state);
+        hash_variable_fallback(fallback, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_variable_fallback(value: &VariableFallback, state: &mut DefaultHasher) {
+    value.authored().as_css().hash(state);
+    hash_variable_expression(value.expression(), state);
+}
+
+fn hash_variable_expression(value: &VariableExpression, state: &mut DefaultHasher) {
+    match value {
+        VariableExpression::Value(value) => {
+            0u8.hash(state);
+            hash_value(value, state);
+        }
+        VariableExpression::CssWideKeyword(value) => {
+            1u8.hash(state);
+            value.hash(state);
+        }
+        VariableExpression::Reference(value) => {
+            2u8.hash(state);
+            hash_variable_reference(value, state);
+        }
+    }
 }
 
 fn hash_slant(value: TextSlant, state: &mut DefaultHasher) {
@@ -1911,10 +2141,10 @@ fn hash_decoration(value: super::Decoration, state: &mut DefaultHasher) {
     value.size().map(f32::to_bits).hash(state);
     if let Some(brush) = value.brush() {
         true.hash(state);
-        hash_f32(brush.r, state);
-        hash_f32(brush.g, state);
-        hash_f32(brush.b, state);
-        hash_f32(brush.a, state);
+        hash_f32(brush.r(), state);
+        hash_f32(brush.g(), state);
+        hash_f32(brush.b(), state);
+        hash_f32(brush.a(), state);
     } else {
         false.hash(state);
     }
@@ -1927,13 +2157,18 @@ fn hash_f32(value: f32, state: &mut DefaultHasher) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authored::AuthoredCascadeValue;
     use crate::{
-        AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, Font, FontFeature,
-        FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
-        FontWeight, FontWeightNumber, GridFlowTolerance, LetterSpacing, OverflowWrap,
-        TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
-        TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextTransform,
-        TextWrap, VerticalAlign, WhiteSpace, WordBreak,
+        AlignItems, Alpha, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty,
+        AuthoredTokens, BoxSizing, CalcLength, CalcLengthTerm, ColorComponent,
+        ColorInterpolationMethod, ColorInterpolationSpace, ColorMix, ColorMixComponent,
+        CssWideKeyword, CustomPropertyName, ErrorCode, Font, FontFeature, FontFeatureSettings,
+        FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
+        GridFlowTolerance, LetterSpacing, OverflowWrap, StyleColor, SymbolicComponentExpression,
+        SystemColor, TextAlignLast, TextDecoration, TextDecorationLine,
+        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
+        TextOverflow, TextTransform, TextWrap, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -2048,6 +2283,7 @@ mod tests {
         let thickness = TextDecorationThickness::try_length(Length::Px(2.0)).unwrap();
         let decoration = TextDecoration::try_new(
             Some(line.clone()),
+            None,
             Some(TextDecorationStyle::Wavy),
             Some(thickness.clone()),
         )
@@ -2071,9 +2307,137 @@ mod tests {
     }
 
     #[test]
+    fn color_properties_accept_symbolic_style_colors() {
+        let decoration = StyleColor::current_color();
+        let rgba = StyleColor::rgba(Color::try_rgba(0.2, 0.4, 0.6, 1.0).unwrap());
+
+        let declarations = Declarations::new()
+            .try_text_color(rgba.clone())
+            .unwrap()
+            .try_background_color(StyleColor::current_color())
+            .unwrap()
+            .try_text_decoration_color(decoration.clone())
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::Color),
+            Some(&Value::StyleColor(rgba))
+        );
+        assert_eq!(
+            declarations.get(Property::Background),
+            Some(&Value::StyleColor(StyleColor::current_color()))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationColor),
+            Some(&Value::StyleColor(decoration))
+        );
+    }
+
+    #[test]
+    fn text_decoration_shorthand_lowers_color_with_existing_components() {
+        let line = TextDecorationLine::try_new([TextDecorationLineComponent::Underline]).unwrap();
+        let color = StyleColor::system(SystemColor::CanvasText);
+        let thickness = TextDecorationThickness::try_length(Length::Px(2.0)).unwrap();
+        let decoration = TextDecoration::try_new(
+            Some(line.clone()),
+            Some(color.clone()),
+            Some(TextDecorationStyle::Wavy),
+            Some(thickness.clone()),
+        )
+        .unwrap();
+
+        let declarations = Declarations::new().try_text_decoration(decoration).unwrap();
+
+        assert_eq!(declarations.get(Property::TextDecoration), None);
+        assert_eq!(
+            declarations.get(Property::TextDecorationLine),
+            Some(&Value::TextDecorationLine(line))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationColor),
+            Some(&Value::StyleColor(color))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationStyle),
+            Some(&Value::TextDecorationStyle(TextDecorationStyle::Wavy))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationThickness),
+            Some(&Value::TextDecorationThickness(thickness))
+        );
+    }
+
+    #[test]
+    fn text_decoration_css_wide_expands_to_color_longhand() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::TextDecoration),
+            CssWideKeyword::Initial,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::TextDecoration), None);
+        for property in [
+            Property::TextDecorationLine,
+            Property::TextDecorationColor,
+            Property::TextDecorationStyle,
+            Property::TextDecorationThickness,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Initial
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn symbolic_color_components_validate_domains() {
+        assert!(Alpha::new(0.0).is_ok());
+        assert!(Alpha::new(1.0).is_ok());
+        assert!(Alpha::new(-0.1).is_err());
+        assert!(Alpha::new(1.1).is_err());
+        assert!(Alpha::new(f32::NAN).is_err());
+
+        assert!(ColorComponent::new(Some(0.0)).is_ok());
+        assert!(ColorComponent::new(Some(f32::NAN)).is_err());
+
+        let left = ColorMixComponent::try_new(StyleColor::current_color(), Some(25.0)).unwrap();
+        let right = ColorMixComponent::try_new(StyleColor::rgba(Color::BLACK), None).unwrap();
+        let mix = StyleColor::color_mix(ColorMix::new(
+            ColorInterpolationMethod::new(ColorInterpolationSpace::Oklab, None),
+            left,
+            right,
+        ));
+        assert!(matches!(mix, StyleColor::ColorMix(_)));
+        assert!(ColorMixComponent::try_new(StyleColor::current_color(), Some(101.0)).is_err());
+    }
+
+    #[test]
+    fn relative_color_component_dependencies_include_nested_fallbacks() {
+        let primary = CustomPropertyName::try_new("--a").unwrap();
+        let fallback = CustomPropertyName::try_new("--b").unwrap();
+        let expression = SymbolicComponentExpression::new(
+            AuthoredTokens::new("calc(var(--a, var(--b)) + 1)"),
+            [VariableReference::new(
+                primary.clone(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("var(--b)"),
+                    VariableExpression::Reference(VariableReference::new(fallback.clone(), None)),
+                )),
+            )],
+        )
+        .unwrap();
+
+        assert_eq!(expression.dependencies(), vec![primary, fallback]);
+    }
+
+    #[test]
     fn text_decoration_shorthand_resets_omitted_components_to_defaults() {
         let line = TextDecorationLine::try_new([TextDecorationLineComponent::Underline]).unwrap();
-        let decoration = TextDecoration::try_new(Some(line.clone()), None, None).unwrap();
+        let decoration = TextDecoration::try_new(Some(line.clone()), None, None, None).unwrap();
 
         let declarations = Declarations::new()
             .text_decoration_style(TextDecorationStyle::Wavy)
@@ -2109,7 +2473,7 @@ mod tests {
             ])
             .is_err()
         );
-        assert!(TextDecoration::try_new(None, None, None).is_err());
+        assert!(TextDecoration::try_new(None, None, None, None).is_err());
         assert!(TextDecorationThickness::try_length(Length::Px(0.0)).is_ok());
         assert!(TextDecorationThickness::try_length(Length::Percent(10.0)).is_ok());
         assert!(TextDecorationThickness::try_length(Length::Px(-1.0)).is_err());

@@ -8,7 +8,7 @@ use super::{
     Cursor, Declarations, Display, Edges, FlexFactor, FontFamilyList, FontFeatureSettings,
     FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
     OverflowWrap, PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth,
-    SelectorMatchContext, Sheet, Size, StyleBucket, TextAlignLast, TextDecorationLine,
+    SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine,
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
     TextTransform, TextWrap, Transform, Traversal, Tree, Value, Version, VerticalAlign, Viewport,
     Visibility, WhiteSpace, WordBreak, ZIndex, declaration::hash_value,
@@ -75,18 +75,18 @@ impl Resolved {
     }
 
     #[must_use]
-    pub fn background(&self) -> super::Color {
+    pub fn background(&self) -> &StyleColor {
         match self.get(Property::Background) {
-            Value::Color(color) => *color,
-            _ => super::Color::TRANSPARENT,
+            Value::StyleColor(color) => color,
+            _ => unreachable!("resolved background stores a style color"),
         }
     }
 
     #[must_use]
-    pub fn text_color(&self) -> super::Color {
+    pub fn text_color(&self) -> &StyleColor {
         match self.get(Property::Color) {
-            Value::Color(color) => *color,
-            _ => super::Color::BLACK,
+            Value::StyleColor(color) => color,
+            _ => unreachable!("resolved color stores a style color"),
         }
     }
 
@@ -321,6 +321,14 @@ impl Resolved {
                     "resolved text-decoration-thickness stores a text decoration thickness"
                 )
             }
+        }
+    }
+
+    #[must_use]
+    pub fn text_decoration_color(&self) -> &StyleColor {
+        match self.get(Property::TextDecorationColor) {
+            Value::StyleColor(value) => value,
+            _ => unreachable!("resolved text-decoration-color stores a style color"),
         }
     }
 
@@ -1425,11 +1433,11 @@ mod tests {
         FontStretch, FontVariant, FontWeight, FontWeightNumber, LayerOrder, LayoutPosition,
         LetterSpacing, Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence,
         RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket,
-        StyleClass, StyleRole, StyleState, StyleTag, TextAlignLast, TextDecorationLine,
-        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
-        TextOverflow, TextSlant, TextTransform, TextWrap, VariableDependentValue,
-        VariableExpression, VariableFallback, VariableReference, VerticalAlign, WhiteSpace,
-        WordBreak, ZIndex,
+        StyleClass, StyleColor, StyleRole, StyleState, StyleTag, SystemColor, TextAlignLast,
+        TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+        TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1442,7 +1450,7 @@ mod tests {
             .try_push(
                 AuthoredDeclaration::try_new(
                     AuthoredProperty::Property(Property::Color),
-                    AuthoredValue::Value(Value::Color(value)),
+                    AuthoredValue::Value(Value::StyleColor(StyleColor::rgba(value))),
                 )
                 .unwrap(),
             )
@@ -1483,7 +1491,7 @@ mod tests {
             CustomPropertyValue::new(AuthoredTokens::new(format!("{color:?}")), [])
                 .try_with_typed_value(
                     Property::Color,
-                    VariableExpression::Value(Value::Color(color)),
+                    VariableExpression::Value(Value::StyleColor(StyleColor::rgba(color))),
                 )
                 .unwrap(),
         )
@@ -1581,7 +1589,10 @@ mod tests {
     fn parent_color(color: Color) -> Resolved {
         let mut parent = Resolved::new();
         parent
-            .apply(&Declarations::new().try_text_color(color).unwrap(), None)
+            .apply(
+                &Declarations::new().try_concrete_text_color(color).unwrap(),
+                None,
+            )
             .unwrap();
         parent
     }
@@ -1862,19 +1873,38 @@ mod tests {
     }
 
     #[test]
+    fn resolved_color_getters_preserve_symbolic_colors() {
+        let decoration = StyleColor::current_color();
+        let background = StyleColor::system(SystemColor::Canvas);
+        let style = resolve_single(
+            Declarations::new()
+                .try_text_color(StyleColor::rgba(Color::BLACK))
+                .unwrap()
+                .try_background_color(background.clone())
+                .unwrap()
+                .try_text_decoration_color(decoration.clone())
+                .unwrap(),
+        );
+
+        assert_eq!(style.text_color(), &StyleColor::rgba(Color::BLACK));
+        assert_eq!(style.background(), &background);
+        assert_eq!(style.text_decoration_color(), &decoration);
+    }
+
+    #[test]
     fn higher_layer_wins_over_later_source_order() {
         let mut sheet = Sheet::new();
         push_authored(
             &mut sheet,
-            authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+            authored_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0)),
             precedence(1, 100),
         );
         push_authored(&mut sheet, authored_color(Color::BLACK), precedence(2, 0));
-        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+        let parent = parent_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0));
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -1882,15 +1912,15 @@ mod tests {
         let mut sheet = Sheet::new();
         push_authored(
             &mut sheet,
-            authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+            authored_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0)),
             precedence(7, 0),
         );
         push_authored(&mut sheet, authored_color(Color::BLACK), precedence(7, 1));
-        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+        let parent = parent_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0));
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -1899,7 +1929,7 @@ mod tests {
         sheet
             .push_authored_rule(
                 Selector::tag("button").unwrap(),
-                authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+                authored_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0)),
                 precedence(7, 10).with_specificity(SelectorSpecificity::new(0, 0, 1)),
             )
             .unwrap();
@@ -1913,7 +1943,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -1928,7 +1958,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -1937,7 +1967,7 @@ mod tests {
         parent
             .apply(
                 &Declarations::new()
-                    .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
                     .unwrap(),
                 None,
             )
@@ -1951,7 +1981,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -1960,7 +1990,7 @@ mod tests {
         parent
             .apply(
                 &Declarations::new()
-                    .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
                     .unwrap()
                     .try_set(Property::Width, Value::Length(Length::Px(88.0)))
                     .unwrap(),
@@ -1981,7 +2011,10 @@ mod tests {
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::rgba(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(
+            resolved.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+        );
         assert_eq!(resolved.width(), Length::Auto);
     }
 
@@ -1994,11 +2027,11 @@ mod tests {
             authored_keyword(Property::Color, CssWideKeyword::RevertLayer),
             precedence(2, 0),
         );
-        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+        let parent = parent_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0));
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -2007,7 +2040,7 @@ mod tests {
         push_authored(&mut sheet, authored_color(Color::BLACK), precedence(1, 0));
         push_authored(
             &mut sheet,
-            authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+            authored_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0)),
             precedence(2, 0),
         );
         push_authored(
@@ -2015,11 +2048,11 @@ mod tests {
             authored_keyword(Property::Color, CssWideKeyword::RevertLayer),
             precedence(2, 1),
         );
-        let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
+        let parent = parent_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0));
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -2028,7 +2061,7 @@ mod tests {
         parent
             .apply(
                 &Declarations::new()
-                    .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
                     .unwrap()
                     .try_set(Property::Width, Value::Length(Length::Px(88.0)))
                     .unwrap(),
@@ -2049,14 +2082,17 @@ mod tests {
 
         let resolved = resolve_child(sheet, Some(&parent));
 
-        assert_eq!(resolved.text_color(), Color::rgba(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(
+            resolved.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+        );
         assert_eq!(resolved.width(), Length::Auto);
     }
 
     #[test]
     fn child_styles_inherit_custom_properties_from_parent_resolved() {
         let name = custom_name("--brand");
-        let parent = parent_custom_color("--brand", Color::rgba(0.2, 0.3, 0.4, 1.0));
+        let parent = parent_custom_color("--brand", Color::raw_rgba(0.2, 0.3, 0.4, 1.0));
         let sheet = Sheet::new();
 
         let resolved = resolve_child(sheet, Some(&parent));
@@ -2075,7 +2111,7 @@ mod tests {
         push_custom_color(
             &mut sheet,
             "--brand",
-            Color::rgba(0.8, 0.1, 0.1, 1.0),
+            Color::raw_rgba(0.8, 0.1, 0.1, 1.0),
             precedence(1, 0),
         );
 
@@ -2101,7 +2137,9 @@ mod tests {
             &mut sheet,
             variable_color_declarations(
                 name.clone(),
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(1, 1),
         );
@@ -2109,13 +2147,13 @@ mod tests {
         let resolved = resolve_child(sheet, Some(&parent));
 
         assert_eq!(resolved.custom_property(&name), None);
-        assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
     }
 
     #[test]
     fn unset_inherits_custom_property_from_parent() {
         let name = custom_name("--brand");
-        let parent = parent_custom_color("--brand", Color::rgba(0.2, 0.3, 0.4, 1.0));
+        let parent = parent_custom_color("--brand", Color::raw_rgba(0.2, 0.3, 0.4, 1.0));
         let mut sheet = Sheet::new();
         push_authored(
             &mut sheet,
@@ -2153,7 +2191,7 @@ mod tests {
     #[test]
     fn revert_layer_on_custom_property_without_lower_layer_resolves_as_unset() {
         let name = custom_name("--brand");
-        let parent = parent_custom_color("--brand", Color::rgba(0.3, 0.4, 0.5, 1.0));
+        let parent = parent_custom_color("--brand", Color::raw_rgba(0.3, 0.4, 0.5, 1.0));
         let mut sheet = Sheet::new();
         push_authored(
             &mut sheet,
@@ -2188,7 +2226,9 @@ mod tests {
             &mut sheet,
             variable_color_declarations(
                 name.clone(),
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(2, 1),
         );
@@ -2196,7 +2236,7 @@ mod tests {
         let resolved = resolve_child(sheet, Some(&parent));
 
         assert_eq!(resolved.custom_property(&name), None);
-        assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
     }
 
     #[test]
@@ -2206,21 +2246,26 @@ mod tests {
         push_custom_color(
             &mut sheet,
             "--brand",
-            Color::rgba(0.9, 0.2, 0.1, 1.0),
+            Color::raw_rgba(0.9, 0.2, 0.1, 1.0),
             precedence(1, 0),
         );
         push_authored(
             &mut sheet,
             variable_color_declarations(
                 name,
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(1, 1),
         );
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::rgba(0.9, 0.2, 0.1, 1.0));
+        assert_eq!(
+            resolved.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.9, 0.2, 0.1, 1.0))
+        );
     }
 
     #[test]
@@ -2247,7 +2292,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
         assert_eq!(
             dependency_names_for_property(&resolved, Property::Color),
             ["--brand"]
@@ -2292,7 +2337,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
         assert_eq!(
             dependency_names_for_property(&resolved, Property::Color),
             ["--brand", "--fallback"]
@@ -2322,7 +2367,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
         assert_eq!(
             dependency_names_for_property(&resolved, Property::Color),
             ["--brand", "--fallback"]
@@ -2336,14 +2381,16 @@ mod tests {
             &mut sheet,
             variable_color_declarations(
                 custom_name("--brand"),
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(1, 0),
         );
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
     }
 
     #[test]
@@ -2357,7 +2404,7 @@ mod tests {
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -2376,14 +2423,19 @@ mod tests {
             &mut fallback_sheet,
             variable_color_declarations(
                 name.clone(),
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(1, 1),
         );
 
         let fallback_resolved = resolve_child(fallback_sheet, None);
 
-        assert_eq!(fallback_resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(
+            fallback_resolved.text_color(),
+            &StyleColor::rgba(Color::TRANSPARENT)
+        );
 
         let mut unset_sheet = Sheet::new();
         push_authored(
@@ -2402,14 +2454,14 @@ mod tests {
 
         let unset_resolved = resolve_child(unset_sheet, None);
 
-        assert_eq!(unset_resolved.text_color(), Color::BLACK);
+        assert_eq!(unset_resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
     fn fallback_only_custom_property_self_reference_does_not_create_cycle() {
         let a = custom_name("--a");
         let b = custom_name("--b");
-        let a_color = Color::rgba(0.1, 0.6, 0.3, 1.0);
+        let a_color = Color::raw_rgba(0.1, 0.6, 0.3, 1.0);
         let b_fallback_reference = VariableReference::new(b.clone(), None);
         let b_expression = VariableExpression::Reference(VariableReference::new(
             a.clone(),
@@ -2426,7 +2478,7 @@ mod tests {
                 CustomPropertyValue::new(AuthoredTokens::new("green"), [])
                     .try_with_typed_value(
                         Property::Color,
-                        VariableExpression::Value(Value::Color(a_color)),
+                        VariableExpression::Value(Value::StyleColor(StyleColor::rgba(a_color))),
                     )
                     .unwrap(),
             ),
@@ -2452,14 +2504,16 @@ mod tests {
             &mut sheet,
             variable_color_declarations(
                 b.clone(),
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(1, 2),
         );
 
         let resolved = resolve_child(sheet, None);
 
-        assert_eq!(resolved.text_color(), a_color);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(a_color));
         assert!(
             !resolved
                 .custom_property_resolution(&b)
@@ -2505,14 +2559,19 @@ mod tests {
             &mut fallback_sheet,
             variable_color_declarations(
                 a.clone(),
-                Some(VariableExpression::Value(Value::Color(Color::TRANSPARENT))),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
             ),
             precedence(1, 2),
         );
 
         let fallback_resolved = resolve_child(fallback_sheet, None);
 
-        assert_eq!(fallback_resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(
+            fallback_resolved.text_color(),
+            &StyleColor::rgba(Color::TRANSPARENT)
+        );
         assert!(
             fallback_resolved
                 .custom_property_resolution(&a)
@@ -2557,7 +2616,7 @@ mod tests {
 
         let unset_resolved = resolve_child(unset_sheet, None);
 
-        assert_eq!(unset_resolved.text_color(), Color::BLACK);
+        assert_eq!(unset_resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -2592,10 +2651,10 @@ mod tests {
             precedence(1, 1),
         );
         let local = Declarations::new()
-            .try_text_color(Color::rgba(0.4, 0.4, 0.4, 1.0))
+            .try_concrete_text_color(Color::raw_rgba(0.4, 0.4, 0.4, 1.0))
             .unwrap();
         let animated = Declarations::new()
-            .try_text_color(Color::TRANSPARENT)
+            .try_concrete_text_color(Color::TRANSPARENT)
             .unwrap();
         let mut resolver = Resolver::new(sheet);
 
@@ -2603,7 +2662,7 @@ mod tests {
             .resolve(Context::new(&tree, 0).local(&local).animated(&animated))
             .unwrap();
 
-        assert_eq!(resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
     }
 
     #[test]
@@ -2613,18 +2672,23 @@ mod tests {
             .rule(
                 Selector::class("badge").unwrap(),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
                     .unwrap(),
             )
             .targeted_rule(
                 RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
-                Declarations::new().try_text_color(Color::BLACK).unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::BLACK)
+                    .unwrap(),
             );
         let mut resolver = Resolver::new(sheet);
 
         let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
 
-        assert_eq!(resolved.text_color(), Color::rgba(0.1, 0.2, 0.3, 1.0));
+        assert_eq!(
+            resolved.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
+        );
     }
 
     #[test]
@@ -2634,13 +2698,13 @@ mod tests {
             .rule(
                 Selector::class("badge").unwrap(),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
                     .unwrap(),
             )
             .targeted_rule(
                 RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.8, 0.7, 0.6, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.8, 0.7, 0.6, 1.0))
                     .unwrap(),
             );
         let mut resolver = Resolver::new(sheet);
@@ -2650,8 +2714,14 @@ mod tests {
             .resolve(Context::new(&tree, 0).style_bucket(StyleBucket::Before))
             .unwrap();
 
-        assert_eq!(element.text_color(), Color::rgba(0.1, 0.2, 0.3, 1.0));
-        assert_eq!(before.text_color(), Color::rgba(0.8, 0.7, 0.6, 1.0));
+        assert_eq!(
+            element.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
+        );
+        assert_eq!(
+            before.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.8, 0.7, 0.6, 1.0))
+        );
     }
 
     #[test]
@@ -2661,13 +2731,13 @@ mod tests {
             .rule(
                 Selector::class("badge").unwrap(),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
                     .unwrap(),
             )
             .targeted_rule(
                 RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.8, 0.7, 0.6, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.8, 0.7, 0.6, 1.0))
                     .unwrap(),
             );
         let mut resolver = Resolver::new(sheet);
@@ -2680,9 +2750,18 @@ mod tests {
             .resolve(Context::new(&tree, 0).style_bucket(StyleBucket::Before))
             .unwrap();
 
-        assert_eq!(element.text_color(), Color::rgba(0.1, 0.2, 0.3, 1.0));
-        assert_eq!(before.text_color(), Color::rgba(0.8, 0.7, 0.6, 1.0));
-        assert_eq!(before_again.text_color(), Color::rgba(0.8, 0.7, 0.6, 1.0));
+        assert_eq!(
+            element.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
+        );
+        assert_eq!(
+            before.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.8, 0.7, 0.6, 1.0))
+        );
+        assert_eq!(
+            before_again.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.8, 0.7, 0.6, 1.0))
+        );
         assert_eq!(resolver.cache_hits(), 1);
     }
 
@@ -2695,7 +2774,7 @@ mod tests {
                 .try_set(Property::Width, Value::Length(Length::Px(32.0)))
                 .unwrap(),
         );
-        let parent = parent_color(Color::rgba(0.4, 0.5, 0.6, 1.0));
+        let parent = parent_color(Color::raw_rgba(0.4, 0.5, 0.6, 1.0));
         let mut resolver = Resolver::new(sheet);
 
         let before = resolver
@@ -2706,7 +2785,10 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(before.text_color(), Color::rgba(0.4, 0.5, 0.6, 1.0));
+        assert_eq!(
+            before.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.4, 0.5, 0.6, 1.0))
+        );
         assert_eq!(before.width(), Length::Px(32.0));
     }
 
@@ -2717,20 +2799,20 @@ mod tests {
             .rule(
                 Selector::class("badge").unwrap(),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.1, 0.2, 0.3, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.1, 0.2, 0.3, 1.0))
                     .unwrap(),
             )
             .targeted_rule(
                 RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::Before),
                 Declarations::new()
-                    .try_text_color(Color::rgba(0.4, 0.5, 0.6, 1.0))
+                    .try_concrete_text_color(Color::raw_rgba(0.4, 0.5, 0.6, 1.0))
                     .unwrap(),
             );
         let local = Declarations::new()
-            .try_text_color(Color::rgba(0.7, 0.8, 0.9, 1.0))
+            .try_concrete_text_color(Color::raw_rgba(0.7, 0.8, 0.9, 1.0))
             .unwrap();
         let animated = Declarations::new()
-            .try_text_color(Color::TRANSPARENT)
+            .try_concrete_text_color(Color::TRANSPARENT)
             .unwrap();
         let mut resolver = Resolver::new(sheet);
 
@@ -2743,7 +2825,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(before.text_color(), Color::TRANSPARENT);
+        assert_eq!(before.text_color(), &StyleColor::rgba(Color::TRANSPARENT));
     }
 
     #[test]
@@ -2766,8 +2848,11 @@ mod tests {
             .resolve(Context::new(&tree, 0).parent(&transparent_parent))
             .unwrap();
 
-        assert_eq!(black_resolved.text_color(), Color::BLACK);
-        assert_eq!(transparent_resolved.text_color(), Color::TRANSPARENT);
+        assert_eq!(black_resolved.text_color(), &StyleColor::rgba(Color::BLACK));
+        assert_eq!(
+            transparent_resolved.text_color(),
+            &StyleColor::rgba(Color::TRANSPARENT)
+        );
         assert_eq!(resolver.cache_hits(), 0);
     }
 
@@ -2778,18 +2863,20 @@ mod tests {
         sheet.push_rule(
             Selector::tag("button").unwrap(),
             Declarations::new()
-                .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
                 .unwrap(),
         );
         sheet.push_rule(
             Selector::tag("button").unwrap(),
-            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::BLACK)
+                .unwrap(),
         );
         let mut resolver = Resolver::new(sheet);
 
         let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
 
-        assert_eq!(resolved.text_color(), Color::BLACK);
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]
@@ -2812,7 +2899,7 @@ mod tests {
         let sheet = Sheet::new().rule(
             selector,
             Declarations::new()
-                .try_text_color(Color::rgba(1.0, 0.0, 0.0, 1.0))
+                .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
                 .unwrap(),
         );
         let mut resolver = Resolver::new(sheet);
@@ -2824,8 +2911,11 @@ mod tests {
             .resolve(Context::new(&tree, 4).selector_root(0).selector_scope(1))
             .unwrap();
 
-        assert_eq!(scoped.text_color(), Color::rgba(1.0, 0.0, 0.0, 1.0));
-        assert_eq!(unscoped.text_color(), Color::BLACK);
+        assert_eq!(
+            scoped.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+        );
+        assert_eq!(unscoped.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[derive(Clone, Debug)]

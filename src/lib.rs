@@ -54,22 +54,25 @@ pub use sheet::{Rule, RuleTarget, Sheet, Version};
 pub use state::StateFlag;
 pub use tree::{Node, Traversal, Tree};
 pub use value::{
-    AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, Clear, Color,
-    ContentVisibility, Corners, CssPx, Cursor, Dash, Decoration, DimensionLength, Direction,
-    Display, DurationSeconds, Edges, Flex, FlexDirection, FlexFactor, FlexWrap, Float, Font,
-    FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
-    FontStretch, FontVariant, FontWeight, FontWeightNumber, GridAreaPlacement, GridAutoFlow,
-    GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow,
-    GridTemplateAreas, GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length,
-    LetterSpacing, LetterSpacingLength, LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Order,
-    Overflow, OverflowAxes, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
-    PointerEvents, ScrollbarWidth, Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign,
-    SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextAlignLast,
-    TextDecoration, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
-    TextDecorationThickness, TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextValue, TextWeight, TextWrap, TrackRepeat, TrackRepeatCount, TrackSizing,
-    Transform, TransformOp, Value, VerticalAlign, VerticalAlignLength, Visibility, WhiteSpace,
-    WordBreak, WritingMode, ZIndex,
+    AlignContent, AlignItems, Alpha, AnimationNameList, AspectRatio, BoxSizing, Clear, Color,
+    ColorComponent, ColorFunction, ColorInterpolationMethod, ColorInterpolationSpace, ColorMix,
+    ColorMixComponent, ContentVisibility, Corners, CssPx, Cursor, Dash, Decoration,
+    DimensionLength, Direction, Display, DurationSeconds, Edges, Flex, FlexDirection, FlexFactor,
+    FlexWrap, Float, Font, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
+    FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber, GridAreaPlacement,
+    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
+    GridTemplateAreaRow, GridTemplateAreas, GridTrackComponent, GridTrackList,
+    HueInterpolationMethod, Keyword, LayoutPosition, Length, LetterSpacing, LetterSpacingLength,
+    LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Order, Overflow, OverflowAxes,
+    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, PredefinedColorSpace,
+    RelativeColor, RelativeColorFunction, ScrollbarWidth, Shadow, SideSet, Size, Stroke,
+    StrokeAlign, StyleColor, StyleTextAlign, SubgridLineNameComponent, SubgridLineNameRepeatCount,
+    SubgridTrack, SymbolicComponentExpression, SystemColor, TextAlignLast, TextDecoration,
+    TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
+    TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextValue,
+    TextWeight, TextWrap, TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp,
+    Value, VerticalAlign, VerticalAlignLength, Visibility, WhiteSpace, WordBreak, WritingMode,
+    ZIndex,
 };
 
 #[must_use]
@@ -78,5 +81,5 @@ pub fn color(rgba: u32) -> Color {
     let g = ((rgba >> 16) & 0xff) as f32 / 255.0;
     let b = ((rgba >> 8) & 0xff) as f32 / 255.0;
     let a = (rgba & 0xff) as f32 / 255.0;
-    Color::rgba(r, g, b, a)
+    Color::raw_rgba(r, g, b, a)
 }
