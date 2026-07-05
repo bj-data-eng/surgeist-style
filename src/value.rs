@@ -1,5 +1,5 @@
 use super::{
-    CalcLength, Error, ErrorCode, Interpolation, Property, Result,
+    CalcLength, CalcOperator, Error, ErrorCode, Interpolation, Property, Result,
     error::{validate_finite, validate_non_negative},
 };
 
@@ -844,6 +844,10 @@ pub enum Value {
     VerticalAlign(VerticalAlign),
     LetterSpacing(LetterSpacing),
     TextTransform(TextTransform),
+    TextDecoration(TextDecoration),
+    TextDecorationLine(TextDecorationLine),
+    TextDecorationStyle(TextDecorationStyle),
+    TextDecorationThickness(TextDecorationThickness),
     TextWrap(TextWrap),
     WhiteSpace(WhiteSpace),
     WordBreak(WordBreak),
@@ -908,6 +912,7 @@ impl Value {
             Self::TextIndent(_) | Self::VerticalAlign(_) | Self::LetterSpacing(_) => {
                 Interpolation::Length
             }
+            Self::TextDecorationThickness(_) => Interpolation::Length,
             Self::Keyword(_)
             | Self::Display(_)
             | Self::BoxSizing(_)
@@ -925,6 +930,9 @@ impl Value {
             | Self::TextAlign(_)
             | Self::TextAlignLast(_)
             | Self::TextTransform(_)
+            | Self::TextDecoration(_)
+            | Self::TextDecorationLine(_)
+            | Self::TextDecorationStyle(_)
             | Self::TextWrap(_)
             | Self::WhiteSpace(_)
             | Self::WordBreak(_)
@@ -993,6 +1001,10 @@ impl Value {
             Self::TextIndent(value) => validate_text_length(value.length(), "text-indent"),
             Self::VerticalAlign(value) => value.validate(),
             Self::LetterSpacing(value) => value.validate(),
+            Self::TextDecoration(value) => value.validate(),
+            Self::TextDecorationLine(value) => value.validate(),
+            Self::TextDecorationStyle(_) => Ok(()),
+            Self::TextDecorationThickness(value) => value.validate(),
             Self::TextWrap(_)
             | Self::WhiteSpace(_)
             | Self::WordBreak(_)
@@ -1061,6 +1073,64 @@ fn validate_letter_spacing_length(length: &Length) -> Result<()> {
             ErrorCode::InvalidValue,
             "letter-spacing accepts only non-percentage length values",
         )),
+    }
+}
+
+fn validate_text_decoration_thickness_length(length: &Length) -> Result<()> {
+    match length {
+        Length::Px(value) | Length::Percent(value) if *value >= 0.0 => length.validate(),
+        Length::Calc(calc) if !calc_is_definitely_negative(calc) => length.validate(),
+        Length::Px(_)
+        | Length::Percent(_)
+        | Length::Calc(_)
+        | Length::Auto
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "text-decoration-thickness accepts only non-negative thickness lengths",
+        )),
+    }
+}
+
+fn calc_is_definitely_negative(calc: &CalcLength) -> bool {
+    calc_coefficients(calc, 1.0).is_some_and(|coefficients| {
+        coefficients.px < 0.0 && coefficients.percent <= 0.0
+            || coefficients.px <= 0.0 && coefficients.percent < 0.0
+    })
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CalcCoefficients {
+    px: f32,
+    percent: f32,
+}
+
+fn calc_coefficients(calc: &CalcLength, sign: f32) -> Option<CalcCoefficients> {
+    match calc {
+        CalcLength::Px(value) => Some(CalcCoefficients {
+            px: sign * *value,
+            percent: 0.0,
+        }),
+        CalcLength::Percent(value) => Some(CalcCoefficients {
+            px: 0.0,
+            percent: sign * *value,
+        }),
+        CalcLength::Sum(terms) => {
+            let mut total = CalcCoefficients::default();
+            for term in terms {
+                let term_sign = match term.operator() {
+                    CalcOperator::Add => sign,
+                    CalcOperator::Sub => -sign,
+                };
+                let coefficients = calc_coefficients(term.value(), term_sign)?;
+                total.px += coefficients.px;
+                total.percent += coefficients.percent;
+            }
+            Some(total)
+        }
     }
 }
 
@@ -1308,6 +1378,198 @@ pub enum TextTransform {
     Capitalize,
     Uppercase,
     Lowercase,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TextDecorationLineComponent {
+    Underline,
+    Overline,
+    LineThrough,
+    Blink,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TextDecorationLine {
+    components: Vec<TextDecorationLineComponent>,
+    none: bool,
+}
+
+impl TextDecorationLine {
+    pub fn try_new(
+        components: impl IntoIterator<Item = TextDecorationLineComponent>,
+    ) -> Result<Self> {
+        let components = components.into_iter().collect::<Vec<_>>();
+        if components.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "text-decoration-line requires at least one component",
+            ));
+        }
+        if has_duplicate_decoration_line_components(&components) {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "text-decoration-line components must not repeat",
+            ));
+        }
+        Ok(Self {
+            components,
+            none: false,
+        })
+    }
+
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            components: Vec::new(),
+            none: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        self.none
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[TextDecorationLineComponent] {
+        &self.components
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.none {
+            if self.components.is_empty() {
+                Ok(())
+            } else {
+                Err(Error::new(
+                    ErrorCode::InvalidValue,
+                    "text-decoration-line none cannot include components",
+                ))
+            }
+        } else {
+            Self::try_new(self.components.iter().copied()).map(|_| ())
+        }
+    }
+}
+
+impl Default for TextDecorationLine {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
+fn has_duplicate_decoration_line_components(components: &[TextDecorationLineComponent]) -> bool {
+    components.iter().enumerate().any(|(index, component)| {
+        components
+            .iter()
+            .skip(index + 1)
+            .any(|candidate| candidate == component)
+    })
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TextDecorationStyle {
+    #[default]
+    Solid,
+    Double,
+    Dotted,
+    Dashed,
+    Wavy,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum TextDecorationThickness {
+    #[default]
+    Auto,
+    FromFont,
+    Length(TextDecorationThicknessLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextDecorationThicknessLength(Length);
+
+impl TextDecorationThicknessLength {
+    pub fn new(length: Length) -> Result<Self> {
+        validate_text_decoration_thickness_length(&length)?;
+        Ok(Self(length))
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &Length {
+        &self.0
+    }
+}
+
+impl TextDecorationThickness {
+    pub fn try_length(length: Length) -> Result<Self> {
+        Ok(Self::Length(TextDecorationThicknessLength::new(length)?))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Auto | Self::FromFont => Ok(()),
+            Self::Length(length) => validate_text_decoration_thickness_length(length.length()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextDecoration {
+    line: Option<TextDecorationLine>,
+    style: Option<TextDecorationStyle>,
+    thickness: Option<TextDecorationThickness>,
+}
+
+impl TextDecoration {
+    pub fn try_new(
+        line: Option<TextDecorationLine>,
+        style: Option<TextDecorationStyle>,
+        thickness: Option<TextDecorationThickness>,
+    ) -> Result<Self> {
+        if line.is_none() && style.is_none() && thickness.is_none() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "text-decoration shorthand requires at least one component",
+            ));
+        }
+        let value = Self {
+            line,
+            style,
+            thickness,
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    #[must_use]
+    pub const fn line(&self) -> Option<&TextDecorationLine> {
+        self.line.as_ref()
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<TextDecorationStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn thickness(&self) -> Option<&TextDecorationThickness> {
+        self.thickness.as_ref()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.line.is_none() && self.style.is_none() && self.thickness.is_none() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "text-decoration shorthand requires at least one component",
+            ));
+        }
+        if let Some(line) = &self.line {
+            line.validate()?;
+        }
+        if let Some(thickness) = &self.thickness {
+            thickness.validate()?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

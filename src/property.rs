@@ -4,7 +4,8 @@ use super::{
     FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
     FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
     Order, Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result,
-    ScrollbarWidth, StyleTextAlign, TextAlignLast, TextIndent, TextOverflow, TextSlant,
+    ScrollbarWidth, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
+    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
     TextTransform, TextWrap, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
     ZIndex,
     value::{validate_font_size_length, validate_line_height_length},
@@ -124,6 +125,9 @@ pub enum Property {
     OverflowWrap,
     TextOverflow,
     TextDecoration,
+    TextDecorationLine,
+    TextDecorationStyle,
+    TextDecorationThickness,
     SelectionColor,
     Cursor,
     PointerEvents,
@@ -252,6 +256,9 @@ impl Property {
         Self::OverflowWrap,
         Self::TextOverflow,
         Self::TextDecoration,
+        Self::TextDecorationLine,
+        Self::TextDecorationStyle,
+        Self::TextDecorationThickness,
         Self::SelectionColor,
         Self::Cursor,
         Self::PointerEvents,
@@ -286,6 +293,7 @@ impl Property {
                 | Self::PlaceSelf
                 | Self::Flex
                 | Self::Font
+                | Self::TextDecoration
                 | Self::GridTemplate
                 | Self::Grid
                 | Self::GridRow
@@ -486,9 +494,23 @@ impl Property {
                 .impact(Impact::empty().text().layout()),
             Self::TextOverflow => Metadata::new(Value::TextOverflow(TextOverflow::default()))
                 .impact(Impact::empty().text().layout()),
-            Self::TextDecoration => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
-                .inherited(true)
-                .impact(Impact::empty().text().layout()),
+            Self::TextDecoration => Metadata::new(Value::TextDecoration(
+                TextDecoration::try_new(Some(TextDecorationLine::default()), None, None).unwrap(),
+            ))
+            .impact(Impact::empty().text().layout()),
+            Self::TextDecorationLine => {
+                Metadata::new(Value::TextDecorationLine(TextDecorationLine::default()))
+                    .impact(Impact::empty().text().layout())
+            }
+            Self::TextDecorationStyle => {
+                Metadata::new(Value::TextDecorationStyle(TextDecorationStyle::default()))
+                    .impact(Impact::empty().text().layout())
+            }
+            Self::TextDecorationThickness => Metadata::new(Value::TextDecorationThickness(
+                TextDecorationThickness::default(),
+            ))
+            .impact(Impact::empty().text().layout())
+            .interpolation(Interpolation::Length),
             Self::Transform => Metadata::new(Value::Transform(super::Transform::default()))
                 .impact(Impact::empty().paint())
                 .interpolation(Interpolation::Transform)
@@ -617,9 +639,7 @@ impl Property {
             return true;
         }
         match self {
-            Self::BorderStyle | Self::TextDecoration | Self::Filter | Self::TransitionTiming => {
-                false
-            }
+            Self::BorderStyle | Self::Filter | Self::TransitionTiming => false,
             Self::Display => matches!(value, Value::Display(_)),
             Self::BoxSizing => matches!(value, Value::BoxSizing(_)),
             Self::Position => matches!(value, Value::Position(_)),
@@ -633,6 +653,10 @@ impl Property {
             Self::VerticalAlign => matches!(value, Value::VerticalAlign(_)),
             Self::LetterSpacing => matches!(value, Value::LetterSpacing(_)),
             Self::TextTransform => matches!(value, Value::TextTransform(_)),
+            Self::TextDecoration => matches!(value, Value::TextDecoration(_)),
+            Self::TextDecorationLine => matches!(value, Value::TextDecorationLine(_)),
+            Self::TextDecorationStyle => matches!(value, Value::TextDecorationStyle(_)),
+            Self::TextDecorationThickness => matches!(value, Value::TextDecorationThickness(_)),
             Self::TextWrap => matches!(value, Value::TextWrap(_)),
             Self::WhiteSpace => matches!(value, Value::WhiteSpace(_)),
             Self::WordBreak => matches!(value, Value::WordBreak(_)),
@@ -990,6 +1014,10 @@ fn value_kind(value: &Value) -> &'static str {
         Value::VerticalAlign(_) => "vertical align",
         Value::LetterSpacing(_) => "letter spacing",
         Value::TextTransform(_) => "text transform",
+        Value::TextDecoration(_) => "text decoration shorthand",
+        Value::TextDecorationLine(_) => "text decoration line",
+        Value::TextDecorationStyle(_) => "text decoration style",
+        Value::TextDecorationThickness(_) => "text decoration thickness",
         Value::TextWrap(_) => "text wrap",
         Value::WhiteSpace(_) => "white space",
         Value::WordBreak(_) => "word break",

@@ -12,8 +12,9 @@ use surgeist_style::{
     RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
     StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState, StyleTag,
-    TextAlignLast, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap, Traversal, Tree,
-    TypedDeclaration, Value,
+    TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
+    TextDecorationStyle, TextDecorationThickness, TextDecorationThicknessLength, TextIndent,
+    TextOverflow, TextSlant, TextTransform, TextWrap, Traversal, Tree, TypedDeclaration, Value,
     VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
     VerticalAlignLength, WhiteSpace, WordBreak, ZIndex,
 };
@@ -92,6 +93,36 @@ fn main() -> surgeist_style::Result<()> {
         .overflow_wrap(OverflowWrap::Anywhere)
         .text_overflow(TextOverflow::Ellipsis);
     assert_eq!(declarations.len(), 5);
+
+    let text_decoration_line = TextDecorationLine::try_new([
+        TextDecorationLineComponent::Underline,
+        TextDecorationLineComponent::Overline,
+    ])?;
+    assert!(!text_decoration_line.is_none());
+    assert_eq!(text_decoration_line.components().len(), 2);
+    assert!(TextDecorationLine::none().components().is_empty());
+    let text_decoration_thickness_length =
+        TextDecorationThicknessLength::new(Length::Px(2.0))?;
+    assert_eq!(
+        text_decoration_thickness_length.length(),
+        &Length::Px(2.0)
+    );
+    let text_decoration_thickness =
+        TextDecorationThickness::Length(text_decoration_thickness_length);
+    let text_decoration = TextDecoration::try_new(
+        Some(text_decoration_line.clone()),
+        Some(TextDecorationStyle::Double),
+        Some(text_decoration_thickness.clone()),
+    )?;
+    assert!(text_decoration.line().is_some());
+    assert_eq!(text_decoration.style(), Some(TextDecorationStyle::Double));
+    assert!(text_decoration.thickness().is_some());
+    let declarations = Declarations::new()
+        .try_text_decoration(text_decoration)?
+        .try_text_decoration_line(text_decoration_line)?
+        .text_decoration_style(TextDecorationStyle::Wavy)
+        .try_text_decoration_thickness(text_decoration_thickness)?;
+    assert_eq!(declarations.len(), 3);
 
     let declarations = Declarations::new()
         .try_inset_top(Length::Auto)?

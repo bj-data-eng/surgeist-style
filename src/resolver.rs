@@ -8,9 +8,10 @@ use super::{
     Cursor, Declarations, Display, Edges, FlexFactor, FontFamilyList, FontFeatureSettings,
     FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
     OverflowWrap, PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth,
-    SelectorMatchContext, Sheet, Size, StyleBucket, TextAlignLast, TextIndent, TextOverflow,
-    TextSlant, TextTransform, TextWrap, Transform, Traversal, Tree, Value, Version, VerticalAlign,
-    Viewport, Visibility, WhiteSpace, WordBreak, ZIndex, declaration::hash_value,
+    SelectorMatchContext, Sheet, Size, StyleBucket, TextAlignLast, TextDecorationLine,
+    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, Transform, Traversal, Tree, Value, Version, VerticalAlign, Viewport,
+    Visibility, WhiteSpace, WordBreak, ZIndex, declaration::hash_value,
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -292,6 +293,34 @@ impl Resolved {
         match self.get(Property::TextOverflow) {
             Value::TextOverflow(value) => *value,
             _ => TextOverflow::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn text_decoration_line(&self) -> &TextDecorationLine {
+        match self.get(Property::TextDecorationLine) {
+            Value::TextDecorationLine(value) => value,
+            _ => unreachable!("resolved text-decoration-line stores a text decoration line"),
+        }
+    }
+
+    #[must_use]
+    pub fn text_decoration_style(&self) -> TextDecorationStyle {
+        match self.get(Property::TextDecorationStyle) {
+            Value::TextDecorationStyle(value) => *value,
+            _ => TextDecorationStyle::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn text_decoration_thickness(&self) -> &TextDecorationThickness {
+        match self.get(Property::TextDecorationThickness) {
+            Value::TextDecorationThickness(value) => value,
+            _ => {
+                unreachable!(
+                    "resolved text-decoration-thickness stores a text decoration thickness"
+                )
+            }
         }
     }
 
@@ -1396,9 +1425,10 @@ mod tests {
         FontStretch, FontVariant, FontWeight, LayerOrder, LayoutPosition, LetterSpacing, Node,
         Order, OverflowWrap, PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth,
         Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState,
-        StyleTag, TextAlignLast, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
-        VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        StyleTag, TextAlignLast, TextDecorationLine, TextDecorationLineComponent,
+        TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+        TextTransform, TextWrap, VariableDependentValue, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1735,6 +1765,24 @@ mod tests {
         assert_eq!(style.word_break(), WordBreak::KeepAll);
         assert_eq!(style.overflow_wrap(), OverflowWrap::BreakWord);
         assert_eq!(style.text_overflow(), TextOverflow::Ellipsis);
+    }
+
+    #[test]
+    fn resolved_text_decoration_getters_return_typed_values() {
+        let line = TextDecorationLine::try_new([TextDecorationLineComponent::Overline]).unwrap();
+        let thickness = TextDecorationThickness::FromFont;
+        let style = resolve_single(
+            Declarations::new()
+                .try_text_decoration_line(line.clone())
+                .unwrap()
+                .text_decoration_style(TextDecorationStyle::Dashed)
+                .try_text_decoration_thickness(thickness.clone())
+                .unwrap(),
+        );
+
+        assert_eq!(style.text_decoration_line(), &line);
+        assert_eq!(style.text_decoration_style(), TextDecorationStyle::Dashed);
+        assert_eq!(style.text_decoration_thickness(), &thickness);
     }
 
     #[test]

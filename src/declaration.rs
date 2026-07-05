@@ -11,9 +11,10 @@ use super::{
     GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
     MaxTrackSizing, MinTrackSizing, Opacity, Order, OverflowWrap, PlaceContentAlignment,
     PlaceItemsAlignment, PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size,
-    SubgridLineNameComponent, TextAlignLast, TextIndent, TextOverflow, TextSlant, TextTransform,
-    TextWrap, TrackRepeatCount, TrackSizing, Transform, Value, VerticalAlign, Visibility,
-    WhiteSpace, WordBreak, ZIndex,
+    SubgridLineNameComponent, TextAlignLast, TextDecoration, TextDecorationLine,
+    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Value, VerticalAlign,
+    Visibility, WhiteSpace, WordBreak, ZIndex,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -398,6 +399,32 @@ impl Declarations {
         self.set(Property::TextOverflow, Value::TextOverflow(value))
     }
 
+    pub fn try_text_decoration(self, value: TextDecoration) -> Result<Self> {
+        self.try_set(Property::TextDecoration, Value::TextDecoration(value))
+    }
+
+    pub fn try_text_decoration_line(self, value: TextDecorationLine) -> Result<Self> {
+        self.try_set(
+            Property::TextDecorationLine,
+            Value::TextDecorationLine(value),
+        )
+    }
+
+    #[must_use]
+    pub fn text_decoration_style(self, value: TextDecorationStyle) -> Self {
+        self.set(
+            Property::TextDecorationStyle,
+            Value::TextDecorationStyle(value),
+        )
+    }
+
+    pub fn try_text_decoration_thickness(self, value: TextDecorationThickness) -> Result<Self> {
+        self.try_set(
+            Property::TextDecorationThickness,
+            Value::TextDecorationThickness(value),
+        )
+    }
+
     #[must_use]
     pub fn cursor(self, cursor: Cursor) -> Self {
         self.set(Property::Cursor, Value::Cursor(cursor))
@@ -766,6 +793,11 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::LineHeight,
             Property::FontFamily,
         ],
+        Property::TextDecoration => vec![
+            Property::TextDecorationLine,
+            Property::TextDecorationStyle,
+            Property::TextDecorationThickness,
+        ],
         Property::Gap => vec![Property::RowGap, Property::ColumnGap],
         Property::GridTemplate => vec![
             Property::GridTemplateRows,
@@ -919,6 +951,13 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Value::Keyword(keyword),
         ),
         (Property::Font, Value::Font(font)) => font_declarations(font),
+        (Property::TextDecoration, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::TextDecoration),
+            Value::Keyword(keyword),
+        ),
+        (Property::TextDecoration, Value::TextDecoration(value)) => {
+            text_decoration_declarations(value)
+        }
         (Property::Gap, Value::Keyword(keyword)) => {
             same_value_declarations(canonical_properties(Property::Gap), Value::Keyword(keyword))
         }
@@ -1088,6 +1127,23 @@ fn font_declarations(font: Font) -> Vec<Declaration> {
         Value::FontFamilyList(font.family().clone()),
     ));
     declarations
+}
+
+fn text_decoration_declarations(value: TextDecoration) -> Vec<Declaration> {
+    vec![
+        Declaration::new(
+            Property::TextDecorationLine,
+            Value::TextDecorationLine(value.line().cloned().unwrap_or_default()),
+        ),
+        Declaration::new(
+            Property::TextDecorationStyle,
+            Value::TextDecorationStyle(value.style().unwrap_or_default()),
+        ),
+        Declaration::new(
+            Property::TextDecorationThickness,
+            Value::TextDecorationThickness(value.thickness().cloned().unwrap_or_default()),
+        ),
+    ]
 }
 
 fn default_line_height() -> Length {
@@ -1282,6 +1338,22 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::TextOverflow(value) => {
             65u8.hash(state);
             value.hash(state);
+        }
+        Value::TextDecoration(value) => {
+            66u8.hash(state);
+            hash_text_decoration(value, state);
+        }
+        Value::TextDecorationLine(value) => {
+            67u8.hash(state);
+            value.hash(state);
+        }
+        Value::TextDecorationStyle(value) => {
+            68u8.hash(state);
+            value.hash(state);
+        }
+        Value::TextDecorationThickness(value) => {
+            69u8.hash(state);
+            hash_text_decoration_thickness(value, state);
         }
         Value::WritingMode(value) => {
             33u8.hash(state);
@@ -1529,6 +1601,33 @@ fn hash_letter_spacing(value: &LetterSpacing, state: &mut DefaultHasher) {
         LetterSpacing::Normal => 0u8.hash(state),
         LetterSpacing::Length(length) => {
             1u8.hash(state);
+            hash_length(length.length(), state);
+        }
+    }
+}
+
+fn hash_text_decoration(value: &TextDecoration, state: &mut DefaultHasher) {
+    if let Some(line) = value.line() {
+        true.hash(state);
+        line.hash(state);
+    } else {
+        false.hash(state);
+    }
+    value.style().hash(state);
+    if let Some(thickness) = value.thickness() {
+        true.hash(state);
+        hash_text_decoration_thickness(thickness, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_text_decoration_thickness(value: &TextDecorationThickness, state: &mut DefaultHasher) {
+    match value {
+        TextDecorationThickness::Auto => 0u8.hash(state),
+        TextDecorationThickness::FromFont => 1u8.hash(state),
+        TextDecorationThickness::Length(length) => {
+            2u8.hash(state);
             hash_length(length.length(), state);
         }
     }
@@ -1835,8 +1934,9 @@ mod tests {
         AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, Font, FontFeature,
         FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
         FontWeight, FontWeightNumber, GridFlowTolerance, LetterSpacing, OverflowWrap,
-        TextAlignLast, TextIndent, TextOverflow, TextTransform, TextWrap, VerticalAlign,
-        WhiteSpace, WordBreak,
+        TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
+        TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextTransform,
+        TextWrap, VerticalAlign, WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -1939,6 +2039,91 @@ mod tests {
             declarations.get(Property::TextOverflow),
             Some(&Value::TextOverflow(TextOverflow::Ellipsis))
         );
+    }
+
+    #[test]
+    fn text_decoration_shorthand_lowers_to_canonical_longhands() {
+        let line = TextDecorationLine::try_new([
+            TextDecorationLineComponent::Underline,
+            TextDecorationLineComponent::LineThrough,
+        ])
+        .unwrap();
+        let thickness = TextDecorationThickness::try_length(Length::Px(2.0)).unwrap();
+        let decoration = TextDecoration::try_new(
+            Some(line.clone()),
+            Some(TextDecorationStyle::Wavy),
+            Some(thickness.clone()),
+        )
+        .unwrap();
+
+        let declarations = Declarations::new().try_text_decoration(decoration).unwrap();
+
+        assert_eq!(declarations.get(Property::TextDecoration), None);
+        assert_eq!(
+            declarations.get(Property::TextDecorationLine),
+            Some(&Value::TextDecorationLine(line))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationStyle),
+            Some(&Value::TextDecorationStyle(TextDecorationStyle::Wavy))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationThickness),
+            Some(&Value::TextDecorationThickness(thickness))
+        );
+    }
+
+    #[test]
+    fn text_decoration_shorthand_resets_omitted_components_to_defaults() {
+        let line = TextDecorationLine::try_new([TextDecorationLineComponent::Underline]).unwrap();
+        let decoration = TextDecoration::try_new(Some(line.clone()), None, None).unwrap();
+
+        let declarations = Declarations::new()
+            .text_decoration_style(TextDecorationStyle::Wavy)
+            .try_text_decoration_thickness(TextDecorationThickness::FromFont)
+            .unwrap()
+            .try_text_decoration(decoration)
+            .unwrap();
+
+        assert_eq!(declarations.get(Property::TextDecoration), None);
+        assert_eq!(
+            declarations.get(Property::TextDecorationLine),
+            Some(&Value::TextDecorationLine(line))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationStyle),
+            Some(&Value::TextDecorationStyle(TextDecorationStyle::default()))
+        );
+        assert_eq!(
+            declarations.get(Property::TextDecorationThickness),
+            Some(&Value::TextDecorationThickness(
+                TextDecorationThickness::default()
+            ))
+        );
+    }
+
+    #[test]
+    fn text_decoration_models_validate_domains() {
+        assert!(TextDecorationLine::none().is_none());
+        assert!(
+            TextDecorationLine::try_new([
+                TextDecorationLineComponent::Underline,
+                TextDecorationLineComponent::Underline,
+            ])
+            .is_err()
+        );
+        assert!(TextDecoration::try_new(None, None, None).is_err());
+        assert!(TextDecorationThickness::try_length(Length::Px(0.0)).is_ok());
+        assert!(TextDecorationThickness::try_length(Length::Percent(10.0)).is_ok());
+        assert!(TextDecorationThickness::try_length(Length::Px(-1.0)).is_err());
+        assert!(
+            TextDecorationThickness::try_length(Length::Calc(CalcLength::sum(
+                CalcLengthTerm::add(CalcLength::px(0.0)),
+                [CalcLengthTerm::sub(CalcLength::px(1.0))]
+            )))
+            .is_err()
+        );
+        assert!(TextDecorationThickness::try_length(Length::Auto).is_err());
     }
 
     #[test]

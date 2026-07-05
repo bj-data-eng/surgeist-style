@@ -464,6 +464,30 @@ mod tests {
     }
 
     #[test]
+    fn text_decoration_css_wide_keyword_expands_to_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::TextDecoration),
+            CssWideKeyword::Unset,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+        assert_eq!(canonical.get(Property::TextDecoration), None);
+        assert_eq!(
+            canonical.get(Property::TextDecorationLine),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(
+            canonical.get(Property::TextDecorationStyle),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(
+            canonical.get(Property::TextDecorationThickness),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+    }
+
+    #[test]
     fn new_layout_shorthands_expand_css_wide_keywords_to_canonical_longhands() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(
