@@ -1736,6 +1736,33 @@ mod tests {
     }
 
     #[test]
+    fn selector_lists_and_has_rules_are_not_dropped_by_rule_index() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0).tag("section").children([1]),
+            TestNode::new(1).tag("button").class("primary"),
+        ]);
+        let list = Selector::list(
+            SelectorList::try_new([
+                Selector::tag("label").unwrap(),
+                Selector::class("primary").unwrap(),
+            ])
+            .unwrap(),
+        );
+        let has = Selector::pseudo(PseudoClassSelector::has(
+            RelativeSelectorList::try_new([RelativeSelector::new(
+                Combinator::Child,
+                Selector::class("primary").unwrap(),
+            )])
+            .unwrap(),
+        ));
+        let list_sheet = Sheet::new().rule(list, crate::Declarations::new());
+        let has_sheet = Sheet::new().rule(has, crate::Declarations::new());
+
+        assert_eq!(list_sheet.candidate_rule_count(&tree, 1).unwrap(), 1);
+        assert_eq!(has_sheet.candidate_rule_count(&tree, 0).unwrap(), 1);
+    }
+
+    #[test]
     fn selector_list_matches_any_selector_and_rejects_empty_lists() {
         let tree = TestTree::new(vec![TestNode::new(0).tag("button").class("primary")]);
         let list = SelectorList::try_new([

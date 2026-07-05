@@ -48,11 +48,14 @@ impl Rule {
 
     #[must_use]
     pub(crate) fn with_order(selector: Selector, declarations: Declarations, order: u32) -> Self {
+        let specificity = selector.specificity();
         Self {
             selector,
             declarations: RuleDeclarations::Legacy(declarations),
             conditions: Vec::new(),
-            precedence: RulePrecedence::default().with_source_order(SourceOrder::new(order)),
+            precedence: RulePrecedence::default()
+                .with_specificity(specificity)
+                .with_source_order(SourceOrder::new(order)),
             source_order_policy: RuleSourceOrderPolicy::RebaseOnExtend,
         }
     }
@@ -525,7 +528,8 @@ mod precedence_tests {
     use super::*;
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
-        CssWideKeyword, LayerOrder, Property, RulePrecedence, Selector, SourceOrder, Value,
+        CssWideKeyword, LayerOrder, Property, RulePrecedence, Selector, SelectorSpecificity,
+        SourceOrder, Value, Viewport,
     };
 
     fn authored_color(color: Color) -> AuthoredDeclarations {
@@ -554,6 +558,7 @@ mod precedence_tests {
         assert_eq!(
             rule.precedence(),
             RulePrecedence::new(LayerOrder::default(), SourceOrder::new(0))
+                .with_specificity(SelectorSpecificity::new(0, 0, 1))
         );
         assert_eq!(rule.order(), 0);
     }
@@ -577,6 +582,42 @@ mod precedence_tests {
         assert_eq!(
             sheet.rules()[1].precedence(),
             RulePrecedence::new(LayerOrder::default(), SourceOrder::new(1))
+                .with_specificity(SelectorSpecificity::new(0, 1, 0))
+        );
+    }
+
+    #[test]
+    fn rule_new_derives_specificity_from_selector() {
+        let rule = Rule::new(
+            Selector::key("submit").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+
+        assert_eq!(
+            rule.precedence(),
+            RulePrecedence::default().with_specificity(SelectorSpecificity::new(1, 0, 0))
+        );
+    }
+
+    #[test]
+    fn conditional_legacy_rules_derive_specificity_and_preserve_source_order() {
+        let mut sheet = Sheet::new();
+        sheet.push_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+        sheet.push_conditional_rule(
+            Selector::class("primary").unwrap(),
+            Declarations::new()
+                .try_text_color(Color::TRANSPARENT)
+                .unwrap(),
+            [Condition::viewport(Viewport::min_width(320.0))],
+        );
+
+        assert_eq!(
+            sheet.rules()[1].precedence(),
+            RulePrecedence::new(LayerOrder::default(), SourceOrder::new(1))
+                .with_specificity(SelectorSpecificity::new(0, 1, 0))
         );
     }
 

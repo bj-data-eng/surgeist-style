@@ -1137,8 +1137,8 @@ mod tests {
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
         Color, Combinator, ComplexSelectorPart, CssWideKeyword, CustomPropertyName,
         CustomPropertyValue, Error, ErrorCode, LayerOrder, Node, RulePrecedence, Selector,
-        SourceOrder, StyleClass, StyleRole, StyleState, StyleTag, VariableDependentValue,
-        VariableExpression, VariableFallback, VariableReference,
+        SelectorSpecificity, SourceOrder, StyleClass, StyleRole, StyleState, StyleTag,
+        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1332,6 +1332,29 @@ mod tests {
         let parent = parent_color(Color::rgba(0.0, 1.0, 0.0, 1.0));
 
         let resolved = resolve_child(sheet, Some(&parent));
+
+        assert_eq!(resolved.text_color(), Color::BLACK);
+    }
+
+    #[test]
+    fn authored_specificity_wins_within_same_layer_before_source_order() {
+        let mut sheet = Sheet::new();
+        sheet
+            .push_authored_rule(
+                Selector::tag("button").unwrap(),
+                authored_color(Color::rgba(1.0, 0.0, 0.0, 1.0)),
+                precedence(7, 10).with_specificity(SelectorSpecificity::new(0, 0, 1)),
+            )
+            .unwrap();
+        sheet
+            .push_authored_rule(
+                Selector::tag("button").unwrap(),
+                authored_color(Color::BLACK),
+                precedence(7, 1).with_specificity(SelectorSpecificity::new(0, 1, 0)),
+            )
+            .unwrap();
+
+        let resolved = resolve_child(sheet, None);
 
         assert_eq!(resolved.text_color(), Color::BLACK);
     }
