@@ -50,7 +50,7 @@ pub use selector::{
     SelectorList, SelectorListPseudoClass, SelectorMatchContext, SelectorSpecificity,
     StructuralSelector,
 };
-pub use sheet::{Rule, Sheet, Version};
+pub use sheet::{Rule, RuleTarget, Sheet, Version};
 pub use state::StateFlag;
 pub use tree::{Node, Traversal, Tree};
 pub use value::{

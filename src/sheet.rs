@@ -5,7 +5,8 @@ use std::{
 
 use super::{
     AuthoredDeclarations, Change, Condition, Declarations, Property, Result, RulePrecedence,
-    Selector, SourceOrder, Tree, Value, selector::PrimaryKey,
+    Selector, SourceOrder, StyleBucket, Tree, Value,
+    selector::{PrimaryKey, SelectorSpecificity},
 };
 use crate::{
     CustomPropertyName, StyleClass, StyleKey, StyleTag,
@@ -32,8 +33,45 @@ impl Version {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Rule {
+pub struct RuleTarget {
     selector: Selector,
+    bucket: StyleBucket,
+}
+
+impl RuleTarget {
+    #[must_use]
+    pub fn new(selector: Selector, bucket: StyleBucket) -> Self {
+        Self { selector, bucket }
+    }
+
+    #[must_use]
+    pub fn element(selector: Selector) -> Self {
+        Self::new(selector, StyleBucket::Element)
+    }
+
+    #[must_use]
+    pub fn selector(&self) -> &Selector {
+        &self.selector
+    }
+
+    #[must_use]
+    pub const fn bucket(&self) -> StyleBucket {
+        self.bucket
+    }
+
+    #[must_use]
+    pub fn specificity(&self) -> SelectorSpecificity {
+        self.selector.specificity()
+    }
+
+    pub(crate) fn primary_key(&self) -> PrimaryKey {
+        self.selector.primary_key()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Rule {
+    target: RuleTarget,
     declarations: RuleDeclarations,
     conditions: Vec<Condition>,
     precedence: RulePrecedence,
@@ -47,10 +85,24 @@ impl Rule {
     }
 
     #[must_use]
+    pub fn targeted(target: RuleTarget, declarations: Declarations) -> Self {
+        Self::with_target_order(target, declarations, 0)
+    }
+
+    #[must_use]
     pub(crate) fn with_order(selector: Selector, declarations: Declarations, order: u32) -> Self {
-        let specificity = selector.specificity();
+        Self::with_target_order(RuleTarget::element(selector), declarations, order)
+    }
+
+    #[must_use]
+    pub(crate) fn with_target_order(
+        target: RuleTarget,
+        declarations: Declarations,
+        order: u32,
+    ) -> Self {
+        let specificity = target.specificity();
         Self {
-            selector,
+            target,
             declarations: RuleDeclarations::Legacy(declarations),
             conditions: Vec::new(),
             precedence: RulePrecedence::default()
@@ -66,8 +118,17 @@ impl Rule {
         declarations: AuthoredCanonicalDeclarations,
         precedence: RulePrecedence,
     ) -> Self {
+        Self::with_authored_target(RuleTarget::element(selector), declarations, precedence)
+    }
+
+    #[must_use]
+    pub(crate) fn with_authored_target(
+        target: RuleTarget,
+        declarations: AuthoredCanonicalDeclarations,
+        precedence: RulePrecedence,
+    ) -> Self {
         Self {
-            selector,
+            target,
             declarations: RuleDeclarations::Authored(declarations),
             conditions: Vec::new(),
             precedence,
@@ -83,7 +144,17 @@ impl Rule {
 
     #[must_use]
     pub fn selector(&self) -> &Selector {
-        &self.selector
+        self.target.selector()
+    }
+
+    #[must_use]
+    pub fn target(&self) -> &RuleTarget {
+        &self.target
+    }
+
+    #[must_use]
+    pub const fn style_bucket(&self) -> StyleBucket {
+        self.target.bucket()
     }
 
     #[must_use]
@@ -314,6 +385,12 @@ impl Sheet {
     }
 
     #[must_use]
+    pub fn targeted_rule(mut self, target: RuleTarget, declarations: Declarations) -> Self {
+        self.push_targeted_rule(target, declarations);
+        self
+    }
+
+    #[must_use]
     pub fn conditional_rule(
         mut self,
         selector: Selector,
@@ -327,6 +404,16 @@ impl Sheet {
     pub fn push_rule(&mut self, selector: Selector, declarations: Declarations) -> &mut Self {
         let order = self.rules.len() as u32;
         self.push(Rule::with_order(selector, declarations, order));
+        self
+    }
+
+    pub fn push_targeted_rule(
+        &mut self,
+        target: RuleTarget,
+        declarations: Declarations,
+    ) -> &mut Self {
+        let order = self.rules.len() as u32;
+        self.push(Rule::with_target_order(target, declarations, order));
         self
     }
 
@@ -349,6 +436,17 @@ impl Sheet {
     ) -> Result<&mut Self> {
         let declarations = declarations.to_rule_declarations()?;
         self.push(Rule::with_authored(selector, declarations, precedence));
+        Ok(self)
+    }
+
+    pub fn push_authored_targeted_rule(
+        &mut self,
+        target: RuleTarget,
+        declarations: AuthoredDeclarations,
+        precedence: RulePrecedence,
+    ) -> Result<&mut Self> {
+        let declarations = declarations.to_rule_declarations()?;
+        self.push(Rule::with_authored_target(target, declarations, precedence));
         Ok(self)
     }
 
@@ -450,7 +548,7 @@ impl Sheet {
 
     fn push(&mut self, rule: Rule) {
         let index = self.rules.len();
-        self.index.insert(index, rule.selector.primary_key());
+        self.index.insert(index, rule.target().primary_key());
         self.rules.push(rule);
         self.version = Version::next();
     }
@@ -634,6 +732,72 @@ mod precedence_tests {
             .unwrap();
 
         assert_eq!(sheet.rules()[0].precedence(), precedence);
+    }
+
+    #[test]
+    fn rule_new_defaults_to_element_bucket() {
+        let rule = Rule::new(
+            Selector::tag("button").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+
+        assert_eq!(rule.style_bucket(), StyleBucket::Element);
+        assert_eq!(
+            rule.target(),
+            &RuleTarget::element(Selector::tag("button").unwrap())
+        );
+    }
+
+    #[test]
+    fn targeted_rule_preserves_bucket() {
+        let selector = Selector::class("badge").unwrap();
+        let target = RuleTarget::new(selector.clone(), StyleBucket::BeforeMarker);
+        let rule = Rule::targeted(
+            target.clone(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+        let sheet = Sheet::new().targeted_rule(
+            target.clone(),
+            Declarations::new()
+                .try_text_color(Color::TRANSPARENT)
+                .unwrap(),
+        );
+
+        assert_eq!(rule.selector(), &selector);
+        assert_eq!(rule.target(), &target);
+        assert_eq!(rule.style_bucket(), StyleBucket::BeforeMarker);
+        assert_eq!(sheet.rules()[0].target(), &target);
+        assert_eq!(sheet.rules()[0].style_bucket(), StyleBucket::BeforeMarker);
+    }
+
+    #[test]
+    fn targeted_rule_uses_origin_selector_primary_key() {
+        let mut sheet = Sheet::new();
+        sheet.push_targeted_rule(
+            RuleTarget::new(Selector::class("badge").unwrap(), StyleBucket::After),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+
+        let class = StyleClass::new("badge").unwrap();
+        let indexed_rules: Vec<_> = sheet.rules_for_class(&class).collect();
+        assert_eq!(indexed_rules.len(), 1);
+        assert_eq!(indexed_rules[0].style_bucket(), StyleBucket::After);
+    }
+
+    #[test]
+    fn push_authored_targeted_rule_preserves_explicit_precedence() {
+        let precedence = RulePrecedence::new(LayerOrder::new(7), SourceOrder::new(3));
+        let mut sheet = Sheet::new();
+        sheet
+            .push_authored_targeted_rule(
+                RuleTarget::new(Selector::tag("button").unwrap(), StyleBucket::Before),
+                authored_color(Color::BLACK),
+                precedence,
+            )
+            .unwrap();
+
+        assert_eq!(sheet.rules()[0].precedence(), precedence);
+        assert_eq!(sheet.rules()[0].style_bucket(), StyleBucket::Before);
     }
 
     #[test]
