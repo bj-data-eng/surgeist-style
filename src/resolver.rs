@@ -7,9 +7,10 @@ use super::{
     AlignContent, AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword,
     Cursor, Declarations, Display, Edges, FlexFactor, FontFamilyList, FontFeatureSettings,
     FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
-    PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet,
-    Size, StyleBucket, TextAlignLast, TextIndent, TextSlant, TextTransform, Transform, Traversal,
-    Tree, Value, Version, VerticalAlign, Viewport, Visibility, ZIndex, declaration::hash_value,
+    OverflowWrap, PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth,
+    SelectorMatchContext, Sheet, Size, StyleBucket, TextAlignLast, TextIndent, TextOverflow,
+    TextSlant, TextTransform, TextWrap, Transform, Traversal, Tree, Value, Version, VerticalAlign,
+    Viewport, Visibility, WhiteSpace, WordBreak, ZIndex, declaration::hash_value,
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -251,6 +252,46 @@ impl Resolved {
         match self.get(Property::TextTransform) {
             Value::TextTransform(value) => *value,
             _ => TextTransform::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn text_wrap(&self) -> TextWrap {
+        match self.get(Property::TextWrap) {
+            Value::TextWrap(value) => *value,
+            _ => TextWrap::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn white_space(&self) -> WhiteSpace {
+        match self.get(Property::WhiteSpace) {
+            Value::WhiteSpace(value) => *value,
+            _ => WhiteSpace::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn word_break(&self) -> WordBreak {
+        match self.get(Property::WordBreak) {
+            Value::WordBreak(value) => *value,
+            _ => WordBreak::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn overflow_wrap(&self) -> OverflowWrap {
+        match self.get(Property::OverflowWrap) {
+            Value::OverflowWrap(value) => *value,
+            _ => OverflowWrap::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn text_overflow(&self) -> TextOverflow {
+        match self.get(Property::TextOverflow) {
+            Value::TextOverflow(value) => *value,
+            _ => TextOverflow::default(),
         }
     }
 
@@ -1353,10 +1394,11 @@ mod tests {
         CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, Flex,
         FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
         FontStretch, FontVariant, FontWeight, LayerOrder, LayoutPosition, LetterSpacing, Node,
-        Order, PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth, Selector,
-        SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState, StyleTag,
-        TextAlignLast, TextIndent, TextSlant, TextTransform, VariableDependentValue,
-        VariableExpression, VariableFallback, VariableReference, VerticalAlign, ZIndex,
+        Order, OverflowWrap, PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth,
+        Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState,
+        StyleTag, TextAlignLast, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1675,6 +1717,24 @@ mod tests {
             LetterSpacing::try_length(Length::Px(1.0)).unwrap()
         );
         assert_eq!(style.text_transform(), TextTransform::Capitalize);
+    }
+
+    #[test]
+    fn resolved_text_flow_getters_return_typed_values() {
+        let style = resolve_single(
+            Declarations::new()
+                .text_wrap(TextWrap::Pretty)
+                .white_space(WhiteSpace::PreWrap)
+                .word_break(WordBreak::KeepAll)
+                .overflow_wrap(OverflowWrap::BreakWord)
+                .text_overflow(TextOverflow::Ellipsis),
+        );
+
+        assert_eq!(style.text_wrap(), TextWrap::Pretty);
+        assert_eq!(style.white_space(), WhiteSpace::PreWrap);
+        assert_eq!(style.word_break(), WordBreak::KeepAll);
+        assert_eq!(style.overflow_wrap(), OverflowWrap::BreakWord);
+        assert_eq!(style.text_overflow(), TextOverflow::Ellipsis);
     }
 
     #[test]

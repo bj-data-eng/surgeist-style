@@ -9,10 +9,11 @@ use super::{
     FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
     GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
     GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
-    MaxTrackSizing, MinTrackSizing, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment,
-    PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size, SubgridLineNameComponent,
-    TextAlignLast, TextIndent, TextSlant, TextTransform, TrackRepeatCount, TrackSizing, Transform,
-    Value, VerticalAlign, Visibility, ZIndex,
+    MaxTrackSizing, MinTrackSizing, Opacity, Order, OverflowWrap, PlaceContentAlignment,
+    PlaceItemsAlignment, PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size,
+    SubgridLineNameComponent, TextAlignLast, TextIndent, TextOverflow, TextSlant, TextTransform,
+    TextWrap, TrackRepeatCount, TrackSizing, Transform, Value, VerticalAlign, Visibility,
+    WhiteSpace, WordBreak, ZIndex,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -370,6 +371,31 @@ impl Declarations {
     #[must_use]
     pub fn text_transform(self, value: TextTransform) -> Self {
         self.set(Property::TextTransform, Value::TextTransform(value))
+    }
+
+    #[must_use]
+    pub fn text_wrap(self, value: TextWrap) -> Self {
+        self.set(Property::TextWrap, Value::TextWrap(value))
+    }
+
+    #[must_use]
+    pub fn white_space(self, value: WhiteSpace) -> Self {
+        self.set(Property::WhiteSpace, Value::WhiteSpace(value))
+    }
+
+    #[must_use]
+    pub fn word_break(self, value: WordBreak) -> Self {
+        self.set(Property::WordBreak, Value::WordBreak(value))
+    }
+
+    #[must_use]
+    pub fn overflow_wrap(self, value: OverflowWrap) -> Self {
+        self.set(Property::OverflowWrap, Value::OverflowWrap(value))
+    }
+
+    #[must_use]
+    pub fn text_overflow(self, value: TextOverflow) -> Self {
+        self.set(Property::TextOverflow, Value::TextOverflow(value))
     }
 
     #[must_use]
@@ -1237,6 +1263,26 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             60u8.hash(state);
             value.hash(state);
         }
+        Value::TextWrap(value) => {
+            61u8.hash(state);
+            value.hash(state);
+        }
+        Value::WhiteSpace(value) => {
+            62u8.hash(state);
+            value.hash(state);
+        }
+        Value::WordBreak(value) => {
+            63u8.hash(state);
+            value.hash(state);
+        }
+        Value::OverflowWrap(value) => {
+            64u8.hash(state);
+            value.hash(state);
+        }
+        Value::TextOverflow(value) => {
+            65u8.hash(state);
+            value.hash(state);
+        }
         Value::WritingMode(value) => {
             33u8.hash(state);
             value.hash(state);
@@ -1788,8 +1834,9 @@ mod tests {
     use crate::{
         AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, Font, FontFeature,
         FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
-        FontWeight, FontWeightNumber, GridFlowTolerance, LetterSpacing, TextAlignLast, TextIndent,
-        TextTransform, VerticalAlign,
+        FontWeight, FontWeightNumber, GridFlowTolerance, LetterSpacing, OverflowWrap,
+        TextAlignLast, TextIndent, TextOverflow, TextTransform, TextWrap, VerticalAlign,
+        WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -1860,6 +1907,37 @@ mod tests {
         assert_eq!(
             declarations.get(Property::TextTransform),
             Some(&Value::TextTransform(TextTransform::Uppercase))
+        );
+    }
+
+    #[test]
+    fn text_flow_properties_accept_typed_values() {
+        let declarations = Declarations::new()
+            .text_wrap(TextWrap::Balance)
+            .white_space(WhiteSpace::BreakSpaces)
+            .word_break(WordBreak::BreakWord)
+            .overflow_wrap(OverflowWrap::Anywhere)
+            .text_overflow(TextOverflow::Ellipsis);
+
+        assert_eq!(
+            declarations.get(Property::TextWrap),
+            Some(&Value::TextWrap(TextWrap::Balance))
+        );
+        assert_eq!(
+            declarations.get(Property::WhiteSpace),
+            Some(&Value::WhiteSpace(WhiteSpace::BreakSpaces))
+        );
+        assert_eq!(
+            declarations.get(Property::WordBreak),
+            Some(&Value::WordBreak(WordBreak::BreakWord))
+        );
+        assert_eq!(
+            declarations.get(Property::OverflowWrap),
+            Some(&Value::OverflowWrap(OverflowWrap::Anywhere))
+        );
+        assert_eq!(
+            declarations.get(Property::TextOverflow),
+            Some(&Value::TextOverflow(TextOverflow::Ellipsis))
         );
     }
 

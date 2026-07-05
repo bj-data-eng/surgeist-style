@@ -7,14 +7,15 @@ use surgeist_style::{
     DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
     FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
     LayerOrder, LayoutPosition, Length, LetterSpacing, LetterSpacingLength, Node, NthPattern,
-    NthSelector, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment, Property,
+    NthSelector, Opacity, Order, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Property,
     PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
     RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
     StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState, StyleTag,
-    TextAlignLast, TextIndent, TextSlant, TextTransform, Traversal, Tree, TypedDeclaration, Value,
+    TextAlignLast, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap, Traversal, Tree,
+    TypedDeclaration, Value,
     VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
-    VerticalAlignLength, ZIndex,
+    VerticalAlignLength, WhiteSpace, WordBreak, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -82,6 +83,14 @@ fn main() -> surgeist_style::Result<()> {
         .try_vertical_align(VerticalAlign::Length(vertical_align_length))?
         .try_letter_spacing(LetterSpacing::Length(letter_spacing_length))?
         .text_transform(TextTransform::Lowercase);
+    assert_eq!(declarations.len(), 5);
+
+    let declarations = Declarations::new()
+        .text_wrap(TextWrap::Balance)
+        .white_space(WhiteSpace::BreakSpaces)
+        .word_break(WordBreak::BreakWord)
+        .overflow_wrap(OverflowWrap::Anywhere)
+        .text_overflow(TextOverflow::Ellipsis);
     assert_eq!(declarations.len(), 5);
 
     let declarations = Declarations::new()

@@ -3,9 +3,10 @@ use super::{
     Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, Flex,
     FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
     FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
-    Order, Overflow, PlaceContentAlignment, PlaceItemsAlignment, Result, ScrollbarWidth,
-    StyleTextAlign, TextAlignLast, TextIndent, TextSlant, TextTransform, Value, VerticalAlign,
-    Visibility, WritingMode, ZIndex,
+    Order, Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result,
+    ScrollbarWidth, StyleTextAlign, TextAlignLast, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
+    ZIndex,
     value::{validate_font_size_length, validate_line_height_length},
 };
 
@@ -471,12 +472,21 @@ impl Property {
                     .inherited(true)
                     .impact(Impact::empty().text().layout())
             }
-            Self::TextWrap
-            | Self::WhiteSpace
-            | Self::WordBreak
-            | Self::OverflowWrap
-            | Self::TextOverflow
-            | Self::TextDecoration => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
+            Self::TextWrap => Metadata::new(Value::TextWrap(TextWrap::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::WhiteSpace => Metadata::new(Value::WhiteSpace(WhiteSpace::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::WordBreak => Metadata::new(Value::WordBreak(WordBreak::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::OverflowWrap => Metadata::new(Value::OverflowWrap(OverflowWrap::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::TextOverflow => Metadata::new(Value::TextOverflow(TextOverflow::default()))
+                .impact(Impact::empty().text().layout()),
+            Self::TextDecoration => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
                 .inherited(true)
                 .impact(Impact::empty().text().layout()),
             Self::Transform => Metadata::new(Value::Transform(super::Transform::default()))
@@ -607,15 +617,9 @@ impl Property {
             return true;
         }
         match self {
-            Self::BorderStyle
-            | Self::TextWrap
-            | Self::WhiteSpace
-            | Self::WordBreak
-            | Self::OverflowWrap
-            | Self::TextOverflow
-            | Self::TextDecoration
-            | Self::Filter
-            | Self::TransitionTiming => false,
+            Self::BorderStyle | Self::TextDecoration | Self::Filter | Self::TransitionTiming => {
+                false
+            }
             Self::Display => matches!(value, Value::Display(_)),
             Self::BoxSizing => matches!(value, Value::BoxSizing(_)),
             Self::Position => matches!(value, Value::Position(_)),
@@ -629,6 +633,11 @@ impl Property {
             Self::VerticalAlign => matches!(value, Value::VerticalAlign(_)),
             Self::LetterSpacing => matches!(value, Value::LetterSpacing(_)),
             Self::TextTransform => matches!(value, Value::TextTransform(_)),
+            Self::TextWrap => matches!(value, Value::TextWrap(_)),
+            Self::WhiteSpace => matches!(value, Value::WhiteSpace(_)),
+            Self::WordBreak => matches!(value, Value::WordBreak(_)),
+            Self::OverflowWrap => matches!(value, Value::OverflowWrap(_)),
+            Self::TextOverflow => matches!(value, Value::TextOverflow(_)),
             Self::Float => matches!(value, Value::Float(_)),
             Self::Clear => matches!(value, Value::Clear(_)),
             Self::FlexDirection => matches!(value, Value::FlexDirection(_)),
@@ -981,6 +990,11 @@ fn value_kind(value: &Value) -> &'static str {
         Value::VerticalAlign(_) => "vertical align",
         Value::LetterSpacing(_) => "letter spacing",
         Value::TextTransform(_) => "text transform",
+        Value::TextWrap(_) => "text wrap",
+        Value::WhiteSpace(_) => "white space",
+        Value::WordBreak(_) => "word break",
+        Value::OverflowWrap(_) => "overflow wrap",
+        Value::TextOverflow(_) => "text overflow",
         Value::WritingMode(_) => "writing mode",
         Value::FlexDirection(_) => "flex direction",
         Value::FlexWrap(_) => "flex wrap",

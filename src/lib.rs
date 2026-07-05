@@ -65,9 +65,9 @@ pub use value::{
     Overflow, OverflowAxes, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
     PointerEvents, ScrollbarWidth, Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign,
     SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextAlignLast, TextIndent,
-    TextSlant, TextTransform, TextValue, TextWeight, TextWrap, TrackRepeat, TrackRepeatCount,
-    TrackSizing, Transform, TransformOp, Value, VerticalAlign, VerticalAlignLength, Visibility,
-    WhiteSpace, WordBreak, WritingMode, ZIndex,
+    TextOverflow, TextSlant, TextTransform, TextValue, TextWeight, TextWrap, TrackRepeat,
+    TrackRepeatCount, TrackSizing, Transform, TransformOp, Value, VerticalAlign,
+    VerticalAlignLength, Visibility, WhiteSpace, WordBreak, WritingMode, ZIndex,
 };
 
 #[must_use]

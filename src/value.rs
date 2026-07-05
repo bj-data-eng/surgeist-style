@@ -844,6 +844,11 @@ pub enum Value {
     VerticalAlign(VerticalAlign),
     LetterSpacing(LetterSpacing),
     TextTransform(TextTransform),
+    TextWrap(TextWrap),
+    WhiteSpace(WhiteSpace),
+    WordBreak(WordBreak),
+    OverflowWrap(OverflowWrap),
+    TextOverflow(TextOverflow),
     WritingMode(WritingMode),
     FlexDirection(FlexDirection),
     FlexWrap(FlexWrap),
@@ -920,6 +925,11 @@ impl Value {
             | Self::TextAlign(_)
             | Self::TextAlignLast(_)
             | Self::TextTransform(_)
+            | Self::TextWrap(_)
+            | Self::WhiteSpace(_)
+            | Self::WordBreak(_)
+            | Self::OverflowWrap(_)
+            | Self::TextOverflow(_)
             | Self::WritingMode(_)
             | Self::FlexDirection(_)
             | Self::FlexWrap(_)
@@ -983,6 +993,11 @@ impl Value {
             Self::TextIndent(value) => validate_text_length(value.length(), "text-indent"),
             Self::VerticalAlign(value) => value.validate(),
             Self::LetterSpacing(value) => value.validate(),
+            Self::TextWrap(_)
+            | Self::WhiteSpace(_)
+            | Self::WordBreak(_)
+            | Self::OverflowWrap(_)
+            | Self::TextOverflow(_) => Ok(()),
             Self::Length(value) => value.validate(),
             Self::Size(value) => value.validate(),
             Self::Edges(value) => value.validate(),
@@ -2591,16 +2606,23 @@ pub enum TextSlant {
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum TextWrap {
-    None,
     #[default]
-    Word,
+    Wrap,
+    NoWrap,
+    Balance,
+    Pretty,
+    Stable,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum WhiteSpace {
-    Collapse,
     #[default]
-    Preserve,
+    Normal,
+    NoWrap,
+    Pre,
+    PreWrap,
+    PreLine,
+    BreakSpaces,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -2609,14 +2631,22 @@ pub enum WordBreak {
     Normal,
     BreakAll,
     KeepAll,
+    BreakWord,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum OverflowWrap {
     #[default]
     Normal,
-    Anywhere,
     BreakWord,
+    Anywhere,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TextOverflow {
+    #[default]
+    Clip,
+    Ellipsis,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2857,8 +2887,8 @@ impl Default for TextValue {
             line_height: Length::Percent(100.0),
             color: Color::BLACK,
             alignment: StyleTextAlign::Start,
-            wrap: TextWrap::Word,
-            white_space: WhiteSpace::Preserve,
+            wrap: TextWrap::Wrap,
+            white_space: WhiteSpace::Normal,
             word_break: WordBreak::Normal,
             overflow_wrap: OverflowWrap::Normal,
             underline: Decoration::none(),
@@ -3064,8 +3094,8 @@ mod tests {
         assert_eq!(text.line_height, Length::Percent(100.0));
         assert_eq!(text.color, Color::BLACK);
         assert_eq!(text.alignment, StyleTextAlign::Start);
-        assert_eq!(text.wrap, TextWrap::Word);
-        assert_eq!(text.white_space, WhiteSpace::Preserve);
+        assert_eq!(text.wrap, TextWrap::Wrap);
+        assert_eq!(text.white_space, WhiteSpace::Normal);
         assert_eq!(text.word_break, WordBreak::Normal);
         assert_eq!(text.overflow_wrap, OverflowWrap::Normal);
         assert_eq!(text.underline, Decoration::none());
