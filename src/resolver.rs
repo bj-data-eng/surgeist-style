@@ -366,8 +366,9 @@ impl Resolver {
             if rule
                 .selector()
                 .matches(context.tree, context.node, context.traversal)?
+                && let Some(declarations) = rule.legacy_declarations()
             {
-                resolved.apply(rule.declarations(), context.parent)?;
+                resolved.apply(declarations, context.parent)?;
             }
         }
 

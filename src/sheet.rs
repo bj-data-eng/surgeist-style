@@ -3,8 +3,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use super::{Change, Condition, Declarations, Result, Selector, Tree, selector::PrimaryKey};
-use crate::{StyleClass, StyleKey, StyleTag};
+use super::{
+    AuthoredDeclarations, Change, Condition, Declarations, Result, RulePrecedence, Selector,
+    SourceOrder, Tree, selector::PrimaryKey,
+};
+use crate::{StyleClass, StyleKey, StyleTag, authored::AuthoredCanonicalDeclarations};
 
 static NEXT_VERSION: AtomicU64 = AtomicU64::new(1);
 
@@ -25,9 +28,10 @@ impl Version {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rule {
     selector: Selector,
-    declarations: Declarations,
+    declarations: RuleDeclarations,
     conditions: Vec<Condition>,
-    order: u32,
+    precedence: RulePrecedence,
+    source_order_policy: RuleSourceOrderPolicy,
 }
 
 impl Rule {
@@ -40,9 +44,25 @@ impl Rule {
     pub(crate) fn with_order(selector: Selector, declarations: Declarations, order: u32) -> Self {
         Self {
             selector,
-            declarations,
+            declarations: RuleDeclarations::Legacy(declarations),
             conditions: Vec::new(),
-            order,
+            precedence: RulePrecedence::default().with_source_order(SourceOrder::new(order)),
+            source_order_policy: RuleSourceOrderPolicy::RebaseOnExtend,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn with_authored(
+        selector: Selector,
+        declarations: AuthoredCanonicalDeclarations,
+        precedence: RulePrecedence,
+    ) -> Self {
+        Self {
+            selector,
+            declarations: RuleDeclarations::Authored(declarations),
+            conditions: Vec::new(),
+            precedence,
+            source_order_policy: RuleSourceOrderPolicy::PreserveExplicit,
         }
     }
 
@@ -58,8 +78,14 @@ impl Rule {
     }
 
     #[must_use]
-    pub fn declarations(&self) -> &Declarations {
-        &self.declarations
+    pub fn legacy_declarations(&self) -> Option<&Declarations> {
+        if self.declaration_origin() != RuleDeclarationOrigin::Legacy {
+            return None;
+        }
+        match &self.declarations {
+            RuleDeclarations::Legacy(declarations) => Some(declarations),
+            RuleDeclarations::Authored(_) => None,
+        }
     }
 
     #[must_use]
@@ -68,9 +94,47 @@ impl Rule {
     }
 
     #[must_use]
-    pub const fn order(&self) -> u32 {
-        self.order
+    pub const fn precedence(&self) -> RulePrecedence {
+        self.precedence
     }
+
+    #[must_use]
+    pub const fn order(&self) -> u32 {
+        self.precedence.source_order().get()
+    }
+
+    #[must_use]
+    fn declaration_origin(&self) -> RuleDeclarationOrigin {
+        self.declarations.origin()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum RuleDeclarations {
+    Legacy(Declarations),
+    Authored(AuthoredCanonicalDeclarations),
+}
+
+impl RuleDeclarations {
+    #[must_use]
+    const fn origin(&self) -> RuleDeclarationOrigin {
+        match self {
+            Self::Legacy(_) => RuleDeclarationOrigin::Legacy,
+            Self::Authored(_) => RuleDeclarationOrigin::Authored,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RuleDeclarationOrigin {
+    Legacy,
+    Authored,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RuleSourceOrderPolicy {
+    RebaseOnExtend,
+    PreserveExplicit,
 }
 
 #[derive(Clone, Debug)]
@@ -136,9 +200,24 @@ impl Sheet {
         self
     }
 
+    pub fn push_authored_rule(
+        &mut self,
+        selector: Selector,
+        declarations: AuthoredDeclarations,
+        precedence: RulePrecedence,
+    ) -> Result<&mut Self> {
+        let declarations = declarations.to_rule_declarations()?;
+        self.push(Rule::with_authored(selector, declarations, precedence));
+        Ok(self)
+    }
+
     pub fn extend(&mut self, rules: impl IntoIterator<Item = Rule>) -> &mut Self {
         for mut rule in rules {
-            rule.order = self.rules.len() as u32;
+            if rule.source_order_policy == RuleSourceOrderPolicy::RebaseOnExtend {
+                rule.precedence = rule
+                    .precedence
+                    .with_source_order(SourceOrder::new(self.rules.len() as u32));
+            }
             self.push(rule);
         }
         self
@@ -243,8 +322,17 @@ impl Sheet {
             }
             change.rematch = true;
             change.scope.include_subtree();
-            for declaration in rule.declarations().iter() {
-                change.invalidation.include_property(declaration.property);
+            match &rule.declarations {
+                RuleDeclarations::Legacy(declarations) => {
+                    for declaration in declarations.iter() {
+                        change.invalidation.include_property(declaration.property);
+                    }
+                }
+                RuleDeclarations::Authored(declarations) => {
+                    for (property, _) in declarations.iter() {
+                        change.invalidation.include_property(property);
+                    }
+                }
             }
         }
         change
@@ -289,5 +377,133 @@ impl RuleIndex {
             PrimaryKey::Class(class) => self.by_class.entry(class).or_default().push(index),
             PrimaryKey::Tag(tag) => self.by_tag.entry(tag).or_default().push(index),
         }
+    }
+}
+
+#[cfg(test)]
+mod precedence_tests {
+    use super::*;
+    use crate::{
+        AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
+        CssWideKeyword, LayerOrder, Property, RulePrecedence, Selector, SourceOrder, Value,
+    };
+
+    fn authored_color(color: Color) -> AuthoredDeclarations {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Color),
+                    AuthoredValue::Value(Value::Color(color)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        declarations
+    }
+
+    #[test]
+    fn existing_rule_api_uses_default_layer_and_insertion_source_order() {
+        let mut sheet = Sheet::new();
+        sheet.push_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+
+        let rule = &sheet.rules()[0];
+        assert_eq!(
+            rule.precedence(),
+            RulePrecedence::new(LayerOrder::default(), SourceOrder::new(0))
+        );
+        assert_eq!(rule.order(), 0);
+    }
+
+    #[test]
+    fn sheet_rule_builder_preserves_existing_source_order_behavior() {
+        let sheet = Sheet::new()
+            .rule(
+                Selector::tag("button").unwrap(),
+                Declarations::new().try_text_color(Color::BLACK).unwrap(),
+            )
+            .rule(
+                Selector::class("primary").unwrap(),
+                Declarations::new()
+                    .try_text_color(Color::TRANSPARENT)
+                    .unwrap(),
+            );
+
+        assert_eq!(sheet.rules()[0].order(), 0);
+        assert_eq!(sheet.rules()[1].order(), 1);
+        assert_eq!(
+            sheet.rules()[1].precedence(),
+            RulePrecedence::new(LayerOrder::default(), SourceOrder::new(1))
+        );
+    }
+
+    #[test]
+    fn authored_rule_preserves_supplied_precedence() {
+        let precedence = RulePrecedence::new(LayerOrder::new(7), SourceOrder::new(3));
+        let mut sheet = Sheet::new();
+        sheet
+            .push_authored_rule(
+                Selector::tag("button").unwrap(),
+                authored_color(Color::BLACK),
+                precedence,
+            )
+            .unwrap();
+
+        assert_eq!(sheet.rules()[0].precedence(), precedence);
+    }
+
+    #[test]
+    fn authored_rules_do_not_expose_legacy_declarations() {
+        let mut authored = AuthoredDeclarations::new();
+        authored.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Color),
+            CssWideKeyword::RevertLayer,
+        ));
+
+        let mut sheet = Sheet::new();
+        sheet
+            .push_authored_rule(
+                Selector::tag("button").unwrap(),
+                authored,
+                RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(0)),
+            )
+            .unwrap();
+
+        assert_eq!(sheet.rules()[0].legacy_declarations(), None);
+    }
+
+    #[test]
+    fn extend_rebases_legacy_rules_and_preserves_authored_precedence() {
+        let authored_precedence = RulePrecedence::new(LayerOrder::new(9), SourceOrder::new(20));
+        let legacy_rule = Rule::new(
+            Selector::tag("button").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+        let mut authored_sheet = Sheet::new();
+        authored_sheet
+            .push_authored_rule(
+                Selector::class("primary").unwrap(),
+                authored_color(Color::TRANSPARENT),
+                authored_precedence,
+            )
+            .unwrap();
+        let authored_rule = authored_sheet.rules()[0].clone();
+
+        let mut sheet = Sheet::new();
+        sheet.push_rule(
+            Selector::key("root").unwrap(),
+            Declarations::new().try_text_color(Color::BLACK).unwrap(),
+        );
+        sheet.extend([legacy_rule, authored_rule]);
+
+        assert_eq!(sheet.rules()[1].order(), 1);
+        assert_eq!(
+            sheet.rules()[1].precedence().layer_order(),
+            LayerOrder::default()
+        );
+        assert_eq!(sheet.rules()[2].precedence(), authored_precedence);
     }
 }
