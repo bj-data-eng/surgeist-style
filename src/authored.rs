@@ -560,6 +560,52 @@ mod tests {
     }
 
     #[test]
+    fn text_shorthands_expand_css_wide_keywords_to_canonical_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Font),
+            CssWideKeyword::RevertLayer,
+        ));
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::TextDecoration),
+            CssWideKeyword::Initial,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+        assert_eq!(canonical.get(Property::Font), None);
+        for property in [
+            Property::FontStyle,
+            Property::FontVariant,
+            Property::FontWeight,
+            Property::FontStretch,
+            Property::FontSize,
+            Property::LineHeight,
+            Property::FontFamily,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::RevertLayer
+                ))
+            );
+        }
+
+        assert_eq!(canonical.get(Property::TextDecoration), None);
+        for property in [
+            Property::TextDecorationLine,
+            Property::TextDecorationStyle,
+            Property::TextDecorationThickness,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Initial
+                ))
+            );
+        }
+    }
+
+    #[test]
     fn revert_layer_expands_without_entering_legacy_value_model() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(

@@ -99,28 +99,28 @@ dependencies, adapters, or generated code.
 | `CssProperty::LineHeight` | `CssValue::Length` | Text and font | `Existing style property` | `Property::LineHeight` + `Value::Length` | Line height has typed length data. | Operation 9 text-facing properties |
 | `CssProperty::WritingMode` | `CssValue::WritingMode` | Writing mode | `Existing style property` | `Property::WritingMode` + `Value::WritingMode` | Writing mode has a typed style enum. | Operation 8 layout-facing properties |
 | `CssProperty::TextAlign` | `CssValue::TextAlign` | Text and font | `Existing style property` | `Property::TextAlign` + `Value::TextAlign` | Text alignment has a typed style enum. | Operation 9 text-facing properties |
-| `CssProperty::TextAlignLast` | `CssValue::TextAlignLast` | Text and font | `New style property needed` | Planned `text-align-last` model | Style lacks typed final-line alignment data. | Operation 9 text-facing properties |
-| `CssProperty::TextIndent` | `CssValue::TextIndent` | Text and font | `New style property needed` | Planned `text-indent` model | Style lacks typed indentation data. | Operation 9 text-facing properties |
-| `CssProperty::VerticalAlign` | `CssValue::VerticalAlign` | Text and font | `New style property needed` | Planned `vertical-align` model | Style lacks inline/table-cell alignment data. | Operation 9 text-facing properties |
+| `CssProperty::TextAlignLast` | `CssValue::TextAlignLast` | Text and font | `Existing style property` | `Property::TextAlignLast` + `Value::TextAlignLast` | Final-line text alignment has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::TextIndent` | `CssValue::TextIndent` | Text and font | `Existing style property` | `Property::TextIndent` + `Value::TextIndent` | Text indentation length and hanging/each-line flags have typed style data. | Operation 9 text-facing properties |
+| `CssProperty::VerticalAlign` | `CssValue::VerticalAlign` | Text and font | `Existing style property` | `Property::VerticalAlign` + `Value::VerticalAlign` | Inline/table-cell vertical alignment has typed style data. | Operation 9 text-facing properties |
 | `CssProperty::FontFamily` | `CssValue::FontFamily` | Text and font | `Existing style property` | `Property::FontFamily` + `Value::FontFamilyList` | Family names are preserved as symbolic font family data; final font loading remains outside style. | Operation 9 text-facing properties |
-| `CssProperty::Font` | `CssValue::Font` | Text and font | `New shorthand lowering needed` | Planned lowering across font longhands | Font shorthand must lower into current and planned font properties without adding a broad font bag. | Operation 9 text-facing properties |
-| `CssProperty::FontWeight` | `CssValue::FontWeight` | Text and font | `New style property needed` | Planned `font-weight` value model | A property variant exists, but non-keyword CSS font weight is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::FontStyle` | `CssValue::FontStyle` | Text and font | `New style property needed` | Planned `font-style` and slant model | A property variant exists, but non-keyword CSS font style is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::FontStretch` | `CssValue::FontStretch` | Text and font | `New style property needed` | Planned `font-stretch` model | Style lacks typed font width/stretch data. | Operation 9 text-facing properties |
-| `CssProperty::FontVariant` | `CssValue::FontVariant` | Text and font | `New style property needed` | Planned `font-variant` model | Style lacks typed variant data. | Operation 9 text-facing properties |
-| `CssProperty::FontFeatureSettings` | `CssValue::FontFeatureSettings` | Text and font | `Symbolic style data needed` | Planned font feature settings model | Feature tags are authored symbolic font data; text shaping applies them later. | Operation 9 text-facing properties |
-| `CssProperty::LetterSpacing` | `CssValue::LetterSpacing` | Text and font | `New style property needed` | Planned `letter-spacing` model | Style lacks typed letter-spacing data. | Operation 9 text-facing properties |
-| `CssProperty::TextWrap` | `CssValue::TextWrap` | Text and font | `New style property needed` | Planned `text-wrap` value model | A property variant exists, but non-keyword CSS text-wrap is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::WhiteSpace` | `CssValue::WhiteSpace` | Text and font | `New style property needed` | Planned `white-space` value model | A property variant exists, but non-keyword CSS white-space is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::WordBreak` | `CssValue::WordBreak` | Text and font | `New style property needed` | Planned `word-break` value model | A property variant exists, but non-keyword CSS word-break is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::OverflowWrap` | `CssValue::OverflowWrap` | Text and font | `New style property needed` | Planned `overflow-wrap` value model | A property variant exists, but non-keyword CSS overflow-wrap is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::TextOverflow` | `CssValue::TextOverflow` | Text and font | `New style property needed` | Planned `text-overflow` value model | A property variant exists, but non-keyword CSS text-overflow is not an accepted typed style value. | Operation 9 text-facing properties |
-| `CssProperty::TextDecoration` | `CssValue::TextDecoration` | Text and font | `New shorthand lowering needed` | Planned lowering to text decoration longhands | Current style decoration support is not a CSS longhand/shorthand receiving model. | Operation 9 text-facing properties |
-| `CssProperty::TextDecorationLine` | `CssValue::TextDecorationLine` | Text and font | `New style property needed` | Planned `text-decoration-line` model | Style lacks CSS decoration line data. | Operation 9 text-facing properties |
+| `CssProperty::Font` | `CssValue::Font` | Text and font | `Existing style shorthand` | `Property::Font` + `Value::Font` | Font shorthand lowers across font style, variant, weight, stretch, size, line-height, and family longhands. | Operation 9 text-facing properties |
+| `CssProperty::FontWeight` | `CssValue::FontWeight` | Text and font | `Existing style property` | `Property::FontWeight` + `Value::FontWeight` | Font weight keywords and numeric weights have typed style data. | Operation 9 text-facing properties |
+| `CssProperty::FontStyle` | `CssValue::FontStyle` | Text and font | `Existing style property` | `Property::FontStyle` + `Value::TextSlant` | Font style and oblique slant are represented by typed text slant data. | Operation 9 text-facing properties |
+| `CssProperty::FontStretch` | `CssValue::FontStretch` | Text and font | `Existing style property` | `Property::FontStretch` + `Value::FontStretch` | Font width/stretch keywords have typed style data. | Operation 9 text-facing properties |
+| `CssProperty::FontVariant` | `CssValue::FontVariant` | Text and font | `Existing style property` | `Property::FontVariant` + `Value::FontVariant` | Font variant keywords have typed style data. | Operation 9 text-facing properties |
+| `CssProperty::FontFeatureSettings` | `CssValue::FontFeatureSettings` | Text and font | `Existing style property` | `Property::FontFeatureSettings` + `Value::FontFeatureSettings` | Feature tags are preserved as symbolic style-owned data for later shaping. | Operation 9 text-facing properties |
+| `CssProperty::LetterSpacing` | `CssValue::LetterSpacing` | Text and font | `Existing style property` | `Property::LetterSpacing` + `Value::LetterSpacing` | Letter spacing has typed normal-or-length style data. | Operation 9 text-facing properties |
+| `CssProperty::TextWrap` | `CssValue::TextWrap` | Text and font | `Existing style property` | `Property::TextWrap` + `Value::TextWrap` | Text wrapping policy has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::WhiteSpace` | `CssValue::WhiteSpace` | Text and font | `Existing style property` | `Property::WhiteSpace` + `Value::WhiteSpace` | White-space handling has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::WordBreak` | `CssValue::WordBreak` | Text and font | `Existing style property` | `Property::WordBreak` + `Value::WordBreak` | Word-break handling has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::OverflowWrap` | `CssValue::OverflowWrap` | Text and font | `Existing style property` | `Property::OverflowWrap` + `Value::OverflowWrap` | Overflow wrapping policy has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::TextOverflow` | `CssValue::TextOverflow` | Text and font | `Existing style property` | `Property::TextOverflow` + `Value::TextOverflow` | Text overflow behavior has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::TextDecoration` | `CssValue::TextDecoration` | Text and font | `Existing style shorthand` | `Property::TextDecoration` + `Value::TextDecoration` | Operation 9 lowers line, style, and thickness; `TextDecorationColor` remains Operation 10. | Operation 9 text-facing properties |
+| `CssProperty::TextDecorationLine` | `CssValue::TextDecorationLine` | Text and font | `Existing style property` | `Property::TextDecorationLine` + `Value::TextDecorationLine` | Text decoration line components have typed style data. | Operation 9 text-facing properties |
 | `CssProperty::TextDecorationColor` | `CssValue::TextDecorationColor` | Color | `New style property needed` | Planned `text-decoration-color` model using color data | Concrete colors can use style color primitives, but the property path is missing. | Operation 10 paint/color/effects |
-| `CssProperty::TextDecorationStyle` | `CssValue::TextDecorationStyle` | Text and font | `New style property needed` | Planned `text-decoration-style` model | Style lacks CSS decoration stroke style data. | Operation 9 text-facing properties |
-| `CssProperty::TextDecorationThickness` | `CssValue::TextDecorationThickness` | Text and font | `New style property needed` | Planned `text-decoration-thickness` model | Style lacks CSS decoration thickness data. | Operation 9 text-facing properties |
-| `CssProperty::TextTransform` | `CssValue::TextTransform` | Text and font | `New style property needed` | Planned `text-transform` model | Style lacks typed text-transform data. | Operation 9 text-facing properties |
+| `CssProperty::TextDecorationStyle` | `CssValue::TextDecorationStyle` | Text and font | `Existing style property` | `Property::TextDecorationStyle` + `Value::TextDecorationStyle` | Text decoration stroke style has a typed style enum. | Operation 9 text-facing properties |
+| `CssProperty::TextDecorationThickness` | `CssValue::TextDecorationThickness` | Text and font | `Existing style property` | `Property::TextDecorationThickness` + `Value::TextDecorationThickness` | Text decoration thickness has typed auto, from-font, and length data. | Operation 9 text-facing properties |
+| `CssProperty::TextTransform` | `CssValue::TextTransform` | Text and font | `Existing style property` | `Property::TextTransform` + `Value::TextTransform` | Text transform has a typed style enum. | Operation 9 text-facing properties |
 | `CssProperty::Inset` | `CssValue::Edges` | Position and stacking | `Existing style shorthand` | `Property::Inset` + `Value::Edges` | Style shorthand canonicalization lowers to top, right, bottom, and left longhands. | Operation 8 layout-facing properties |
 | `CssProperty::Top` | `CssValue::Length` | Position and stacking | `Existing style property` | `Property::Top` + `Value::Length` | Top inset has a canonical side longhand and typed front door. | Operation 8 layout-facing properties |
 | `CssProperty::Right` | `CssValue::Length` | Position and stacking | `Existing style property` | `Property::Right` + `Value::Length` | Right inset has a canonical side longhand and typed front door. | Operation 8 layout-facing properties |
@@ -232,7 +232,7 @@ dependencies, adapters, or generated code.
 | Grid | Track lists, template areas, template/grid shorthands, placement, auto-flow, flow tolerance, and track alignment properties exist. | No Operation 8 grid property gap remains in this ledger. | No property implementation |
 | Alignment | Align/justify content/items/self targets, place shorthands, and track alignment properties exist. | No Operation 8 alignment property gap remains in this ledger. | No property implementation |
 | Writing mode | `Direction` and `WritingMode` are inherited typed style properties. | CSS parity review for additional writing-mode values remains future parser-lowering work. | No property implementation |
-| Text and font | Font family, font size, line height, and text-align have typed targets; text aggregate types exist internally. | Font shorthand, font weight/style/stretch/variant/features, spacing, wrapping, decoration, and transform text properties need CSS-facing models. | Operation 9 text-facing properties |
+| Text and font | Font family, font size, line height, text alignment, font shorthand and longhands, font feature settings, spacing, wrapping, text overflow, text decoration line/style/thickness, and text transform have typed style targets. | No Operation 9 text or font property gap remains in this ledger; `TextDecorationColor` remains in Color for Operation 10. | No property implementation |
 | Generated content and lists | Pseudo-element style buckets and authored declarations can target style buckets. | `content`, list style, marker images, and counters need generated-content style data. | Operation 11 generated content/counters/lists |
 | Color | `Property::Color` and `Value::Color` support concrete RGBA. | Symbolic colors, text-decoration color property path, currentColor, system colors, and modern color functions need symbolic style data. | Operation 10 paint/color/effects |
 | Background | `Property::Background` stores concrete background color. | Background layers, images, position, size, repeat, origin, clip, attachment, and full shorthand lowering are missing. | Operation 10 paint/color/effects |
@@ -263,22 +263,20 @@ render resources.
 
 ## Next Sequence Context
 
-The next implementation plan should cover Operation 9: text-facing computed
+The next implementation plan should cover Operation 10: paint/color/effects
 property families.
 
 Use this ledger instead of re-inventorying the full CSS property surface. The
-text plan should start with the `Text and font` ledger rows that point to
-Operation 9.
+paint/color/effects plan should start with the Color, Background, Border and
+outline, Paint and effects, Transforms, and Interaction ledger rows that point
+to Operation 10.
 
-The text plan should implement style-owned models and lowering front doors
-only where the ledger marks `New style property needed` or
-`New shorthand lowering needed`. It should not add a style-to-layout adapter,
-generated content, text shaping, paint resources, timing/keyframe models, or
+The paint/color/effects plan should implement style-owned models and lowering
+front doors only where the ledger marks `New style property needed`,
+`New shorthand lowering needed`, or `Symbolic style data needed`. It should not
+add a style-to-layout adapter, generated content, timing/keyframe models, or
 Operation 14 cache/invalidation generalization.
 
-`Interaction` rows such as cursor, pointer events, and user select should stay
-with Operation 10 paint/color/effects unless the ledger identifies a concrete
-layout dependency.
-
-Operation 8 layout-facing rows have been rebased after implementation, so
-Operation 9 can proceed from the current text-facing gaps.
+Operation 8 layout-facing rows and Operation 9 text-facing rows have been
+rebased after implementation, so Operation 10 can proceed from the current
+paint/color/effects gaps.

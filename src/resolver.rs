@@ -1422,13 +1422,14 @@ mod tests {
         AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
         CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, Flex,
         FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
-        FontStretch, FontVariant, FontWeight, LayerOrder, LayoutPosition, LetterSpacing, Node,
-        Order, OverflowWrap, PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth,
-        Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState,
-        StyleTag, TextAlignLast, TextDecorationLine, TextDecorationLineComponent,
-        TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-        TextTransform, TextWrap, VariableDependentValue, VariableExpression, VariableFallback,
-        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        FontStretch, FontVariant, FontWeight, FontWeightNumber, LayerOrder, LayoutPosition,
+        LetterSpacing, Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence,
+        RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket,
+        StyleClass, StyleRole, StyleState, StyleTag, TextAlignLast, TextDecorationLine,
+        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
+        TextOverflow, TextSlant, TextTransform, TextWrap, VariableDependentValue,
+        VariableExpression, VariableFallback, VariableReference, VerticalAlign, WhiteSpace,
+        WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1685,6 +1686,81 @@ mod tests {
         assert_eq!(style.flex_grow(), FlexFactor::one());
         assert_eq!(style.flex_shrink(), FlexFactor::one());
         assert_eq!(style.align_tracks(), AlignContent::SpaceEvenly);
+    }
+
+    #[test]
+    fn text_operation_nine_values_resolve_together() {
+        let feature_settings = FontFeatureSettings::features([FontFeature::new(
+            FontFeatureTag::new("liga").unwrap(),
+            Some(FontFeatureValue::Off),
+        )])
+        .unwrap();
+        let indent = TextIndent::new(Length::Px(10.0), true, true).unwrap();
+        let decoration_line =
+            TextDecorationLine::try_new([TextDecorationLineComponent::Underline]).unwrap();
+        let decoration_thickness =
+            TextDecorationThickness::try_length(Length::Percent(12.0)).unwrap();
+
+        let style = resolve_single(
+            Declarations::new()
+                .try_font_family(FontFamilyList::new(["Inter", "serif"]).unwrap())
+                .unwrap()
+                .try_font_size(Length::Px(18.0))
+                .unwrap()
+                .try_line_height(Length::Percent(130.0))
+                .unwrap()
+                .font_weight(FontWeight::Number(FontWeightNumber::new(625).unwrap()))
+                .try_font_style(TextSlant::Italic)
+                .unwrap()
+                .font_stretch(FontStretch::SemiExpanded)
+                .font_variant(FontVariant::SmallCaps)
+                .try_font_feature_settings(feature_settings.clone())
+                .unwrap()
+                .text_align_last(TextAlignLast::End)
+                .try_text_indent(indent.clone())
+                .unwrap()
+                .vertical_align(VerticalAlign::TextTop)
+                .try_letter_spacing(LetterSpacing::try_length(Length::Px(0.5)).unwrap())
+                .unwrap()
+                .text_wrap(TextWrap::Stable)
+                .white_space(WhiteSpace::PreLine)
+                .word_break(WordBreak::BreakAll)
+                .overflow_wrap(OverflowWrap::Anywhere)
+                .text_overflow(TextOverflow::Ellipsis)
+                .try_text_decoration_line(decoration_line.clone())
+                .unwrap()
+                .text_decoration_style(TextDecorationStyle::Dotted)
+                .try_text_decoration_thickness(decoration_thickness.clone())
+                .unwrap()
+                .text_transform(TextTransform::Lowercase),
+        );
+
+        assert_eq!(style.font_size(), Length::Px(18.0));
+        assert_eq!(style.line_height(), Length::Percent(130.0));
+        assert_eq!(
+            style.font_weight(),
+            FontWeight::Number(FontWeightNumber::new(625).unwrap())
+        );
+        assert_eq!(style.font_style(), TextSlant::Italic);
+        assert_eq!(style.font_stretch(), FontStretch::SemiExpanded);
+        assert_eq!(style.font_variant(), FontVariant::SmallCaps);
+        assert_eq!(style.font_feature_settings(), &feature_settings);
+        assert_eq!(style.text_align_last(), TextAlignLast::End);
+        assert_eq!(style.text_indent(), indent);
+        assert_eq!(style.vertical_align(), VerticalAlign::TextTop);
+        assert_eq!(
+            style.letter_spacing(),
+            LetterSpacing::try_length(Length::Px(0.5)).unwrap()
+        );
+        assert_eq!(style.text_wrap(), TextWrap::Stable);
+        assert_eq!(style.white_space(), WhiteSpace::PreLine);
+        assert_eq!(style.word_break(), WordBreak::BreakAll);
+        assert_eq!(style.overflow_wrap(), OverflowWrap::Anywhere);
+        assert_eq!(style.text_overflow(), TextOverflow::Ellipsis);
+        assert_eq!(style.text_decoration_line(), &decoration_line);
+        assert_eq!(style.text_decoration_style(), TextDecorationStyle::Dotted);
+        assert_eq!(style.text_decoration_thickness(), &decoration_thickness);
+        assert_eq!(style.text_transform(), TextTransform::Lowercase);
     }
 
     #[test]
