@@ -1,11 +1,13 @@
 use crate::{
-    Declaration, Error, ErrorCode, Property, Result, Value,
+    CustomPropertyName, CustomPropertyValue, Declaration, Error, ErrorCode, Property, Result,
+    Value, VariableDependentValue,
     declaration::{canonical_declarations, canonical_properties},
 };
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum AuthoredProperty {
     Property(Property),
+    Custom(CustomPropertyName),
     All,
 }
 
@@ -21,6 +23,8 @@ pub enum CssWideKeyword {
 pub enum AuthoredValue {
     Value(Value),
     CssWideKeyword(CssWideKeyword),
+    CustomProperty(CustomPropertyValue),
+    VariableDependent(VariableDependentValue),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,31 +35,55 @@ pub struct AuthoredDeclaration {
 
 impl AuthoredDeclaration {
     pub fn try_new(property: AuthoredProperty, value: AuthoredValue) -> Result<Self> {
-        let AuthoredProperty::Property(style_property) = property else {
-            return Err(invalid_property(
-                "all accepts only explicit authored CSS-wide keywords",
-            ));
-        };
-        let AuthoredValue::Value(style_value) = value else {
-            return Err(invalid_property(
-                "CSS-wide keywords must use AuthoredDeclaration::css_wide",
-            ));
-        };
-        if matches!(style_value, Value::Keyword(_)) {
-            return Err(invalid_property(
-                "legacy keyword values are not valid authored declaration values",
-            ));
+        match (&property, &value) {
+            (AuthoredProperty::Property(style_property), AuthoredValue::Value(style_value)) => {
+                if matches!(style_value, Value::Keyword(_)) {
+                    return Err(invalid_property(
+                        "legacy keyword values are not valid authored declaration values",
+                    ));
+                }
+                style_property.validate_value(style_value)?;
+            }
+            (
+                AuthoredProperty::Property(style_property),
+                AuthoredValue::VariableDependent(variable_value),
+            ) => {
+                if variable_value.property() != *style_property {
+                    return Err(invalid_property(
+                        "variable-dependent values must target the authored property",
+                    ));
+                }
+            }
+            (AuthoredProperty::Custom(_), AuthoredValue::CustomProperty(_)) => {}
+            (AuthoredProperty::Property(_), AuthoredValue::CssWideKeyword(_))
+            | (AuthoredProperty::Custom(_), AuthoredValue::CssWideKeyword(_))
+            | (AuthoredProperty::All, AuthoredValue::CssWideKeyword(_)) => {
+                return Err(invalid_property(
+                    "CSS-wide keywords must use AuthoredDeclaration::css_wide",
+                ));
+            }
+            (AuthoredProperty::All, _) => {
+                return Err(invalid_property(
+                    "all accepts only explicit authored CSS-wide keywords",
+                ));
+            }
+            (AuthoredProperty::Custom(_), _) => {
+                return Err(invalid_property(
+                    "custom properties accept only custom property values or explicit CSS-wide keywords",
+                ));
+            }
+            (AuthoredProperty::Property(_), AuthoredValue::CustomProperty(_)) => {
+                return Err(invalid_property(
+                    "ordinary properties cannot accept custom property values",
+                ));
+            }
         }
-        style_property.validate_value(&style_value)?;
 
-        Ok(Self {
-            property,
-            value: AuthoredValue::Value(style_value),
-        })
+        Ok(Self { property, value })
     }
 
     #[must_use]
-    pub const fn css_wide(property: AuthoredProperty, keyword: CssWideKeyword) -> Self {
+    pub fn css_wide(property: AuthoredProperty, keyword: CssWideKeyword) -> Self {
         Self {
             property,
             value: AuthoredValue::CssWideKeyword(keyword),
@@ -63,8 +91,8 @@ impl AuthoredDeclaration {
     }
 
     #[must_use]
-    pub const fn property(&self) -> AuthoredProperty {
-        self.property
+    pub fn property(&self) -> AuthoredProperty {
+        self.property.clone()
     }
 
     #[must_use]
@@ -116,20 +144,55 @@ impl AuthoredDeclarations {
                     for Declaration { property, value } in
                         canonical_declarations(*property, value.clone())
                     {
-                        canonical.insert(property, AuthoredCascadeValue::Value(value));
+                        canonical.insert_property(property, AuthoredCascadeValue::Value(value));
                     }
                 }
                 (AuthoredProperty::Property(property), AuthoredValue::CssWideKeyword(keyword)) => {
                     for property in canonical_properties(*property) {
-                        canonical.insert(property, AuthoredCascadeValue::CssWideKeyword(*keyword));
+                        canonical.insert_property(
+                            property,
+                            AuthoredCascadeValue::CssWideKeyword(*keyword),
+                        );
                     }
+                }
+                (AuthoredProperty::Property(property), AuthoredValue::VariableDependent(value)) => {
+                    canonical.insert_property(
+                        *property,
+                        AuthoredCascadeValue::VariableDependent(value.clone()),
+                    );
+                }
+                (AuthoredProperty::Property(_), AuthoredValue::CustomProperty(_)) => {
+                    return Err(invalid_property(
+                        "ordinary properties cannot accept custom property values",
+                    ));
+                }
+                (AuthoredProperty::Custom(name), AuthoredValue::CustomProperty(value)) => {
+                    canonical.insert_custom(
+                        name.clone(),
+                        CustomPropertyCascadeValue::Value(value.clone()),
+                    );
+                }
+                (AuthoredProperty::Custom(name), AuthoredValue::CssWideKeyword(keyword)) => {
+                    canonical.insert_custom(
+                        name.clone(),
+                        CustomPropertyCascadeValue::CssWideKeyword(*keyword),
+                    );
+                }
+                (AuthoredProperty::Custom(_), AuthoredValue::Value(_))
+                | (AuthoredProperty::Custom(_), AuthoredValue::VariableDependent(_)) => {
+                    return Err(invalid_property(
+                        "custom properties accept only custom property values or explicit CSS-wide keywords",
+                    ));
                 }
                 (AuthoredProperty::All, AuthoredValue::CssWideKeyword(keyword)) => {
                     for property in all_css_wide_properties() {
-                        canonical.insert(property, AuthoredCascadeValue::CssWideKeyword(*keyword));
+                        canonical.insert_property(
+                            property,
+                            AuthoredCascadeValue::CssWideKeyword(*keyword),
+                        );
                     }
                 }
-                (AuthoredProperty::All, AuthoredValue::Value(_)) => {
+                (AuthoredProperty::All, _) => {
                     return Err(invalid_property(
                         "all accepts only explicit authored CSS-wide keywords",
                     ));
@@ -145,12 +208,27 @@ impl AuthoredDeclarations {
 pub(crate) enum AuthoredCascadeValue {
     Value(Value),
     CssWideKeyword(CssWideKeyword),
+    VariableDependent(VariableDependentValue),
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CustomPropertyCascadeValue {
+    Value(CustomPropertyValue),
+    CssWideKeyword(CssWideKeyword),
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum AuthoredDeclarationItem {
+    Property(Property, AuthoredCascadeValue),
+    Custom(CustomPropertyName, CustomPropertyCascadeValue),
 }
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct AuthoredCanonicalDeclarations {
-    values: Vec<(Property, AuthoredCascadeValue)>,
+    values: Vec<AuthoredDeclarationItem>,
 }
 
 #[allow(dead_code)]
@@ -160,35 +238,84 @@ impl AuthoredCanonicalDeclarations {
         Self::default()
     }
 
-    fn insert(&mut self, property: Property, value: AuthoredCascadeValue) {
-        if let Some((_, existing)) = self
-            .values
-            .iter_mut()
-            .find(|(existing_property, _)| *existing_property == property)
+    fn insert_property(&mut self, property: Property, value: AuthoredCascadeValue) {
+        if let Some(AuthoredDeclarationItem::Property(_, existing)) =
+            self.values.iter_mut().find(|item| match item {
+                AuthoredDeclarationItem::Property(existing_property, _) => {
+                    *existing_property == property
+                }
+                AuthoredDeclarationItem::Custom(_, _) => false,
+            })
         {
             *existing = value;
         } else {
-            self.values.push((property, value));
+            self.values
+                .push(AuthoredDeclarationItem::Property(property, value));
+        }
+    }
+
+    fn insert_custom(&mut self, name: CustomPropertyName, value: CustomPropertyCascadeValue) {
+        if let Some(AuthoredDeclarationItem::Custom(_, existing)) =
+            self.values.iter_mut().find(|item| match item {
+                AuthoredDeclarationItem::Property(_, _) => false,
+                AuthoredDeclarationItem::Custom(existing_name, _) => *existing_name == name,
+            })
+        {
+            *existing = value;
+        } else {
+            self.values
+                .push(AuthoredDeclarationItem::Custom(name, value));
         }
     }
 
     #[must_use]
     pub(crate) fn get(&self, property: Property) -> Option<&AuthoredCascadeValue> {
-        self.values
-            .iter()
-            .find(|(existing_property, _)| *existing_property == property)
-            .map(|(_, value)| value)
+        self.values.iter().find_map(|item| match item {
+            AuthoredDeclarationItem::Property(existing_property, value)
+                if *existing_property == property =>
+            {
+                Some(value)
+            }
+            AuthoredDeclarationItem::Property(_, _) | AuthoredDeclarationItem::Custom(_, _) => None,
+        })
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (Property, &AuthoredCascadeValue)> {
-        self.values
-            .iter()
-            .map(|(property, value)| (*property, value))
+    #[must_use]
+    pub(crate) fn get_custom(
+        &self,
+        name: &CustomPropertyName,
+    ) -> Option<&CustomPropertyCascadeValue> {
+        self.values.iter().find_map(|item| match item {
+            AuthoredDeclarationItem::Custom(existing_name, value) if existing_name == name => {
+                Some(value)
+            }
+            AuthoredDeclarationItem::Property(_, _) | AuthoredDeclarationItem::Custom(_, _) => None,
+        })
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &AuthoredDeclarationItem> {
+        self.values.iter()
     }
 
     #[must_use]
     pub(crate) fn len(&self) -> usize {
         self.values.len()
+    }
+
+    #[must_use]
+    pub(crate) fn property_len(&self) -> usize {
+        self.values
+            .iter()
+            .filter(|item| matches!(item, AuthoredDeclarationItem::Property(_, _)))
+            .count()
+    }
+
+    #[must_use]
+    pub(crate) fn custom_len(&self) -> usize {
+        self.values
+            .iter()
+            .filter(|item| matches!(item, AuthoredDeclarationItem::Custom(_, _)))
+            .count()
     }
 
     #[must_use]
@@ -212,7 +339,11 @@ fn invalid_property(message: impl Into<String>) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Color, Display, ErrorCode, Keyword, Length, Property, Value};
+    use crate::{
+        AuthoredTokens, Color, CustomPropertyName, CustomPropertyValue, Display, ErrorCode,
+        Keyword, Length, Property, Value, VariableDependentValue, VariableExpression,
+        VariableFallback, VariableReference,
+    };
 
     #[test]
     fn ordinary_authored_declaration_validates_against_property() {
@@ -372,5 +503,137 @@ mod tests {
                 12.0
             ))))
         );
+    }
+
+    #[test]
+    fn custom_property_accepts_custom_property_values() {
+        let name = CustomPropertyName::try_new("--brand").unwrap();
+        let custom_value =
+            CustomPropertyValue::new(AuthoredTokens::new("var(--accent, black)"), []);
+        let declaration = AuthoredDeclaration::try_new(
+            AuthoredProperty::Custom(name.clone()),
+            AuthoredValue::CustomProperty(custom_value.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(declaration.property(), AuthoredProperty::Custom(name));
+        assert_eq!(
+            declaration.value(),
+            AuthoredValue::CustomProperty(custom_value)
+        );
+    }
+
+    #[test]
+    fn custom_property_accepts_css_wide_keywords_through_explicit_path() {
+        let name = CustomPropertyName::try_new("--brand").unwrap();
+        let declaration = AuthoredDeclaration::css_wide(
+            AuthoredProperty::Custom(name.clone()),
+            CssWideKeyword::Initial,
+        );
+
+        assert_eq!(declaration.property(), AuthoredProperty::Custom(name));
+        assert_eq!(
+            declaration.value(),
+            AuthoredValue::CssWideKeyword(CssWideKeyword::Initial)
+        );
+    }
+
+    #[test]
+    fn all_expansion_does_not_include_custom_properties() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::All,
+            CssWideKeyword::Unset,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.custom_len(), 0);
+    }
+
+    #[test]
+    fn custom_property_rejects_ordinary_values() {
+        let error = AuthoredDeclaration::try_new(
+            AuthoredProperty::Custom(CustomPropertyName::try_new("--brand").unwrap()),
+            AuthoredValue::Value(Value::Color(Color::BLACK)),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidProperty);
+    }
+
+    #[test]
+    fn custom_property_rejects_variable_dependent_values() {
+        let variable = VariableDependentValue::try_new(
+            Property::Color,
+            AuthoredTokens::new("var(--brand, black)"),
+            VariableExpression::Reference(VariableReference::new(
+                CustomPropertyName::try_new("--brand").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("black"),
+                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                )),
+            )),
+        )
+        .unwrap();
+
+        let error = AuthoredDeclaration::try_new(
+            AuthoredProperty::Custom(CustomPropertyName::try_new("--brand").unwrap()),
+            AuthoredValue::VariableDependent(variable),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidProperty);
+    }
+
+    #[test]
+    fn property_accepts_variable_dependent_values_for_matching_property() {
+        let variable = VariableDependentValue::try_new(
+            Property::Color,
+            AuthoredTokens::new("var(--brand, black)"),
+            VariableExpression::Reference(VariableReference::new(
+                CustomPropertyName::try_new("--brand").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("black"),
+                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                )),
+            )),
+        )
+        .unwrap();
+
+        let declaration = AuthoredDeclaration::try_new(
+            AuthoredProperty::Property(Property::Color),
+            AuthoredValue::VariableDependent(variable.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            declaration.value(),
+            AuthoredValue::VariableDependent(variable)
+        );
+    }
+
+    #[test]
+    fn property_rejects_variable_dependent_values_for_mismatched_property() {
+        let variable = VariableDependentValue::try_new(
+            Property::Color,
+            AuthoredTokens::new("var(--brand, black)"),
+            VariableExpression::Reference(VariableReference::new(
+                CustomPropertyName::try_new("--brand").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("black"),
+                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                )),
+            )),
+        )
+        .unwrap();
+
+        let error = AuthoredDeclaration::try_new(
+            AuthoredProperty::Property(Property::Width),
+            AuthoredValue::VariableDependent(variable),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidProperty);
     }
 }

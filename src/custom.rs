@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{CssWideKeyword, Error, ErrorCode, Property, Result, Value};
 
@@ -40,6 +40,127 @@ impl AuthoredTokens {
     #[must_use]
     pub fn as_css(&self) -> &str {
         &self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomPropertyValue {
+    authored: AuthoredTokens,
+    references: Vec<VariableReference>,
+    dependencies: Vec<CustomPropertyName>,
+    typed_values: BTreeMap<Property, CustomPropertyTypedValue>,
+}
+
+impl CustomPropertyValue {
+    #[must_use]
+    pub fn new(
+        authored: AuthoredTokens,
+        references: impl IntoIterator<Item = VariableReference>,
+    ) -> Self {
+        let references = references.into_iter().collect::<Vec<_>>();
+        let dependencies = dependencies_from_references(&references);
+        Self {
+            authored,
+            references,
+            dependencies,
+            typed_values: BTreeMap::new(),
+        }
+    }
+
+    pub fn try_with_typed_value(
+        mut self,
+        property: Property,
+        expression: VariableExpression,
+    ) -> Result<Self> {
+        self.try_push_typed_value(CustomPropertyTypedValue::try_new(property, expression)?)?;
+        Ok(self)
+    }
+
+    pub fn try_push_typed_value(
+        &mut self,
+        typed_value: CustomPropertyTypedValue,
+    ) -> Result<&mut Self> {
+        typed_value
+            .expression()
+            .validate_for_property(typed_value.property())?;
+        self.typed_values
+            .insert(typed_value.property(), typed_value);
+        self.dependencies = dependencies_from_references_and_typed_values(
+            &self.references,
+            self.typed_values.values(),
+        );
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn authored(&self) -> &AuthoredTokens {
+        &self.authored
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[VariableReference] {
+        &self.references
+    }
+
+    #[must_use]
+    pub fn dependencies(&self) -> &[CustomPropertyName] {
+        &self.dependencies
+    }
+
+    #[must_use]
+    pub fn typed_value(&self, property: Property) -> Option<&CustomPropertyTypedValue> {
+        self.typed_values.get(&property)
+    }
+}
+
+fn dependencies_from_references(references: &[VariableReference]) -> Vec<CustomPropertyName> {
+    dependencies_from_references_and_typed_values(references, std::iter::empty())
+}
+
+fn dependencies_from_references_and_typed_values<'a>(
+    references: &[VariableReference],
+    typed_values: impl IntoIterator<Item = &'a CustomPropertyTypedValue>,
+) -> Vec<CustomPropertyName> {
+    let mut dependencies = BTreeSet::new();
+    for reference in references {
+        dependencies.insert(reference.name().clone());
+        if let Some(fallback) = reference.fallback() {
+            fallback
+                .expression()
+                .collect_dependencies(&mut dependencies);
+        }
+    }
+    for typed_value in typed_values {
+        typed_value
+            .expression()
+            .collect_dependencies(&mut dependencies);
+    }
+    dependencies.into_iter().collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomPropertyTypedValue {
+    property: Property,
+    expression: VariableExpression,
+}
+
+impl CustomPropertyTypedValue {
+    pub fn try_new(property: Property, expression: VariableExpression) -> Result<Self> {
+        expression.validate_for_property(property)?;
+        Ok(Self {
+            property,
+            expression,
+        })
+    }
+
+    #[must_use]
+    pub const fn property(&self) -> Property {
+        self.property
+    }
+
+    #[must_use]
+    pub const fn expression(&self) -> &VariableExpression {
+        &self.expression
     }
 }
 
@@ -345,5 +466,185 @@ mod tests {
         assert_eq!(value.authored().as_css(), "var(--space, 8px)");
         assert_eq!(value.dependencies().len(), 1);
         assert_eq!(value.dependencies()[0].as_str(), "--space");
+    }
+
+    #[test]
+    fn custom_property_value_preserves_authored_tokens_and_references() {
+        let value = CustomPropertyValue::new(
+            AuthoredTokens::new("var(--brand, black)"),
+            [VariableReference::new(
+                CustomPropertyName::try_new("--brand").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("black"),
+                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                )),
+            )],
+        );
+
+        assert_eq!(value.authored().as_css(), "var(--brand, black)");
+        assert_eq!(value.references().len(), 1);
+        assert_eq!(value.references()[0].name().as_str(), "--brand");
+        assert_eq!(
+            value.references()[0]
+                .fallback()
+                .unwrap()
+                .authored()
+                .as_css(),
+            "black"
+        );
+        assert_eq!(value.dependencies()[0].as_str(), "--brand");
+        assert!(value.typed_value(Property::Color).is_none());
+    }
+
+    #[test]
+    fn custom_property_value_preserves_authored_nested_fallback_references() {
+        let value = CustomPropertyValue::new(
+            AuthoredTokens::new("var(--space, var(--fallback, 4px))"),
+            [VariableReference::new(
+                CustomPropertyName::try_new("--space").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("var(--fallback, 4px)"),
+                    VariableExpression::Reference(VariableReference::new(
+                        CustomPropertyName::try_new("--fallback").unwrap(),
+                        Some(VariableFallback::new(
+                            AuthoredTokens::new("4px"),
+                            VariableExpression::Value(Value::Length(Length::px(4.0))),
+                        )),
+                    )),
+                )),
+            )],
+        );
+
+        assert_eq!(
+            value.references()[0].fallback().unwrap().expression(),
+            &VariableExpression::Reference(VariableReference::new(
+                CustomPropertyName::try_new("--fallback").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("4px"),
+                    VariableExpression::Value(Value::Length(Length::px(4.0))),
+                )),
+            ))
+        );
+        assert_eq!(value.dependencies().len(), 2);
+        assert_eq!(value.dependencies()[0].as_str(), "--fallback");
+        assert_eq!(value.dependencies()[1].as_str(), "--space");
+    }
+
+    #[test]
+    fn custom_property_value_accepts_empty_authored_tokens() {
+        let value = CustomPropertyValue::new(AuthoredTokens::new(""), []);
+
+        assert_eq!(value.authored().as_css(), "");
+        assert!(value.references().is_empty());
+    }
+
+    #[test]
+    fn custom_property_typed_value_validates_literals_against_property() {
+        let error = CustomPropertyTypedValue::try_new(
+            Property::Width,
+            VariableExpression::Value(Value::Color(Color::BLACK)),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code(), ErrorCode::InvalidProperty);
+
+        let typed = CustomPropertyTypedValue::try_new(
+            Property::Width,
+            VariableExpression::Value(Value::Length(Length::px(8.0))),
+        )
+        .unwrap();
+
+        assert_eq!(typed.property(), Property::Width);
+        assert_eq!(
+            typed.expression(),
+            &VariableExpression::Value(Value::Length(Length::px(8.0)))
+        );
+    }
+
+    #[test]
+    fn custom_property_typed_value_allows_references_and_builder_stores_by_property() {
+        let typed = CustomPropertyTypedValue::try_new(
+            Property::Color,
+            VariableExpression::Reference(VariableReference::new(
+                CustomPropertyName::try_new("--brand").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("black"),
+                    VariableExpression::Value(Value::Color(Color::BLACK)),
+                )),
+            )),
+        )
+        .unwrap();
+
+        let mut value = CustomPropertyValue::new(
+            AuthoredTokens::new("var(--brand, black)"),
+            [VariableReference::new(
+                CustomPropertyName::try_new("--brand").unwrap(),
+                None,
+            )],
+        );
+        value.try_push_typed_value(typed).unwrap();
+
+        assert_eq!(
+            value.typed_value(Property::Color).unwrap().property(),
+            Property::Color
+        );
+        assert!(value.typed_value(Property::Width).is_none());
+    }
+
+    #[test]
+    fn custom_property_value_authored_dependencies_include_typed_expression_references() {
+        let mut value = CustomPropertyValue::new(AuthoredTokens::new("8px"), []);
+        value
+            .try_push_typed_value(
+                CustomPropertyTypedValue::try_new(
+                    Property::Width,
+                    VariableExpression::Reference(VariableReference::new(
+                        CustomPropertyName::try_new("--typed-only").unwrap(),
+                        Some(VariableFallback::new(
+                            AuthoredTokens::new("4px"),
+                            VariableExpression::Value(Value::Length(Length::px(4.0))),
+                        )),
+                    )),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert!(value.references().is_empty());
+        assert_eq!(value.dependencies().len(), 1);
+        assert_eq!(value.dependencies()[0].as_str(), "--typed-only");
+    }
+
+    #[test]
+    fn custom_property_value_authored_dependencies_dedupe_authored_and_typed_references() {
+        let mut value = CustomPropertyValue::new(
+            AuthoredTokens::new("var(--shared, 8px)"),
+            [VariableReference::new(
+                CustomPropertyName::try_new("--shared").unwrap(),
+                Some(VariableFallback::new(
+                    AuthoredTokens::new("8px"),
+                    VariableExpression::Value(Value::Length(Length::px(8.0))),
+                )),
+            )],
+        );
+        value
+            .try_push_typed_value(
+                CustomPropertyTypedValue::try_new(
+                    Property::Width,
+                    VariableExpression::Reference(VariableReference::new(
+                        CustomPropertyName::try_new("--shared").unwrap(),
+                        Some(VariableFallback::new(
+                            AuthoredTokens::new("4px"),
+                            VariableExpression::Value(Value::Length(Length::px(4.0))),
+                        )),
+                    )),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(value.references().len(), 1);
+        assert_eq!(value.dependencies().len(), 1);
+        assert_eq!(value.dependencies()[0].as_str(), "--shared");
     }
 }

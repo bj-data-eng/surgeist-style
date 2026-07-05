@@ -8,8 +8,11 @@ use super::{
     Selector, SourceOrder, Tree, Value, selector::PrimaryKey,
 };
 use crate::{
-    StyleClass, StyleKey, StyleTag,
-    authored::{AuthoredCanonicalDeclarations, AuthoredCascadeValue},
+    CustomPropertyName, StyleClass, StyleKey, StyleTag,
+    authored::{
+        AuthoredCanonicalDeclarations, AuthoredCascadeValue, AuthoredDeclarationItem,
+        CustomPropertyCascadeValue,
+    },
 };
 
 static NEXT_VERSION: AtomicU64 = AtomicU64::new(1);
@@ -106,12 +109,36 @@ impl Rule {
                 .collect(),
             RuleDeclarations::Authored(declarations) => declarations
                 .iter()
-                .map(|(property, value)| {
-                    RuleDeclarationItem::new(
-                        property,
+                .filter_map(|item| {
+                    let AuthoredDeclarationItem::Property(property, value) = item else {
+                        return None;
+                    };
+                    Some(RuleDeclarationItem::new(
+                        *property,
                         RuleDeclarationOrigin::Authored,
                         RuleDeclarationValue::Authored(value),
-                    )
+                    ))
+                })
+                .collect(),
+        }
+    }
+
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn custom_declaration_items(&self) -> Vec<RuleCustomDeclarationItem<'_>> {
+        match &self.declarations {
+            RuleDeclarations::Legacy(_) => Vec::new(),
+            RuleDeclarations::Authored(declarations) => declarations
+                .iter()
+                .filter_map(|item| {
+                    let AuthoredDeclarationItem::Custom(name, value) = item else {
+                        return None;
+                    };
+                    Some(RuleCustomDeclarationItem::new(
+                        name,
+                        RuleDeclarationOrigin::Authored,
+                        value,
+                    ))
                 })
                 .collect(),
         }
@@ -201,6 +228,45 @@ impl<'a> RuleDeclarationItem<'a> {
 pub(crate) enum RuleDeclarationValue<'a> {
     Value(&'a Value),
     Authored(&'a AuthoredCascadeValue),
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RuleCustomDeclarationItem<'a> {
+    name: &'a CustomPropertyName,
+    origin: RuleDeclarationOrigin,
+    value: &'a CustomPropertyCascadeValue,
+}
+
+#[allow(dead_code)]
+impl<'a> RuleCustomDeclarationItem<'a> {
+    #[must_use]
+    const fn new(
+        name: &'a CustomPropertyName,
+        origin: RuleDeclarationOrigin,
+        value: &'a CustomPropertyCascadeValue,
+    ) -> Self {
+        Self {
+            name,
+            origin,
+            value,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn name(self) -> &'a CustomPropertyName {
+        self.name
+    }
+
+    #[must_use]
+    pub(crate) const fn origin(self) -> RuleDeclarationOrigin {
+        self.origin
+    }
+
+    #[must_use]
+    pub(crate) const fn value(self) -> &'a CustomPropertyCascadeValue {
+        self.value
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -401,8 +467,10 @@ impl Sheet {
                     }
                 }
                 RuleDeclarations::Authored(declarations) => {
-                    for (property, _) in declarations.iter() {
-                        change.invalidation.include_property(property);
+                    for item in declarations.iter() {
+                        if let AuthoredDeclarationItem::Property(property, _) = item {
+                            change.invalidation.include_property(*property);
+                        }
                     }
                 }
             }

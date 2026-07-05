@@ -1,9 +1,10 @@
 use surgeist_style::{
     AnimationNameList, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue,
-    AuthoredTokens, Color, CssPx, CssWideKeyword, CustomPropertyName, Declarations,
-    DimensionLength, DurationSeconds, FontFamilyList, GridTrackList, LayerOrder, Length, Opacity,
-    Property, RulePrecedence, SourceOrder, TypedDeclaration, Value, VariableDependentValue,
-    VariableExpression, VariableFallback, VariableReference,
+    AuthoredTokens, Color, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
+    CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
+    GridTrackList, LayerOrder, Length, Opacity, Property, RulePrecedence, SourceOrder,
+    TypedDeclaration, Value, VariableDependentValue, VariableExpression, VariableFallback,
+    VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -74,11 +75,52 @@ fn main() -> surgeist_style::Result<()> {
     )?;
     assert_eq!(nested_fallback_width.dependencies().len(), 2);
 
+    let mut custom_value = CustomPropertyValue::new(
+        AuthoredTokens::new("var(--brand, var(--fallback-brand, black))"),
+        [VariableReference::new(
+            CustomPropertyName::try_new("--brand")?,
+            Some(VariableFallback::new(
+                AuthoredTokens::new("var(--fallback-brand, black)"),
+                VariableExpression::Reference(VariableReference::new(
+                    CustomPropertyName::try_new("--fallback-brand")?,
+                    Some(VariableFallback::new(
+                        AuthoredTokens::new("black"),
+                        VariableExpression::Value(Value::Color(Color::BLACK)),
+                    )),
+                )),
+            )),
+        )],
+    );
+    assert_eq!(custom_value.references()[0].name().as_str(), "--brand");
+    assert_eq!(custom_value.dependencies().len(), 2);
+    custom_value.try_push_typed_value(CustomPropertyTypedValue::try_new(
+        Property::Color,
+        VariableExpression::Reference(VariableReference::new(
+            CustomPropertyName::try_new("--brand")?,
+            Some(VariableFallback::new(
+                AuthoredTokens::new("black"),
+                VariableExpression::Value(Value::Color(Color::BLACK)),
+            )),
+        )),
+    )?)?;
+    assert!(custom_value.typed_value(Property::Color).is_some());
+
+    let literal_custom_value = CustomPropertyValue::new(AuthoredTokens::new("8px"), [])
+        .try_with_typed_value(
+            Property::Width,
+            VariableExpression::Value(Value::Length(Length::px(8.0))),
+        )?;
+    assert_eq!(literal_custom_value.authored().as_css(), "8px");
+
     let mut authored = AuthoredDeclarations::new();
     authored.push(AuthoredDeclaration::css_wide(
         AuthoredProperty::All,
         CssWideKeyword::Initial,
     ));
+    authored.try_push(AuthoredDeclaration::try_new(
+        AuthoredProperty::Custom(CustomPropertyName::try_new("--brand")?),
+        AuthoredValue::CustomProperty(custom_value),
+    )?)?;
     authored.try_push(AuthoredDeclaration::try_new(
         AuthoredProperty::Property(Property::Color),
         AuthoredValue::Value(Value::Color(Color::BLACK)),

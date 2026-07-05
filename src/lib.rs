@@ -27,8 +27,8 @@ pub use authored::{
 pub use calc::{CalcLength, CalcLengthTerm, CalcOperator};
 pub use condition::{Condition, Container, Viewport};
 pub use custom::{
-    AuthoredTokens, CustomPropertyName, VariableDependentValue, VariableExpression,
-    VariableFallback, VariableReference,
+    AuthoredTokens, CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue,
+    VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
 };
 pub use declaration::{Declaration, Declarations, Fingerprint, TypedDeclaration};
 pub use error::{Error, ErrorCode, Result};

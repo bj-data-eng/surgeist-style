@@ -9,6 +9,7 @@ use super::{
     Value, Version, Viewport, Visibility, declaration::hash_value,
 };
 use crate::{
+    Error, ErrorCode,
     authored::AuthoredCascadeValue,
     sheet::{RuleDeclarationOrigin, RuleDeclarationValue},
 };
@@ -474,6 +475,12 @@ impl RuleCandidate {
                 }
                 AuthoredCascadeValue::CssWideKeyword(keyword) => {
                     RuleCandidateValue::CssWideKeyword(*keyword)
+                }
+                AuthoredCascadeValue::VariableDependent(_) => {
+                    return Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "variable-dependent authored values are resolved in a later custom property phase",
+                    ));
                 }
             },
         };
