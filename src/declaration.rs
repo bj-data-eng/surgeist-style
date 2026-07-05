@@ -8,10 +8,11 @@ use super::{
     Cursor, DimensionLength, Display, DurationSeconds, Edges, Flex, FlexFactor, Font,
     FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
     GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
-    GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, MaxTrackSizing,
-    MinTrackSizing, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents,
-    Property, Result, ScrollbarWidth, Shadow, Size, SubgridLineNameComponent, TextSlant,
-    TrackRepeatCount, TrackSizing, Transform, Value, Visibility, ZIndex,
+    GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
+    MaxTrackSizing, MinTrackSizing, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment,
+    PointerEvents, Property, Result, ScrollbarWidth, Shadow, Size, SubgridLineNameComponent,
+    TextAlignLast, TextIndent, TextSlant, TextTransform, TrackRepeatCount, TrackSizing, Transform,
+    Value, VerticalAlign, Visibility, ZIndex,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -342,6 +343,33 @@ impl Declarations {
 
     pub fn try_font(self, font: Font) -> Result<Self> {
         self.try_set(Property::Font, Value::Font(font))
+    }
+
+    #[must_use]
+    pub fn text_align_last(self, value: TextAlignLast) -> Self {
+        self.set(Property::TextAlignLast, Value::TextAlignLast(value))
+    }
+
+    pub fn try_text_indent(self, value: TextIndent) -> Result<Self> {
+        self.try_set(Property::TextIndent, Value::TextIndent(value))
+    }
+
+    #[must_use]
+    pub fn vertical_align(self, value: VerticalAlign) -> Self {
+        self.set(Property::VerticalAlign, Value::VerticalAlign(value))
+    }
+
+    pub fn try_vertical_align(self, value: VerticalAlign) -> Result<Self> {
+        self.try_set(Property::VerticalAlign, Value::VerticalAlign(value))
+    }
+
+    pub fn try_letter_spacing(self, value: LetterSpacing) -> Result<Self> {
+        self.try_set(Property::LetterSpacing, Value::LetterSpacing(value))
+    }
+
+    #[must_use]
+    pub fn text_transform(self, value: TextTransform) -> Self {
+        self.set(Property::TextTransform, Value::TextTransform(value))
     }
 
     #[must_use]
@@ -1187,6 +1215,28 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             32u8.hash(state);
             value.hash(state);
         }
+        Value::TextAlignLast(value) => {
+            56u8.hash(state);
+            value.hash(state);
+        }
+        Value::TextIndent(value) => {
+            57u8.hash(state);
+            hash_length(value.length(), state);
+            value.hanging().hash(state);
+            value.each_line().hash(state);
+        }
+        Value::VerticalAlign(value) => {
+            58u8.hash(state);
+            hash_vertical_align(value, state);
+        }
+        Value::LetterSpacing(value) => {
+            59u8.hash(state);
+            hash_letter_spacing(value, state);
+        }
+        Value::TextTransform(value) => {
+            60u8.hash(state);
+            value.hash(state);
+        }
         Value::WritingMode(value) => {
             33u8.hash(state);
             value.hash(state);
@@ -1407,6 +1457,33 @@ fn hash_flex(value: &Flex, state: &mut DefaultHasher) {
             } else {
                 false.hash(state);
             }
+        }
+    }
+}
+
+fn hash_vertical_align(value: &VerticalAlign, state: &mut DefaultHasher) {
+    match value {
+        VerticalAlign::Baseline => 0u8.hash(state),
+        VerticalAlign::Sub => 1u8.hash(state),
+        VerticalAlign::Super => 2u8.hash(state),
+        VerticalAlign::TextTop => 3u8.hash(state),
+        VerticalAlign::TextBottom => 4u8.hash(state),
+        VerticalAlign::Middle => 5u8.hash(state),
+        VerticalAlign::Top => 6u8.hash(state),
+        VerticalAlign::Bottom => 7u8.hash(state),
+        VerticalAlign::Length(length) => {
+            8u8.hash(state);
+            hash_length(length.length(), state);
+        }
+    }
+}
+
+fn hash_letter_spacing(value: &LetterSpacing, state: &mut DefaultHasher) {
+    match value {
+        LetterSpacing::Normal => 0u8.hash(state),
+        LetterSpacing::Length(length) => {
+            1u8.hash(state);
+            hash_length(length.length(), state);
         }
     }
 }
@@ -1711,7 +1788,8 @@ mod tests {
     use crate::{
         AlignItems, BoxSizing, CalcLength, CalcLengthTerm, ErrorCode, Font, FontFeature,
         FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
-        FontWeight, FontWeightNumber, GridFlowTolerance,
+        FontWeight, FontWeightNumber, GridFlowTolerance, LetterSpacing, TextAlignLast, TextIndent,
+        TextTransform, VerticalAlign,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -1742,6 +1820,61 @@ mod tests {
         assert_ne!(
             value_hash(&Value::Length(Length::Calc(calc_a))),
             value_hash(&Value::Length(Length::Calc(calc_b)))
+        );
+    }
+
+    #[test]
+    fn inline_text_properties_accept_typed_values() {
+        let declarations = Declarations::new()
+            .text_align_last(TextAlignLast::Justify)
+            .try_text_indent(TextIndent::new(Length::Percent(12.5), true, false).unwrap())
+            .unwrap()
+            .try_vertical_align(VerticalAlign::try_length(Length::Px(-2.0)).unwrap())
+            .unwrap()
+            .try_letter_spacing(LetterSpacing::try_length(Length::Px(1.5)).unwrap())
+            .unwrap()
+            .text_transform(TextTransform::Uppercase);
+
+        assert_eq!(
+            declarations.get(Property::TextAlignLast),
+            Some(&Value::TextAlignLast(TextAlignLast::Justify))
+        );
+        assert_eq!(
+            declarations.get(Property::TextIndent),
+            Some(&Value::TextIndent(
+                TextIndent::new(Length::Percent(12.5), true, false).unwrap()
+            ))
+        );
+        assert_eq!(
+            declarations.get(Property::VerticalAlign),
+            Some(&Value::VerticalAlign(
+                VerticalAlign::try_length(Length::Px(-2.0)).unwrap()
+            ))
+        );
+        assert_eq!(
+            declarations.get(Property::LetterSpacing),
+            Some(&Value::LetterSpacing(
+                LetterSpacing::try_length(Length::Px(1.5)).unwrap()
+            ))
+        );
+        assert_eq!(
+            declarations.get(Property::TextTransform),
+            Some(&Value::TextTransform(TextTransform::Uppercase))
+        );
+    }
+
+    #[test]
+    fn inline_text_values_validate_length_domains() {
+        assert!(TextIndent::new(Length::Auto, false, false).is_err());
+        assert!(VerticalAlign::try_length(Length::Auto).is_err());
+        assert!(LetterSpacing::try_length(Length::Percent(10.0)).is_err());
+        assert!(LetterSpacing::try_length(Length::Normal).is_err());
+        assert!(
+            LetterSpacing::try_length(Length::Calc(CalcLength::sum(
+                CalcLengthTerm::add(CalcLength::percent(50.0)),
+                [CalcLengthTerm::add(CalcLength::px(1.0))]
+            )))
+            .is_err()
         );
     }
 

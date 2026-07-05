@@ -61,11 +61,12 @@ pub use value::{
     FontStretch, FontVariant, FontWeight, FontWeightNumber, GridAreaPlacement, GridAutoFlow,
     GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate, GridTemplateAreaRow,
     GridTemplateAreas, GridTrackComponent, GridTrackList, Keyword, LayoutPosition, Length,
-    LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Order, Overflow, OverflowAxes,
-    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, ScrollbarWidth,
-    Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign, SubgridLineNameComponent,
-    SubgridLineNameRepeatCount, SubgridTrack, TextSlant, TextValue, TextWeight, TextWrap,
-    TrackRepeat, TrackRepeatCount, TrackSizing, Transform, TransformOp, Value, Visibility,
+    LetterSpacing, LetterSpacingLength, LineStyle, MaxTrackSizing, MinTrackSizing, Opacity, Order,
+    Overflow, OverflowAxes, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
+    PointerEvents, ScrollbarWidth, Shadow, SideSet, Size, Stroke, StrokeAlign, StyleTextAlign,
+    SubgridLineNameComponent, SubgridLineNameRepeatCount, SubgridTrack, TextAlignLast, TextIndent,
+    TextSlant, TextTransform, TextValue, TextWeight, TextWrap, TrackRepeat, TrackRepeatCount,
+    TrackSizing, Transform, TransformOp, Value, VerticalAlign, VerticalAlignLength, Visibility,
     WhiteSpace, WordBreak, WritingMode, ZIndex,
 };
 

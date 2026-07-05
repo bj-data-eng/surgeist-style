@@ -2,9 +2,10 @@ use super::{
     AlignContent, AlignItems, AnimationNameList, AspectRatio, BoxSizing, CalcLength, CalcOperator,
     Clear, Color, ContentVisibility, Corners, Direction, Edges, Error, ErrorCode, Flex,
     FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, Order,
-    Overflow, PlaceContentAlignment, PlaceItemsAlignment, Result, ScrollbarWidth, StyleTextAlign,
-    TextSlant, Value, Visibility, WritingMode, ZIndex,
+    FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
+    Order, Overflow, PlaceContentAlignment, PlaceItemsAlignment, Result, ScrollbarWidth,
+    StyleTextAlign, TextAlignLast, TextIndent, TextSlant, TextTransform, Value, VerticalAlign,
+    Visibility, WritingMode, ZIndex,
     value::{validate_font_size_length, validate_line_height_length},
 };
 
@@ -47,6 +48,11 @@ pub enum Property {
     Direction,
     WritingMode,
     TextAlign,
+    TextAlignLast,
+    TextIndent,
+    VerticalAlign,
+    LetterSpacing,
+    TextTransform,
     Float,
     Clear,
     FlexDirection,
@@ -170,6 +176,11 @@ impl Property {
         Self::Direction,
         Self::WritingMode,
         Self::TextAlign,
+        Self::TextAlignLast,
+        Self::TextIndent,
+        Self::VerticalAlign,
+        Self::LetterSpacing,
+        Self::TextTransform,
         Self::Float,
         Self::Clear,
         Self::FlexDirection,
@@ -520,6 +531,22 @@ impl Property {
             Self::TextAlign => Metadata::new(Value::TextAlign(StyleTextAlign::default()))
                 .inherited(true)
                 .impact(Impact::empty().layout()),
+            Self::TextAlignLast => Metadata::new(Value::TextAlignLast(TextAlignLast::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
+            Self::TextIndent => Metadata::new(Value::TextIndent(TextIndent::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout())
+                .interpolation(Interpolation::Length),
+            Self::VerticalAlign => Metadata::new(Value::VerticalAlign(VerticalAlign::default()))
+                .impact(Impact::empty().text().layout()),
+            Self::LetterSpacing => Metadata::new(Value::LetterSpacing(LetterSpacing::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout())
+                .interpolation(Interpolation::Length),
+            Self::TextTransform => Metadata::new(Value::TextTransform(TextTransform::default()))
+                .inherited(true)
+                .impact(Impact::empty().text().layout()),
             Self::Float => {
                 Metadata::new(Value::Float(Float::default())).impact(Impact::empty().layout())
             }
@@ -597,6 +624,11 @@ impl Property {
             Self::Direction => matches!(value, Value::Direction(_)),
             Self::WritingMode => matches!(value, Value::WritingMode(_)),
             Self::TextAlign => matches!(value, Value::TextAlign(_)),
+            Self::TextAlignLast => matches!(value, Value::TextAlignLast(_)),
+            Self::TextIndent => matches!(value, Value::TextIndent(_)),
+            Self::VerticalAlign => matches!(value, Value::VerticalAlign(_)),
+            Self::LetterSpacing => matches!(value, Value::LetterSpacing(_)),
+            Self::TextTransform => matches!(value, Value::TextTransform(_)),
             Self::Float => matches!(value, Value::Float(_)),
             Self::Clear => matches!(value, Value::Clear(_)),
             Self::FlexDirection => matches!(value, Value::FlexDirection(_)),
@@ -944,6 +976,11 @@ fn value_kind(value: &Value) -> &'static str {
         Value::Float(_) => "float",
         Value::Clear(_) => "clear",
         Value::TextAlign(_) => "text align",
+        Value::TextAlignLast(_) => "text align last",
+        Value::TextIndent(_) => "text indent",
+        Value::VerticalAlign(_) => "vertical align",
+        Value::LetterSpacing(_) => "letter spacing",
+        Value::TextTransform(_) => "text transform",
         Value::WritingMode(_) => "writing mode",
         Value::FlexDirection(_) => "flex direction",
         Value::FlexWrap(_) => "flex wrap",

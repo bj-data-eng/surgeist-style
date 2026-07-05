@@ -839,6 +839,11 @@ pub enum Value {
     Float(Float),
     Clear(Clear),
     TextAlign(StyleTextAlign),
+    TextAlignLast(TextAlignLast),
+    TextIndent(TextIndent),
+    VerticalAlign(VerticalAlign),
+    LetterSpacing(LetterSpacing),
+    TextTransform(TextTransform),
     WritingMode(WritingMode),
     FlexDirection(FlexDirection),
     FlexWrap(FlexWrap),
@@ -895,6 +900,9 @@ impl Value {
             Self::FlexFactor(_) | Self::AspectRatio(_) | Self::FontWeight(_) => {
                 Interpolation::Number
             }
+            Self::TextIndent(_) | Self::VerticalAlign(_) | Self::LetterSpacing(_) => {
+                Interpolation::Length
+            }
             Self::Keyword(_)
             | Self::Display(_)
             | Self::BoxSizing(_)
@@ -910,6 +918,8 @@ impl Value {
             | Self::Float(_)
             | Self::Clear(_)
             | Self::TextAlign(_)
+            | Self::TextAlignLast(_)
+            | Self::TextTransform(_)
             | Self::WritingMode(_)
             | Self::FlexDirection(_)
             | Self::FlexWrap(_)
@@ -957,6 +967,8 @@ impl Value {
             | Self::Float(_)
             | Self::Clear(_)
             | Self::TextAlign(_)
+            | Self::TextAlignLast(_)
+            | Self::TextTransform(_)
             | Self::WritingMode(_)
             | Self::FlexDirection(_)
             | Self::FlexWrap(_)
@@ -968,6 +980,9 @@ impl Value {
             Self::FlexFactor(value) => value.validate(),
             Self::Flex(value) => value.validate(),
             Self::AspectRatio(value) => value.validate(),
+            Self::TextIndent(value) => validate_text_length(value.length(), "text-indent"),
+            Self::VerticalAlign(value) => value.validate(),
+            Self::LetterSpacing(value) => value.validate(),
             Self::Length(value) => value.validate(),
             Self::Size(value) => value.validate(),
             Self::Edges(value) => value.validate(),
@@ -998,6 +1013,39 @@ impl Value {
             Self::Cursor(_) | Self::PointerEvents(_) => Ok(()),
             Self::Visibility(_) => Ok(()),
         }
+    }
+}
+
+fn validate_text_length(length: &Length, property_name: &str) -> Result<()> {
+    match length {
+        Length::Px(_) | Length::Percent(_) | Length::Calc(_) => length.validate(),
+        Length::Auto
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{property_name} accepts only text length values"),
+        )),
+    }
+}
+
+fn validate_letter_spacing_length(length: &Length) -> Result<()> {
+    match length {
+        Length::Px(_) => length.validate(),
+        Length::Calc(calc) if !calc.uses_percentage() => length.validate(),
+        Length::Percent(_)
+        | Length::Calc(_)
+        | Length::Auto
+        | Length::Normal
+        | Length::Fill
+        | Length::Fit
+        | Length::MinContent
+        | Length::MaxContent => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "letter-spacing accepts only non-percentage length values",
+        )),
     }
 }
 
@@ -1097,6 +1145,154 @@ pub enum StyleTextAlign {
     LegacyLeft,
     LegacyRight,
     LegacyCenter,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TextAlignLast {
+    #[default]
+    Auto,
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextIndent {
+    length: Length,
+    hanging: bool,
+    each_line: bool,
+}
+
+impl TextIndent {
+    pub fn new(length: Length, hanging: bool, each_line: bool) -> Result<Self> {
+        validate_text_length(&length, "text-indent")?;
+        Ok(Self {
+            length,
+            hanging,
+            each_line,
+        })
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &Length {
+        &self.length
+    }
+
+    #[must_use]
+    pub const fn hanging(&self) -> bool {
+        self.hanging
+    }
+
+    #[must_use]
+    pub const fn each_line(&self) -> bool {
+        self.each_line
+    }
+}
+
+impl Default for TextIndent {
+    fn default() -> Self {
+        Self {
+            length: Length::ZERO,
+            hanging: false,
+            each_line: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum VerticalAlign {
+    #[default]
+    Baseline,
+    Sub,
+    Super,
+    TextTop,
+    TextBottom,
+    Middle,
+    Top,
+    Bottom,
+    Length(VerticalAlignLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VerticalAlignLength(Length);
+
+impl VerticalAlignLength {
+    pub fn new(length: Length) -> Result<Self> {
+        validate_text_length(&length, "vertical-align")?;
+        Ok(Self(length))
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &Length {
+        &self.0
+    }
+}
+
+impl VerticalAlign {
+    pub fn try_length(length: Length) -> Result<Self> {
+        Ok(Self::Length(VerticalAlignLength::new(length)?))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Length(length) => validate_text_length(length.length(), "vertical-align"),
+            Self::Baseline
+            | Self::Sub
+            | Self::Super
+            | Self::TextTop
+            | Self::TextBottom
+            | Self::Middle
+            | Self::Top
+            | Self::Bottom => Ok(()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum LetterSpacing {
+    #[default]
+    Normal,
+    Length(LetterSpacingLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LetterSpacingLength(Length);
+
+impl LetterSpacingLength {
+    pub fn new(length: Length) -> Result<Self> {
+        validate_letter_spacing_length(&length)?;
+        Ok(Self(length))
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &Length {
+        &self.0
+    }
+}
+
+impl LetterSpacing {
+    pub fn try_length(length: Length) -> Result<Self> {
+        Ok(Self::Length(LetterSpacingLength::new(length)?))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Normal => Ok(()),
+            Self::Length(length) => validate_letter_spacing_length(length.length()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TextTransform {
+    #[default]
+    None,
+    Capitalize,
+    Uppercase,
+    Lowercase,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

@@ -6,14 +6,15 @@ use surgeist_style::{
     CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
     DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
     FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
-    LayerOrder, LayoutPosition, Length, Node, NthPattern, NthSelector, Opacity, Order,
-    PlaceContentAlignment, PlaceItemsAlignment, Property, PseudoClassSelector, PseudoElement,
-    RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
+    LayerOrder, LayoutPosition, Length, LetterSpacing, LetterSpacingLength, Node, NthPattern,
+    NthSelector, Opacity, Order, PlaceContentAlignment, PlaceItemsAlignment, Property,
+    PseudoClassSelector, PseudoElement, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
     RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
     StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleRole, StyleState, StyleTag,
-    TextSlant, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
-    VariableExpression, VariableFallback, VariableReference, ZIndex,
+    TextAlignLast, TextIndent, TextSlant, TextTransform, Traversal, Tree, TypedDeclaration, Value,
+    VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
+    VerticalAlignLength, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -66,6 +67,22 @@ fn main() -> surgeist_style::Result<()> {
         .try_font_feature_settings(font_features)?
         .try_font(font)?;
     assert_eq!(declarations.len(), 8);
+
+    let text_indent = TextIndent::new(Length::Percent(10.0), true, false)?;
+    assert_eq!(text_indent.length(), &Length::Percent(10.0));
+    assert!(text_indent.hanging());
+    assert!(!text_indent.each_line());
+    let vertical_align_length = VerticalAlignLength::new(Length::Px(-1.0))?;
+    assert_eq!(vertical_align_length.length(), &Length::Px(-1.0));
+    let letter_spacing_length = LetterSpacingLength::new(Length::Px(0.5))?;
+    assert_eq!(letter_spacing_length.length(), &Length::Px(0.5));
+    let declarations = Declarations::new()
+        .text_align_last(TextAlignLast::End)
+        .try_text_indent(text_indent)?
+        .try_vertical_align(VerticalAlign::Length(vertical_align_length))?
+        .try_letter_spacing(LetterSpacing::Length(letter_spacing_length))?
+        .text_transform(TextTransform::Lowercase);
+    assert_eq!(declarations.len(), 5);
 
     let declarations = Declarations::new()
         .try_inset_top(Length::Auto)?

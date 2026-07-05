@@ -6,10 +6,10 @@ use std::{
 use super::{
     AlignContent, AspectRatio, Condition, Container, ContentVisibility, Corners, CssWideKeyword,
     Cursor, Declarations, Display, Edges, FlexFactor, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, Order, PointerEvents, Property,
-    Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket,
-    TextSlant, Transform, Traversal, Tree, Value, Version, Viewport, Visibility, ZIndex,
-    declaration::hash_value,
+    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
+    PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet,
+    Size, StyleBucket, TextAlignLast, TextIndent, TextSlant, TextTransform, Transform, Traversal,
+    Tree, Value, Version, VerticalAlign, Viewport, Visibility, ZIndex, declaration::hash_value,
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -211,6 +211,46 @@ impl Resolved {
         match self.get(Property::FontFeatureSettings) {
             Value::FontFeatureSettings(value) => value,
             _ => unreachable!("resolved font-feature-settings stores feature settings"),
+        }
+    }
+
+    #[must_use]
+    pub fn text_align_last(&self) -> TextAlignLast {
+        match self.get(Property::TextAlignLast) {
+            Value::TextAlignLast(value) => *value,
+            _ => TextAlignLast::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn text_indent(&self) -> TextIndent {
+        match self.get(Property::TextIndent) {
+            Value::TextIndent(value) => value.clone(),
+            _ => TextIndent::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn vertical_align(&self) -> VerticalAlign {
+        match self.get(Property::VerticalAlign) {
+            Value::VerticalAlign(value) => value.clone(),
+            _ => VerticalAlign::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn letter_spacing(&self) -> LetterSpacing {
+        match self.get(Property::LetterSpacing) {
+            Value::LetterSpacing(value) => value.clone(),
+            _ => LetterSpacing::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn text_transform(&self) -> TextTransform {
+        match self.get(Property::TextTransform) {
+            Value::TextTransform(value) => *value,
+            _ => TextTransform::default(),
         }
     }
 
@@ -1312,11 +1352,11 @@ mod tests {
         AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
         CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, Flex,
         FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
-        FontStretch, FontVariant, FontWeight, LayerOrder, LayoutPosition, Node, Order,
-        PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth, Selector,
+        FontStretch, FontVariant, FontWeight, LayerOrder, LayoutPosition, LetterSpacing, Node,
+        Order, PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth, Selector,
         SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState, StyleTag,
-        TextSlant, VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
-        ZIndex,
+        TextAlignLast, TextIndent, TextSlant, TextTransform, VariableDependentValue,
+        VariableExpression, VariableFallback, VariableReference, VerticalAlign, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1611,6 +1651,30 @@ mod tests {
         assert_eq!(style.font_stretch(), FontStretch::Expanded);
         assert_eq!(style.font_variant(), FontVariant::SmallCaps);
         assert_eq!(style.font_feature_settings(), &features);
+    }
+
+    #[test]
+    fn resolved_inline_text_getters_return_typed_values() {
+        let indent = TextIndent::new(Length::Px(8.0), false, true).unwrap();
+        let style = resolve_single(
+            Declarations::new()
+                .text_align_last(TextAlignLast::Center)
+                .try_text_indent(indent.clone())
+                .unwrap()
+                .vertical_align(VerticalAlign::Middle)
+                .try_letter_spacing(LetterSpacing::try_length(Length::Px(1.0)).unwrap())
+                .unwrap()
+                .text_transform(TextTransform::Capitalize),
+        );
+
+        assert_eq!(style.text_align_last(), TextAlignLast::Center);
+        assert_eq!(style.text_indent(), indent);
+        assert_eq!(style.vertical_align(), VerticalAlign::Middle);
+        assert_eq!(
+            style.letter_spacing(),
+            LetterSpacing::try_length(Length::Px(1.0)).unwrap()
+        );
+        assert_eq!(style.text_transform(), TextTransform::Capitalize);
     }
 
     #[test]
