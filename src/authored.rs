@@ -464,6 +464,78 @@ mod tests {
     }
 
     #[test]
+    fn new_layout_shorthands_expand_css_wide_keywords_to_canonical_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Flex),
+            CssWideKeyword::RevertLayer,
+        ));
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::PlaceContent),
+            CssWideKeyword::Unset,
+        ));
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Margin),
+            CssWideKeyword::Initial,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+        assert_eq!(canonical.get(Property::Flex), None);
+        assert_eq!(
+            canonical.get(Property::FlexGrow),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::RevertLayer
+            ))
+        );
+        assert_eq!(
+            canonical.get(Property::FlexShrink),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::RevertLayer
+            ))
+        );
+        assert_eq!(
+            canonical.get(Property::FlexBasis),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::RevertLayer
+            ))
+        );
+        assert_eq!(canonical.get(Property::PlaceContent), None);
+        assert_eq!(
+            canonical.get(Property::AlignContent),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(
+            canonical.get(Property::JustifyContent),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(canonical.get(Property::Margin), None);
+        assert_eq!(
+            canonical.get(Property::MarginTop),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::Initial
+            ))
+        );
+        assert_eq!(
+            canonical.get(Property::MarginRight),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::Initial
+            ))
+        );
+        assert_eq!(
+            canonical.get(Property::MarginBottom),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::Initial
+            ))
+        );
+        assert_eq!(
+            canonical.get(Property::MarginLeft),
+            Some(&AuthoredCascadeValue::CssWideKeyword(
+                CssWideKeyword::Initial
+            ))
+        );
+    }
+
+    #[test]
     fn revert_layer_expands_without_entering_legacy_value_model() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(

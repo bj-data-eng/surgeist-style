@@ -1253,10 +1253,11 @@ mod tests {
     use crate::{
         AspectRatio, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
         AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
-        CustomPropertyName, CustomPropertyValue, Error, ErrorCode, LayerOrder, LayoutPosition,
-        Node, Order, RulePrecedence, RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity,
-        SourceOrder, StyleBucket, StyleClass, StyleRole, StyleState, StyleTag,
-        VariableDependentValue, VariableExpression, VariableFallback, VariableReference, ZIndex,
+        CustomPropertyName, CustomPropertyValue, Error, ErrorCode, Flex, LayerOrder,
+        LayoutPosition, Node, Order, PlaceContentAlignment, RulePrecedence, RuleTarget,
+        ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass,
+        StyleRole, StyleState, StyleTag, VariableDependentValue, VariableExpression,
+        VariableFallback, VariableReference, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1474,6 +1475,45 @@ mod tests {
         assert_eq!(style.content_visibility(), ContentVisibility::Hidden);
         assert_eq!(style.order(), Order::new(-1));
         assert_eq!(style.aspect_ratio(), AspectRatio::ratio(2.0).unwrap());
+    }
+
+    #[test]
+    fn layout_operation_eight_values_resolve_together() {
+        let style = resolve_single(
+            Declarations::new()
+                .display(Display::Grid)
+                .position(LayoutPosition::Fixed)
+                .try_inset(Edges::all(Length::Px(3.0)))
+                .unwrap()
+                .try_margin_left(Length::Px(-2.0))
+                .unwrap()
+                .try_padding(Edges::all(Length::Px(4.0)))
+                .unwrap()
+                .try_border_width(Edges::all(Length::Px(1.0)))
+                .unwrap()
+                .z_index(ZIndex::integer(7))
+                .scrollbar_width(ScrollbarWidth::Thin)
+                .content_visibility(ContentVisibility::Auto)
+                .order(Order::new(5))
+                .try_flex(Flex::auto())
+                .unwrap()
+                .place_content(PlaceContentAlignment::all(AlignContent::Center))
+                .align_tracks(AlignContent::SpaceEvenly),
+        );
+
+        assert_eq!(style.display(), Display::Grid);
+        assert_eq!(style.position(), LayoutPosition::Fixed);
+        assert_eq!(style.inset_edges().left, Length::Px(3.0));
+        assert_eq!(style.margin_edges().left, Length::Px(-2.0));
+        assert_eq!(style.padding_edges().right, Length::Px(4.0));
+        assert_eq!(style.border_width_edges().top, Length::Px(1.0));
+        assert_eq!(style.z_index(), ZIndex::integer(7));
+        assert_eq!(style.scrollbar_width(), ScrollbarWidth::Thin);
+        assert_eq!(style.content_visibility(), ContentVisibility::Auto);
+        assert_eq!(style.order(), Order::new(5));
+        assert_eq!(style.flex_grow(), FlexFactor::one());
+        assert_eq!(style.flex_shrink(), FlexFactor::one());
+        assert_eq!(style.align_tracks(), AlignContent::SpaceEvenly);
     }
 
     #[test]
