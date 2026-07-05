@@ -314,6 +314,62 @@ impl VariableDependentValue {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CustomPropertyDependencies {
+    names: BTreeSet<CustomPropertyName>,
+}
+
+impl CustomPropertyDependencies {
+    #[must_use]
+    pub fn new(names: impl IntoIterator<Item = CustomPropertyName>) -> Self {
+        Self {
+            names: names.into_iter().collect(),
+        }
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &CustomPropertyName> {
+        self.names.iter()
+    }
+
+    pub(crate) fn insert(&mut self, name: CustomPropertyName) {
+        self.names.insert(name);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CustomPropertyResolution {
+    value: Option<CustomPropertyValue>,
+    invalid: bool,
+}
+
+impl CustomPropertyResolution {
+    #[must_use]
+    pub(crate) fn valid(value: CustomPropertyValue) -> Self {
+        Self {
+            value: Some(value),
+            invalid: false,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn invalid() -> Self {
+        Self {
+            value: None,
+            invalid: true,
+        }
+    }
+
+    #[must_use]
+    pub fn value(&self) -> Option<&CustomPropertyValue> {
+        self.value.as_ref()
+    }
+
+    #[must_use]
+    pub const fn is_invalid(&self) -> bool {
+        self.invalid
+    }
+}
+
 fn is_custom_property_suffix_char(value: char) -> bool {
     value.is_alphanumeric() || value == '-' || value == '_'
 }
