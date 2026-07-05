@@ -248,8 +248,11 @@ impl Resolved {
             name.hash(&mut hasher);
             hash_custom_property_resolution(resolution, &mut hasher);
         }
-        for name in self.custom_property_dependencies.names() {
-            name.hash(&mut hasher);
+        for property in Property::ALL {
+            for name in self.custom_property_dependencies.for_property(*property) {
+                property.hash(&mut hasher);
+                name.hash(&mut hasher);
+            }
         }
         hasher.finish()
     }
@@ -919,7 +922,7 @@ impl<'a, 'dependencies> RuleEvaluator<'a, 'dependencies> {
                 Some(self.resolve_css_wide_keyword(property, *keyword, Some(candidate_index)))
             }
             VariableExpression::Reference(reference) => {
-                self.dependencies.insert(reference.name().clone());
+                self.dependencies.insert(property, reference.name().clone());
                 if variable_stack.iter().any(|name| name == reference.name()) {
                     return self.evaluate_variable_fallback(
                         property,
@@ -1216,10 +1219,10 @@ mod tests {
         push_authored(sheet, custom_color_declarations(name, color), precedence);
     }
 
-    fn dependency_names(resolved: &Resolved) -> Vec<String> {
+    fn dependency_names_for_property(resolved: &Resolved, property: Property) -> Vec<String> {
         resolved
             .custom_property_dependencies()
-            .names()
+            .for_property(property)
             .map(|name| name.as_str().to_owned())
             .collect()
     }
@@ -1628,7 +1631,17 @@ mod tests {
         let resolved = resolve_child(sheet, None);
 
         assert_eq!(resolved.text_color(), Color::BLACK);
-        assert_eq!(dependency_names(&resolved), ["--brand"]);
+        assert_eq!(
+            dependency_names_for_property(&resolved, Property::Color),
+            ["--brand"]
+        );
+        assert_eq!(
+            resolved
+                .custom_property_dependencies()
+                .properties_for_custom_property(&custom_name("--brand"))
+                .collect::<Vec<_>>(),
+            [Property::Color]
+        );
     }
 
     #[test]
@@ -1663,7 +1676,10 @@ mod tests {
         let resolved = resolve_child(sheet, None);
 
         assert_eq!(resolved.text_color(), Color::TRANSPARENT);
-        assert_eq!(dependency_names(&resolved), ["--brand", "--fallback"]);
+        assert_eq!(
+            dependency_names_for_property(&resolved, Property::Color),
+            ["--brand", "--fallback"]
+        );
     }
 
     #[test]
@@ -1690,7 +1706,10 @@ mod tests {
         let resolved = resolve_child(sheet, None);
 
         assert_eq!(resolved.text_color(), Color::TRANSPARENT);
-        assert_eq!(dependency_names(&resolved), ["--brand", "--fallback"]);
+        assert_eq!(
+            dependency_names_for_property(&resolved, Property::Color),
+            ["--brand", "--fallback"]
+        );
     }
 
     #[test]

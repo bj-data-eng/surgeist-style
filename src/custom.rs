@@ -316,23 +316,30 @@ impl VariableDependentValue {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CustomPropertyDependencies {
-    names: BTreeSet<CustomPropertyName>,
+    by_property: BTreeMap<Property, BTreeSet<CustomPropertyName>>,
 }
 
 impl CustomPropertyDependencies {
+    pub fn for_property(&self, property: Property) -> impl Iterator<Item = &CustomPropertyName> {
+        self.by_property.get(&property).into_iter().flatten()
+    }
+
+    pub fn properties_for_custom_property<'a>(
+        &'a self,
+        name: &'a CustomPropertyName,
+    ) -> impl Iterator<Item = Property> + 'a {
+        self.by_property
+            .iter()
+            .filter_map(move |(property, names)| names.contains(name).then_some(*property))
+    }
+
     #[must_use]
-    pub fn new(names: impl IntoIterator<Item = CustomPropertyName>) -> Self {
-        Self {
-            names: names.into_iter().collect(),
-        }
+    pub fn is_empty(&self) -> bool {
+        self.by_property.is_empty()
     }
 
-    pub fn names(&self) -> impl Iterator<Item = &CustomPropertyName> {
-        self.names.iter()
-    }
-
-    pub(crate) fn insert(&mut self, name: CustomPropertyName) {
-        self.names.insert(name);
+    pub(crate) fn insert(&mut self, property: Property, name: CustomPropertyName) {
+        self.by_property.entry(property).or_default().insert(name);
     }
 }
 
@@ -702,5 +709,46 @@ mod tests {
         assert_eq!(value.references().len(), 1);
         assert_eq!(value.dependencies().len(), 1);
         assert_eq!(value.dependencies()[0].as_str(), "--shared");
+    }
+
+    #[test]
+    fn custom_property_dependencies_record_names_by_ordinary_property() {
+        let brand = CustomPropertyName::try_new("--brand").unwrap();
+        let space = CustomPropertyName::try_new("--space").unwrap();
+        let mut dependencies = CustomPropertyDependencies::default();
+
+        assert!(dependencies.is_empty());
+
+        dependencies.insert(Property::Color, brand.clone());
+        dependencies.insert(Property::Width, space.clone());
+        dependencies.insert(Property::Color, space.clone());
+
+        assert!(!dependencies.is_empty());
+        assert_eq!(
+            dependencies
+                .for_property(Property::Color)
+                .map(CustomPropertyName::as_str)
+                .collect::<Vec<_>>(),
+            ["--brand", "--space"]
+        );
+        assert_eq!(
+            dependencies
+                .for_property(Property::Width)
+                .map(CustomPropertyName::as_str)
+                .collect::<Vec<_>>(),
+            ["--space"]
+        );
+        assert_eq!(
+            dependencies
+                .properties_for_custom_property(&space)
+                .collect::<Vec<_>>(),
+            [Property::Width, Property::Color]
+        );
+        assert!(
+            dependencies
+                .properties_for_custom_property(&CustomPropertyName::try_new("--unused").unwrap())
+                .next()
+                .is_none()
+        );
     }
 }
