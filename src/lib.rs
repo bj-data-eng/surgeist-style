@@ -7,6 +7,7 @@
 mod authored;
 mod calc;
 mod condition;
+mod custom;
 mod declaration;
 mod error;
 mod identity;
@@ -25,6 +26,7 @@ pub use authored::{
 };
 pub use calc::{CalcLength, CalcLengthTerm, CalcOperator};
 pub use condition::{Condition, Container, Viewport};
+pub use custom::{AuthoredTokens, CustomPropertyName};
 pub use declaration::{Declaration, Declarations, Fingerprint, TypedDeclaration};
 pub use error::{Error, ErrorCode, Result};
 pub use identity::{

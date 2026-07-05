@@ -1,8 +1,8 @@
 use surgeist_style::{
     AnimationNameList, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue,
-    Color, CssPx, CssWideKeyword, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
-    GridTrackList, LayerOrder, Opacity, Property, RulePrecedence, SourceOrder, TypedDeclaration,
-    Value,
+    AuthoredTokens, Color, CssPx, CssWideKeyword, CustomPropertyName, Declarations,
+    DimensionLength, DurationSeconds, FontFamilyList, GridTrackList, LayerOrder, Opacity, Property,
+    RulePrecedence, SourceOrder, TypedDeclaration, Value,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -33,6 +33,11 @@ fn main() -> surgeist_style::Result<()> {
 
     let precedence = RulePrecedence::new(LayerOrder::new(2), SourceOrder::new(8));
     assert_eq!(precedence.layer_order(), LayerOrder::new(2));
+
+    let custom_name = CustomPropertyName::try_new("--brand")?;
+    let authored_tokens = AuthoredTokens::new("var(--brand, #000)");
+    assert_eq!(custom_name.as_str(), "--brand");
+    assert_eq!(authored_tokens.as_css(), "var(--brand, #000)");
 
     let mut authored = AuthoredDeclarations::new();
     authored.push(AuthoredDeclaration::css_wide(
