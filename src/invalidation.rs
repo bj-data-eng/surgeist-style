@@ -56,6 +56,7 @@ pub struct Scope {
     pub node: bool,
     pub siblings: bool,
     pub descendants: bool,
+    pub whole_tree: bool,
 }
 
 impl Scope {
@@ -65,6 +66,7 @@ impl Scope {
             node: false,
             siblings: false,
             descendants: false,
+            whole_tree: false,
         }
     }
 
@@ -80,10 +82,25 @@ impl Scope {
         self.descendants = true;
     }
 
+    pub const fn include_whole_tree(&mut self) {
+        self.whole_tree = true;
+    }
+
     pub const fn include_subtree(&mut self) {
         self.node = true;
         self.descendants = true;
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SelectorFactChange {
+    Tag,
+    Key,
+    Class,
+    Attribute,
+    RuntimeState,
+    Structure,
+    Scope,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -131,6 +148,14 @@ impl Change {
         }
         change
     }
+
+    #[must_use]
+    pub fn from_selector_fact_change(_fact: SelectorFactChange) -> Self {
+        let mut change = Self::empty();
+        change.rematch = true;
+        change.scope.include_whole_tree();
+        change
+    }
 }
 
 #[cfg(test)]
@@ -154,6 +179,7 @@ mod tests {
         assert!(change.scope.node);
         assert!(change.scope.descendants);
         assert!(!change.scope.siblings);
+        assert!(!change.scope.whole_tree);
         assert!(change.invalidation.layout);
         assert!(!change.invalidation.paint);
         assert!(!change.invalidation.text);
@@ -172,6 +198,7 @@ mod tests {
         assert!(change.scope.node);
         assert!(change.scope.descendants);
         assert!(!change.scope.siblings);
+        assert!(!change.scope.whole_tree);
         assert_eq!(change.invalidation, Invalidation::empty());
     }
 
@@ -185,6 +212,43 @@ mod tests {
         assert!(!change.rematch);
         assert!(change.scope.node);
         assert!(change.scope.descendants);
+        assert!(!change.scope.whole_tree);
         assert_eq!(change.invalidation, Invalidation::empty());
+    }
+
+    #[test]
+    fn selector_fact_changes_use_whole_tree_rematch_for_has_and_filtered_structural_safety() {
+        for fact in [
+            SelectorFactChange::Tag,
+            SelectorFactChange::Key,
+            SelectorFactChange::Class,
+            SelectorFactChange::Attribute,
+            SelectorFactChange::RuntimeState,
+            SelectorFactChange::Structure,
+            SelectorFactChange::Scope,
+        ] {
+            let change = Change::from_selector_fact_change(fact);
+
+            assert!(change.rematch);
+            assert!(change.scope.whole_tree);
+            assert_eq!(change.invalidation, Invalidation::empty());
+        }
+    }
+
+    #[test]
+    fn selector_fact_change_rematch_scope_documents_conservative_selector_dependencies() {
+        // A descendant fact change can affect an ancestor selector such as :has(.changed).
+        let ancestor_has_change = Change::from_selector_fact_change(SelectorFactChange::Class);
+        assert!(ancestor_has_change.scope.whole_tree);
+
+        // A following sibling fact change can affect earlier siblings matching :has(+ .changed)
+        // or :has(~ .changed).
+        let sibling_has_change = Change::from_selector_fact_change(SelectorFactChange::Attribute);
+        assert!(sibling_has_change.scope.whole_tree);
+
+        // A selector-list filter in :nth-child(... of .candidate) can reshuffle sibling matches.
+        let structural_filter_change =
+            Change::from_selector_fact_change(SelectorFactChange::Structure);
+        assert!(structural_filter_change.scope.whole_tree);
     }
 }

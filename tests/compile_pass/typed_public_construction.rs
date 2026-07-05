@@ -1,13 +1,14 @@
 use surgeist_style::{
     AnimationNameList, AttributeCaseSensitivity, AttributeMatcher, AttributeSelector,
     AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, AuthoredTokens,
-    Color, Combinator, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
+    Change, Color, Combinator, CssPx, CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue,
     CustomPropertyValue, Declarations, DimensionLength, DurationSeconds, FontFamilyList,
     GridTrackList, LayerOrder, Length, NthPattern, NthSelector, Opacity, Property,
     PseudoClassSelector, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence,
     RuntimePseudoClass, Selector, SelectorList, SelectorListPseudoClass, SelectorSpecificity,
-    SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue, StyleState, TypedDeclaration,
-    Value, VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+    SelectorFactChange, SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue,
+    StyleState, TypedDeclaration, Value, VariableDependentValue, VariableExpression,
+    VariableFallback, VariableReference,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -86,6 +87,10 @@ fn main() -> surgeist_style::Result<()> {
     );
     let state = StyleState::default().with_range_state(Some(RangeState::InRange));
     assert!(state.has_flag(StateFlag::InRange));
+
+    let selector_change = Change::from_selector_fact_change(SelectorFactChange::Class);
+    assert!(selector_change.rematch);
+    assert!(selector_change.scope.whole_tree);
 
     let custom_name = CustomPropertyName::try_new("--brand")?;
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");

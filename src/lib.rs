@@ -37,7 +37,7 @@ pub use identity::{
     RangeState, StyleAttribute, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey,
     StyleRole, StyleState, StyleTag,
 };
-pub use invalidation::{Change, Invalidation, Scope};
+pub use invalidation::{Change, Invalidation, Scope, SelectorFactChange};
 pub use precedence::{LayerOrder, RulePrecedence, SourceOrder};
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
