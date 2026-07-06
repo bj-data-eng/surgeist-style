@@ -31,12 +31,13 @@ use surgeist_style::{
     Property, PseudoClassSelector, PseudoElement, QueryComparison, QueryLength, QueryLengthBasis,
     QueryLengthUnit, RangeFeature, RangeState, Ratio, ReducedMotionPreference,
     ReducedTransparencyPreference, RelativeSelector, RelativeSelectorList, Resolution,
-    ResolutionUnit, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale, ScaleValues,
-    ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass, TypedMediaQuery,
-    SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
-    StyleAttributeName, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor,
-    StyleLayerName, StyleLayerNameList, StyleRole, StyleState, StyleTag, StyleUrl,
-    SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
+    ResolutionUnit, Rotate, RulePrecedence, RuleScope, RuleTarget, RuntimePseudoClass, Scale,
+    ScaleValues, ScopeSelectorList, ScrollbarWidth, Selector, SelectorList,
+    SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder,
+    StateFlag, StructuralSelector, StyleAttributeName, StyleAttributeValue, StyleBucket,
+    StyleBucketPolicy, StyleColor, StyleLayerName, StyleLayerNameList, StyleRole, StyleState,
+    StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
+    TypedMediaQuery,
     TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
     TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
     TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
@@ -231,6 +232,13 @@ fn main() -> surgeist_style::Result<()> {
     sheet.declare_layers(layers);
     sheet.push_layer_rule(base_layer, Selector::tag("button")?, Declarations::new())?;
     assert!(sheet.layer_order(&theme_layer).is_some());
+
+    let scope = RuleScope::try_new(
+        Some(ScopeSelectorList::try_new([Selector::class("card")?])?),
+        Some(ScopeSelectorList::try_new([Selector::class("limit")?])?),
+    )?;
+    let mut sheet = Sheet::new();
+    sheet.push_scoped_rule(scope, Selector::tag("button")?, Declarations::new())?;
 
     let text_decoration_line = TextDecorationLine::try_new([
         TextDecorationLineComponent::Underline,

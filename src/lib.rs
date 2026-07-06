@@ -16,6 +16,7 @@ mod invalidation;
 mod precedence;
 mod property;
 mod resolver;
+mod scope;
 mod selector;
 mod sheet;
 mod state;
@@ -54,6 +55,7 @@ pub use precedence::{
 };
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
+pub use scope::{RuleScope, ScopeSelectorList};
 pub use selector::{
     AttributeCaseSensitivity, AttributeMatcher, AttributeSelector, Combinator, ComplexSelector,
     ComplexSelectorPart, Compound, Nth, NthPattern, NthSelector, Position as SelectorPosition,

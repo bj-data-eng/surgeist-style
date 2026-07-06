@@ -9,8 +9,8 @@ use super::{
     selector::{PrimaryKey, SelectorSpecificity},
 };
 use crate::{
-    CustomPropertyName, Error, ErrorCode, LayerOrder, LayerRegistry, LayerStatement, StyleClass,
-    StyleKey, StyleLayerName, StyleLayerNameList, StyleTag,
+    CustomPropertyName, Error, ErrorCode, LayerOrder, LayerRegistry, LayerStatement, RuleScope,
+    StyleClass, StyleKey, StyleLayerName, StyleLayerNameList, StyleTag,
     authored::{
         AuthoredCanonicalDeclarations, AuthoredCascadeValue, AuthoredDeclarationItem,
         CustomPropertyCascadeValue,
@@ -75,6 +75,7 @@ pub struct Rule {
     target: RuleTarget,
     declarations: RuleDeclarations,
     conditions: Vec<Condition>,
+    scope: Option<RuleScope>,
     precedence: RulePrecedence,
     source_order_policy: RuleSourceOrderPolicy,
 }
@@ -133,6 +134,7 @@ impl Rule {
             target,
             declarations: RuleDeclarations::Legacy(declarations),
             conditions: Vec::new(),
+            scope: None,
             precedence: precedence.with_specificity(specificity),
             source_order_policy: RuleSourceOrderPolicy::RebaseOnExtend,
         }
@@ -157,6 +159,7 @@ impl Rule {
             target,
             declarations: RuleDeclarations::Authored(declarations),
             conditions: Vec::new(),
+            scope: None,
             precedence,
             source_order_policy: RuleSourceOrderPolicy::PreserveExplicit,
         }
@@ -165,6 +168,12 @@ impl Rule {
     #[must_use]
     pub fn when(mut self, conditions: impl IntoIterator<Item = Condition>) -> Self {
         self.conditions = conditions.into_iter().collect();
+        self
+    }
+
+    #[must_use]
+    pub fn scoped(mut self, scope: RuleScope) -> Self {
+        self.scope = Some(scope);
         self
     }
 
@@ -247,6 +256,11 @@ impl Rule {
     #[must_use]
     pub fn conditions(&self) -> &[Condition] {
         &self.conditions
+    }
+
+    #[must_use]
+    pub const fn scope(&self) -> Option<&RuleScope> {
+        self.scope.as_ref()
     }
 
     #[must_use]
@@ -466,6 +480,17 @@ impl Sheet {
         self
     }
 
+    pub fn push_scoped_rule(
+        &mut self,
+        scope: RuleScope,
+        selector: Selector,
+        declarations: Declarations,
+    ) -> Result<&mut Self> {
+        let order = self.rules.len() as u32;
+        self.push(Rule::with_order(selector, declarations, order).scoped(scope));
+        Ok(self)
+    }
+
     pub fn push_authored_rule(
         &mut self,
         selector: Selector,
@@ -474,6 +499,18 @@ impl Sheet {
     ) -> Result<&mut Self> {
         let declarations = declarations.to_rule_declarations()?;
         self.push(Rule::with_authored(selector, declarations, precedence));
+        Ok(self)
+    }
+
+    pub fn push_authored_scoped_rule(
+        &mut self,
+        scope: RuleScope,
+        selector: Selector,
+        declarations: AuthoredDeclarations,
+        precedence: RulePrecedence,
+    ) -> Result<&mut Self> {
+        let declarations = declarations.to_rule_declarations()?;
+        self.push(Rule::with_authored(selector, declarations, precedence).scoped(scope));
         Ok(self)
     }
 

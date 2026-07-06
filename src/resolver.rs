@@ -11,12 +11,12 @@ use super::{
     FlexFactor, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
     LayoutPosition, Length, LetterSpacing, ListStyleImage, ListStylePosition, ListStyleType,
     MediaEnvironment, Order, OutlineStyle, OutlineWidth, OverflowWrap, PointerEvents, Property,
-    QueryLength, QueryLengthBasis, Ratio, Resolution, Result, Rotate, RulePrecedence, Scale,
-    ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast,
-    TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
-    TextSlant, TextTransform, TextWrap, TimeList, Transform, TransitionPropertyList, Translate,
-    Traversal, Tree, UserSelect, Value, Version, VerticalAlign, Visibility, WhiteSpace, WordBreak,
-    ZIndex,
+    QueryLength, QueryLengthBasis, Ratio, Resolution, Result, Rotate, RulePrecedence, RuleScope,
+    Scale, ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor,
+    TextAlignLast, TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent,
+    TextOverflow, TextSlant, TextTransform, TextWrap, TimeList, Transform, TransitionPropertyList,
+    Translate, Traversal, Tree, UserSelect, Value, Version, VerticalAlign, Visibility, WhiteSpace,
+    WordBreak, ZIndex,
     declaration::hash_value,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList, Content,
@@ -1129,6 +1129,19 @@ impl Resolver {
             if let Some(scope) = context.selector_scope {
                 selector_context = selector_context.with_scope(scope);
             }
+            if let Some(rule_scope) = rule.scope() {
+                let Some(anchor) = matching_scope_anchor(
+                    rule_scope,
+                    context.tree,
+                    context.node,
+                    context.traversal,
+                    context.selector_root,
+                )?
+                else {
+                    continue;
+                };
+                selector_context = selector_context.with_scope(anchor);
+            }
             if rule
                 .selector()
                 .matches_with_context(context.tree, selector_context)?
@@ -1226,6 +1239,111 @@ impl Resolver {
             value: hasher.finish(),
             node: node_hash,
         }))
+    }
+}
+
+fn matching_scope_anchor<T: Tree>(
+    scope: &RuleScope,
+    tree: &T,
+    subject: T::Id,
+    traversal: Traversal,
+    explicit_root: Option<T::Id>,
+) -> Result<Option<T::Id>>
+where
+    T::Id: Copy + Eq,
+{
+    let mut ancestors = Vec::new();
+    let mut candidate = subject;
+    loop {
+        ancestors.push(candidate);
+        let Some(parent) = tree.parent(candidate, traversal)? else {
+            break;
+        };
+        candidate = parent;
+    }
+
+    for (candidate_index, candidate) in ancestors.iter().copied().enumerate() {
+        if !scope_root_matches(scope, tree, candidate, traversal, explicit_root, &ancestors)? {
+            continue;
+        }
+        let limit_candidates = if candidate_index == 0 {
+            &ancestors[..=candidate_index]
+        } else {
+            &ancestors[..candidate_index]
+        };
+        if scope_limit_blocks(scope, tree, limit_candidates, traversal, explicit_root)? {
+            continue;
+        }
+        return Ok(Some(candidate));
+    }
+    Ok(None)
+}
+
+fn scope_root_matches<T: Tree>(
+    scope: &RuleScope,
+    tree: &T,
+    candidate: T::Id,
+    traversal: Traversal,
+    explicit_root: Option<T::Id>,
+    ancestors: &[T::Id],
+) -> Result<bool>
+where
+    T::Id: Copy + Eq,
+{
+    let Some(roots) = scope.roots() else {
+        if let Some(root) = explicit_root {
+            return Ok(candidate == root);
+        }
+        return Ok(ancestors.last().is_some_and(|root| *root == candidate));
+    };
+
+    for selector in roots.selectors() {
+        if selector.matches_with_context(
+            tree,
+            selector_context_for_candidate(candidate, traversal, explicit_root),
+        )? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn scope_limit_blocks<T: Tree>(
+    scope: &RuleScope,
+    tree: &T,
+    candidates: &[T::Id],
+    traversal: Traversal,
+    explicit_root: Option<T::Id>,
+) -> Result<bool>
+where
+    T::Id: Copy + Eq,
+{
+    let Some(limits) = scope.limits() else {
+        return Ok(false);
+    };
+    for candidate in candidates.iter().copied() {
+        for selector in limits.selectors() {
+            if selector.matches_with_context(
+                tree,
+                selector_context_for_candidate(candidate, traversal, explicit_root),
+            )? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn selector_context_for_candidate<Id: Copy>(
+    candidate: Id,
+    traversal: Traversal,
+    explicit_root: Option<Id>,
+) -> SelectorMatchContext<Id> {
+    let context = SelectorMatchContext::new(candidate, traversal);
+    if let Some(root) = explicit_root {
+        context.with_root(root)
+    } else {
+        context
     }
 }
 
@@ -1938,13 +2056,13 @@ mod tests {
         ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MediaCondition,
         MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, Node, Order, OverflowWrap,
         PlaceContentAlignment, QueryComparison, QueryLength, QueryLengthUnit, RangeFeature,
-        RulePrecedence, RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder,
-        StyleBucket, StyleClass, StyleColor, StyleRole, StyleState, StyleTag, StyleUrl,
-        SymbolicFunctionValue, SystemColor, TextAlignLast, TextDecorationLine,
-        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
-        TextOverflow, TextSlant, TextTransform, TextWrap, TimeList, UserSelect,
-        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
-        VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        RulePrecedence, RuleScope, RuleTarget, ScopeSelectorList, ScrollbarWidth, Selector,
+        SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleColor, StyleRole,
+        StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor, TextAlignLast,
+        TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+        TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+        TimeList, UserSelect, VariableDependentValue, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -3657,6 +3775,114 @@ mod tests {
             &StyleColor::rgba(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
         );
         assert_eq!(unscoped.text_color(), &StyleColor::rgba(Color::BLACK));
+    }
+
+    mod scoped_rules {
+        use super::*;
+
+        #[test]
+        fn scoped_rules_apply_inside_root_until_limit() {
+            let tree = TestTree::new(vec![
+                TestNode::new(0, "root").children([1]),
+                TestNode::new(1, "section").class("card").children([2, 3]),
+                TestNode::new(2, "button"),
+                TestNode::new(3, "footer").class("limit").children([4]),
+                TestNode::new(4, "button"),
+            ]);
+            let scope = RuleScope::try_new(
+                Some(ScopeSelectorList::try_new([Selector::class("card").unwrap()]).unwrap()),
+                Some(ScopeSelectorList::try_new([Selector::class("limit").unwrap()]).unwrap()),
+            )
+            .unwrap();
+            let mut sheet = Sheet::new();
+            sheet
+                .push_scoped_rule(
+                    scope,
+                    Selector::tag("button").unwrap(),
+                    Declarations::new()
+                        .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                        .unwrap(),
+                )
+                .unwrap();
+            let mut resolver = Resolver::new(sheet);
+
+            let inside = resolver.resolve(Context::new(&tree, 2)).unwrap();
+            let outside_limit = resolver.resolve(Context::new(&tree, 4)).unwrap();
+
+            assert_eq!(
+                inside.text_color(),
+                &StyleColor::rgba(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+            );
+            assert_eq!(outside_limit.text_color(), &StyleColor::rgba(Color::BLACK));
+        }
+
+        #[test]
+        fn scope_anchor_pseudo_class_uses_matched_rule_scope_root() {
+            let tree = TestTree::new(vec![
+                TestNode::new(0, "root").children([1]),
+                TestNode::new(1, "section").class("card").children([2]),
+                TestNode::new(2, "button"),
+            ]);
+            let scope = RuleScope::try_new(
+                Some(ScopeSelectorList::try_new([Selector::class("card").unwrap()]).unwrap()),
+                None,
+            )
+            .unwrap();
+            let selector = Selector::complex([
+                ComplexSelectorPart::root(Selector::compound().scope_anchor()),
+                ComplexSelectorPart::related(
+                    Combinator::Descendant,
+                    Selector::compound().tag("button").unwrap(),
+                ),
+            ])
+            .unwrap();
+            let mut sheet = Sheet::new();
+            sheet
+                .push_scoped_rule(
+                    scope,
+                    selector,
+                    Declarations::new()
+                        .try_concrete_text_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+                        .unwrap(),
+                )
+                .unwrap();
+            let mut resolver = Resolver::new(sheet);
+
+            let resolved = resolver.resolve(Context::new(&tree, 2)).unwrap();
+
+            assert_eq!(
+                resolved.text_color(),
+                &StyleColor::rgba(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+            );
+        }
+
+        #[test]
+        fn scope_limit_blocks_subject_that_is_also_scope_root() {
+            let tree = TestTree::new(vec![
+                TestNode::new(0, "root").children([1]),
+                TestNode::new(1, "button").class("card").class("limit"),
+            ]);
+            let scope = RuleScope::try_new(
+                Some(ScopeSelectorList::try_new([Selector::class("card").unwrap()]).unwrap()),
+                Some(ScopeSelectorList::try_new([Selector::class("limit").unwrap()]).unwrap()),
+            )
+            .unwrap();
+            let mut sheet = Sheet::new();
+            sheet
+                .push_scoped_rule(
+                    scope,
+                    Selector::tag("button").unwrap(),
+                    Declarations::new()
+                        .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                        .unwrap(),
+                )
+                .unwrap();
+            let mut resolver = Resolver::new(sheet);
+
+            let resolved = resolver.resolve(Context::new(&tree, 1)).unwrap();
+
+            assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
+        }
     }
 
     #[derive(Clone, Debug)]
