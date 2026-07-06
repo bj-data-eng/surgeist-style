@@ -1,17 +1,18 @@
 use super::{
-    AlignContent, AlignItems, AnimationNameList, AspectRatio, Border, BorderLineStyle, BorderRadii,
-    BorderStyles, BoxDecorationBreak, BoxSizing, CalcLength, CalcOperator, Clear, ClipPath, Color,
-    Content, ContentVisibility, CornerRadius, CounterChanges, Direction, Edges, Error, ErrorCode,
-    Filter, Flex, FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList,
-    FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition,
-    Length, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType, Order,
-    Outline, OutlineStyle, OutlineWidth, Overflow, OverflowWrap, PlaceContentAlignment,
-    PlaceItemsAlignment, Result, Rotate, Scale, ScrollbarWidth, StyleColor, StyleTextAlign,
-    TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationStyle,
-    TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-    TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyTarget,
-    Translate, UserSelect, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
-    ZIndex,
+    AlignContent, AlignItems, AnimationDirectionList, AnimationFillModeList,
+    AnimationIterationCountList, AnimationNameList, AnimationPlayStateList, AspectRatio, Border,
+    BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak, BoxSizing, CalcLength,
+    CalcOperator, Clear, ClipPath, Color, Content, ContentVisibility, CornerRadius, CounterChanges,
+    Direction, Edges, Error, ErrorCode, Filter, Flex, FlexDirection, FlexFactor, FlexWrap, Float,
+    Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
+    GridFlowTolerance, LayoutPosition, Length, LetterSpacing, ListStyle, ListStyleImage,
+    ListStylePosition, ListStyleType, Order, Outline, OutlineStyle, OutlineWidth, Overflow,
+    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result, Rotate, Scale,
+    ScrollbarWidth, StyleColor, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
+    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, TimeList, TransitionItem, TransitionList, TransitionPropertyList,
+    TransitionPropertyTarget, Translate, UserSelect, Value, VerticalAlign, Visibility, WhiteSpace,
+    WordBreak, WritingMode, ZIndex,
     value::{
         BackgroundAttachment, BackgroundAttachmentList, BackgroundBox, BackgroundRepeat,
         BackgroundRepeatList, BackgroundSize, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -196,6 +197,13 @@ pub enum Property {
     TransitionTimingFunction,
     Transition,
     AnimationName,
+    AnimationDuration,
+    AnimationDelay,
+    AnimationTimingFunction,
+    AnimationIterationCount,
+    AnimationDirection,
+    AnimationFillMode,
+    AnimationPlayState,
     Mask,
     MaskImage,
     MaskSize,
@@ -377,6 +385,13 @@ impl Property {
         Self::TransitionTimingFunction,
         Self::Transition,
         Self::AnimationName,
+        Self::AnimationDuration,
+        Self::AnimationDelay,
+        Self::AnimationTimingFunction,
+        Self::AnimationIterationCount,
+        Self::AnimationDirection,
+        Self::AnimationFillMode,
+        Self::AnimationPlayState,
         Self::Mask,
         Self::MaskImage,
         Self::MaskSize,
@@ -817,9 +832,33 @@ impl Property {
             ))
             .impact(Impact::empty().animation()),
             Self::AnimationName => {
-                Metadata::new(Value::AnimationNameList(AnimationNameList::empty()))
+                Metadata::new(Value::AnimationNameList(AnimationNameList::single_none()))
                     .impact(Impact::empty().animation())
             }
+            Self::AnimationDuration | Self::AnimationDelay => {
+                Metadata::new(Value::TimeList(TimeList::single_zero()))
+                    .impact(Impact::empty().animation())
+            }
+            Self::AnimationTimingFunction => {
+                Metadata::new(Value::EasingList(EasingList::single_ease()))
+                    .impact(Impact::empty().animation())
+            }
+            Self::AnimationIterationCount => Metadata::new(Value::AnimationIterationCountList(
+                AnimationIterationCountList::single_one(),
+            ))
+            .impact(Impact::empty().animation()),
+            Self::AnimationDirection => Metadata::new(Value::AnimationDirectionList(
+                AnimationDirectionList::single_normal(),
+            ))
+            .impact(Impact::empty().animation()),
+            Self::AnimationFillMode => Metadata::new(Value::AnimationFillModeList(
+                AnimationFillModeList::single_none(),
+            ))
+            .impact(Impact::empty().animation()),
+            Self::AnimationPlayState => Metadata::new(Value::AnimationPlayStateList(
+                AnimationPlayStateList::single_running(),
+            ))
+            .impact(Impact::empty().animation()),
             Self::Mask => Metadata::new(Value::MaskLayerList(
                 MaskLayerList::try_new([MaskLayer::try_new(
                     Some(ImageLayer::None),
@@ -1091,6 +1130,14 @@ impl Property {
             Self::FontVariant => matches!(value, Value::FontVariant(_)),
             Self::FontFeatureSettings => matches!(value, Value::FontFeatureSettings(_)),
             Self::AnimationName => matches!(value, Value::AnimationNameList(_)),
+            Self::AnimationDuration | Self::AnimationDelay => matches!(value, Value::TimeList(_)),
+            Self::AnimationTimingFunction => matches!(value, Value::EasingList(_)),
+            Self::AnimationIterationCount => {
+                matches!(value, Value::AnimationIterationCountList(_))
+            }
+            Self::AnimationDirection => matches!(value, Value::AnimationDirectionList(_)),
+            Self::AnimationFillMode => matches!(value, Value::AnimationFillModeList(_)),
+            Self::AnimationPlayState => matches!(value, Value::AnimationPlayStateList(_)),
             Self::Cursor => matches!(value, Value::Cursor(_)),
             Self::PointerEvents => matches!(value, Value::PointerEvents(_)),
             Self::UserSelect => matches!(value, Value::UserSelect(_)),
@@ -1418,6 +1465,10 @@ fn value_kind(value: &Value) -> &'static str {
         Value::FontFeatureSettings(_) => "font feature settings",
         Value::Font(_) => "font shorthand",
         Value::AnimationNameList(_) => "animation name list",
+        Value::AnimationIterationCountList(_) => "animation iteration count list",
+        Value::AnimationDirectionList(_) => "animation direction list",
+        Value::AnimationFillModeList(_) => "animation fill mode list",
+        Value::AnimationPlayStateList(_) => "animation play state list",
         Value::ImageLayerList(_) => "image layer list",
         Value::PositionList(_) => "position list",
         Value::BackgroundSizeList(_) => "background size list",

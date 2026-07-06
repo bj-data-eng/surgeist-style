@@ -1902,48 +1902,324 @@ impl Font {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct AnimationNameList(StyleStringList);
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct KeyframesIdent {
+    value: String,
+}
 
-impl AnimationNameList {
-    #[must_use]
-    pub const fn empty() -> Self {
-        Self(StyleStringList::empty())
-    }
-
-    pub fn new(values: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
-        Ok(Self(StyleStringList::new(values, "animation name")?))
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        self.0.validate("animation name")
-    }
-
-    #[must_use]
-    pub fn as_slice(&self) -> &[String] {
-        self.0.as_slice()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &str> {
-        self.0.as_slice().iter().map(String::as_str)
+impl KeyframesIdent {
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self> {
+        let value = validate_timing_ident(value.as_ref(), "keyframes name")?;
+        if value.eq_ignore_ascii_case("none") {
+            return Err(Error::new(
+                ErrorCode::InvalidString,
+                "keyframes name cannot be `none`",
+            ));
+        }
+        Ok(Self { value })
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.as_slice().is_empty()
-    }
-
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.as_slice().len()
-    }
-
-    #[must_use]
-    pub fn into_vec(self) -> Vec<String> {
-        self.0.into_vec()
+    pub fn as_str(&self) -> &str {
+        &self.value
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct KeyframesString {
+    value: String,
+}
+
+impl KeyframesString {
+    pub fn try_new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidString,
+                "keyframes string name cannot be empty",
+            ));
+        }
+        if value.contains('\0') {
+            return Err(Error::new(
+                ErrorCode::InvalidString,
+                "keyframes string name cannot contain U+0000",
+            ));
+        }
+        Ok(Self { value })
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum KeyframesName {
+    Ident(KeyframesIdent),
+    String(KeyframesString),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum AnimationName {
+    None,
+    Keyframes(KeyframesName),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct AnimationNameList {
+    names: Vec<AnimationName>,
+}
+
+impl AnimationNameList {
+    pub fn try_new(names: impl IntoIterator<Item = AnimationName>) -> Result<Self> {
+        let names = names.into_iter().collect::<Vec<_>>();
+        if names.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation name list cannot be empty",
+            ));
+        }
+        Ok(Self { names })
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.names.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation name list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn names(&self) -> &[AnimationName] {
+        &self.names
+    }
+
+    #[must_use]
+    pub fn single_none() -> Self {
+        Self {
+            names: vec![AnimationName::None],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AnimationIterationCount {
+    Infinite,
+    Number(AnimationIterationNumber),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnimationIterationNumber {
+    value: f32,
+}
+
+impl AnimationIterationNumber {
+    pub fn try_new(value: f32) -> Result<Self> {
+        validate_non_negative(value, "animation iteration count")?;
+        Ok(Self { value })
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnimationIterationCountList {
+    values: Vec<AnimationIterationCount>,
+}
+
+impl AnimationIterationCountList {
+    pub fn try_new(values: impl IntoIterator<Item = AnimationIterationCount>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation iteration count list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[AnimationIterationCount] {
+        &self.values
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation iteration count list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn single_one() -> Self {
+        Self {
+            values: vec![AnimationIterationCount::Number(
+                AnimationIterationNumber::try_new(1.0).unwrap(),
+            )],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum AnimationDirection {
+    #[default]
+    Normal,
+    Reverse,
+    Alternate,
+    AlternateReverse,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum AnimationFillMode {
+    #[default]
+    None,
+    Forwards,
+    Backwards,
+    Both,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum AnimationPlayState {
+    #[default]
+    Running,
+    Paused,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct AnimationDirectionList {
+    values: Vec<AnimationDirection>,
+}
+
+impl AnimationDirectionList {
+    pub fn try_new(values: impl IntoIterator<Item = AnimationDirection>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation direction list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[AnimationDirection] {
+        &self.values
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation direction list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn single_normal() -> Self {
+        Self {
+            values: vec![AnimationDirection::Normal],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct AnimationFillModeList {
+    values: Vec<AnimationFillMode>,
+}
+
+impl AnimationFillModeList {
+    pub fn try_new(values: impl IntoIterator<Item = AnimationFillMode>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation fill mode list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[AnimationFillMode] {
+        &self.values
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation fill mode list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn single_none() -> Self {
+        Self {
+            values: vec![AnimationFillMode::None],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct AnimationPlayStateList {
+    values: Vec<AnimationPlayState>,
+}
+
+impl AnimationPlayStateList {
+    pub fn try_new(values: impl IntoIterator<Item = AnimationPlayState>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation play state list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[AnimationPlayState] {
+        &self.values
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation play state list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn single_running() -> Self {
+        Self {
+            values: vec![AnimationPlayState::Running],
+        }
+    }
+}
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StyleUrl(String);
 
@@ -3000,6 +3276,10 @@ pub enum Value {
     FontFeatureSettings(FontFeatureSettings),
     Font(Font),
     AnimationNameList(AnimationNameList),
+    AnimationIterationCountList(AnimationIterationCountList),
+    AnimationDirectionList(AnimationDirectionList),
+    AnimationFillModeList(AnimationFillModeList),
+    AnimationPlayStateList(AnimationPlayStateList),
     ImageLayerList(ImageLayerList),
     PositionList(PositionList),
     BackgroundSizeList(BackgroundSizeList),
@@ -3121,6 +3401,10 @@ impl Value {
             | Self::FontFeatureSettings(_)
             | Self::Font(_)
             | Self::AnimationNameList(_)
+            | Self::AnimationIterationCountList(_)
+            | Self::AnimationDirectionList(_)
+            | Self::AnimationFillModeList(_)
+            | Self::AnimationPlayStateList(_)
             | Self::TransitionPropertyList(_)
             | Self::TimeList(_)
             | Self::EasingList(_)
@@ -3209,6 +3493,10 @@ impl Value {
             Self::TextSlant(value) => validate_slant(*value),
             Self::Font(value) => value.validate(),
             Self::AnimationNameList(values) => values.validate(),
+            Self::AnimationIterationCountList(values) => values.validate(),
+            Self::AnimationDirectionList(values) => values.validate(),
+            Self::AnimationFillModeList(values) => values.validate(),
+            Self::AnimationPlayStateList(values) => values.validate(),
             Self::ImageLayerList(value) => {
                 if value.layers().is_empty() {
                     Err(Error::new(
@@ -5829,14 +6117,17 @@ fn validate_decoration_brush(brush: Color) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationNameList, BuiltInCounterStyle, Color, Content, ContentItem, ContentItemList,
-        ContentString, CounterChange, CounterChangeList, CounterChanges, CounterFunction,
-        CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx, Decoration,
-        DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, ErrorCode,
-        FontFamilyList, Length, ListStyle, ListStyleImage, ListStylePosition, ListStyleType,
-        OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight, TextWrap,
-        TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
-        TransitionPropertyTarget, Value, WhiteSpace, WordBreak,
+        AnimationDirection, AnimationDirectionList, AnimationFillMode, AnimationFillModeList,
+        AnimationIterationCount, AnimationIterationCountList, AnimationIterationNumber,
+        AnimationName, AnimationNameList, AnimationPlayState, AnimationPlayStateList,
+        BuiltInCounterStyle, Color, Content, ContentItem, ContentItemList, ContentString,
+        CounterChange, CounterChangeList, CounterChanges, CounterFunction, CounterName,
+        CounterStyle, CounterStyleName, CountersFunction, CssPx, Decoration, DimensionLength,
+        DurationSeconds, EasingArguments, EasingFunction, EasingList, ErrorCode, FontFamilyList,
+        KeyframesIdent, KeyframesName, Length, ListStyle, ListStyleImage, ListStylePosition,
+        ListStyleType, OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight,
+        TextWrap, TimeList, TransitionItem, TransitionList, TransitionPropertyList,
+        TransitionPropertyName, TransitionPropertyTarget, Value, WhiteSpace, WordBreak,
     };
     use crate::StyleAttributeName;
 
@@ -5852,10 +6143,10 @@ mod tests {
     #[test]
     fn string_list_wrappers_preserve_empty_defaults() {
         let font_families = FontFamilyList::empty();
-        let animation_names = AnimationNameList::empty();
+        let animation_names = AnimationNameList::single_none();
 
         assert!(font_families.is_empty());
-        assert!(animation_names.is_empty());
+        assert_eq!(animation_names.names(), &[AnimationName::None]);
         Value::FontFamilyList(font_families).validate().unwrap();
         Value::AnimationNameList(animation_names)
             .validate()
@@ -5865,10 +6156,10 @@ mod tests {
     #[test]
     fn string_list_wrappers_reject_empty_items_at_construction() {
         let font_error = FontFamilyList::new([""]).unwrap_err();
-        let animation_error = AnimationNameList::new(["fade-in", " "]).unwrap_err();
+        let animation_error = AnimationNameList::try_new([]).unwrap_err();
 
         assert_eq!(font_error.code(), ErrorCode::InvalidString);
-        assert_eq!(animation_error.code(), ErrorCode::InvalidString);
+        assert_eq!(animation_error.code(), ErrorCode::InvalidValue);
     }
 
     #[test]
@@ -5911,6 +6202,50 @@ mod tests {
         assert!(TransitionPropertyName::try_new("-webkit-transform").is_ok());
         assert!(TransitionPropertyName::try_new("フェード").is_ok());
         assert!(TransitionPropertyName::try_new("auto").is_err());
+    }
+
+    #[test]
+    fn animation_longhand_lists_preserve_css_timing_shape() {
+        let names = AnimationNameList::try_new([
+            AnimationName::None,
+            AnimationName::Keyframes(KeyframesName::Ident(
+                KeyframesIdent::try_new("fade-in").unwrap(),
+            )),
+        ])
+        .unwrap();
+        assert_eq!(names.names().len(), 2);
+        assert!(KeyframesIdent::try_new("none").is_err());
+
+        let iterations = AnimationIterationCountList::try_new([
+            AnimationIterationCount::Number(AnimationIterationNumber::try_new(2.5).unwrap()),
+            AnimationIterationCount::Infinite,
+        ])
+        .unwrap();
+        assert_eq!(iterations.values().len(), 2);
+        assert!(AnimationIterationNumber::try_new(-1.0).is_err());
+        assert!(AnimationIterationNumber::try_new(f32::INFINITY).is_err());
+
+        let directions = AnimationDirectionList::try_new([
+            AnimationDirection::Normal,
+            AnimationDirection::Reverse,
+        ])
+        .unwrap();
+        assert_eq!(directions.values().len(), 2);
+        assert!(AnimationDirectionList::try_new([]).is_err());
+
+        let fill_modes =
+            AnimationFillModeList::try_new([AnimationFillMode::None, AnimationFillMode::Both])
+                .unwrap();
+        assert_eq!(fill_modes.values().len(), 2);
+        assert!(AnimationFillModeList::try_new([]).is_err());
+
+        let play_states = AnimationPlayStateList::try_new([
+            AnimationPlayState::Running,
+            AnimationPlayState::Paused,
+        ])
+        .unwrap();
+        assert_eq!(play_states.values().len(), 2);
+        assert!(AnimationPlayStateList::try_new([]).is_err());
     }
 
     #[test]

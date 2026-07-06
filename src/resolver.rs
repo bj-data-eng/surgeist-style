@@ -4,17 +4,18 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, BorderLineStyle, BorderRadii, BoxDecorationBreak, ClipPath,
-    Condition, Container, ContentVisibility, CornerRadius, Corners, CssWideKeyword, Cursor,
-    Declarations, Display, Edges, Filter, FlexFactor, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, ListStyleImage,
-    ListStylePosition, ListStyleType, Order, OutlineStyle, OutlineWidth, OverflowWrap,
-    PointerEvents, Property, Result, Rotate, RulePrecedence, Scale, ScrollbarWidth,
-    SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine,
-    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, TimeList, Transform, TransitionPropertyList, Translate, Traversal,
-    Tree, UserSelect, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak,
-    ZIndex,
+    AlignContent, AnimationDirectionList, AnimationFillModeList, AnimationIterationCountList,
+    AnimationNameList, AnimationPlayStateList, AspectRatio, BorderLineStyle, BorderRadii,
+    BoxDecorationBreak, ClipPath, Condition, Container, ContentVisibility, CornerRadius, Corners,
+    CssWideKeyword, Cursor, Declarations, Display, Edges, Filter, FlexFactor, FontFamilyList,
+    FontFeatureSettings, FontStretch, FontVariant, FontWeight, LayoutPosition, Length,
+    LetterSpacing, ListStyleImage, ListStylePosition, ListStyleType, Order, OutlineStyle,
+    OutlineWidth, OverflowWrap, PointerEvents, Property, Result, Rotate, RulePrecedence, Scale,
+    ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast,
+    TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
+    TextSlant, TextTransform, TextWrap, TimeList, Transform, TransitionPropertyList, Translate,
+    Traversal, Tree, UserSelect, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace,
+    WordBreak, ZIndex,
     declaration::hash_value,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList, Content,
@@ -665,6 +666,72 @@ impl Resolved {
         match self.get(Property::TransitionTimingFunction) {
             Value::EasingList(easings) => easings,
             _ => unreachable!("resolved transition-timing-function stores easing list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_name(&self) -> &AnimationNameList {
+        match self.get(Property::AnimationName) {
+            Value::AnimationNameList(names) => names,
+            _ => unreachable!("resolved animation-name stores animation name list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_duration(&self) -> &TimeList {
+        match self.get(Property::AnimationDuration) {
+            Value::TimeList(durations) => durations,
+            _ => unreachable!("resolved animation-duration stores time list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_delay(&self) -> &TimeList {
+        match self.get(Property::AnimationDelay) {
+            Value::TimeList(delays) => delays,
+            _ => unreachable!("resolved animation-delay stores time list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_timing_function(&self) -> &EasingList {
+        match self.get(Property::AnimationTimingFunction) {
+            Value::EasingList(easings) => easings,
+            _ => unreachable!("resolved animation-timing-function stores easing list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_iteration_count(&self) -> &AnimationIterationCountList {
+        match self.get(Property::AnimationIterationCount) {
+            Value::AnimationIterationCountList(values) => values,
+            _ => {
+                unreachable!("resolved animation-iteration-count stores animation count list")
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn animation_direction(&self) -> &AnimationDirectionList {
+        match self.get(Property::AnimationDirection) {
+            Value::AnimationDirectionList(values) => values,
+            _ => unreachable!("resolved animation-direction stores animation direction list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_fill_mode(&self) -> &AnimationFillModeList {
+        match self.get(Property::AnimationFillMode) {
+            Value::AnimationFillModeList(values) => values,
+            _ => unreachable!("resolved animation-fill-mode stores animation fill mode list"),
+        }
+    }
+
+    #[must_use]
+    pub fn animation_play_state(&self) -> &AnimationPlayStateList {
+        match self.get(Property::AnimationPlayState) {
+            Value::AnimationPlayStateList(values) => values,
+            _ => unreachable!("resolved animation-play-state stores animation play state list"),
         }
     }
 
@@ -1755,21 +1822,25 @@ fn hash_variable_expression(expression: &VariableExpression, hasher: &mut Defaul
 mod tests {
     use super::*;
     use crate::{
-        AspectRatio, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
-        AuthoredValue, BuiltInCounterStyle, Color, Combinator, ComplexSelectorPart, Content,
-        ContentItem, ContentItemList, ContentString, ContentVisibility, CounterChange,
-        CounterChangeList, CounterChanges, CounterName, CounterStyle, CssWideKeyword,
-        CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, FilterFunction,
-        FilterFunctionList, Flex, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
-        FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber, ImageLayer,
-        LayerOrder, LayoutPosition, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition,
-        ListStyleType, Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence,
-        RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket,
-        StyleClass, StyleColor, StyleRole, StyleState, StyleTag, StyleUrl, SymbolicFunctionValue,
-        SystemColor, TextAlignLast, TextDecorationLine, TextDecorationLineComponent,
-        TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-        TextTransform, TextWrap, UserSelect, VariableDependentValue, VariableExpression,
-        VariableFallback, VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        AnimationDirection, AnimationDirectionList, AnimationFillMode, AnimationFillModeList,
+        AnimationIterationCount, AnimationIterationCountList, AnimationIterationNumber,
+        AnimationName, AnimationNameList, AnimationPlayState, AnimationPlayStateList, AspectRatio,
+        AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
+        BuiltInCounterStyle, Color, Combinator, ComplexSelectorPart, Content, ContentItem,
+        ContentItemList, ContentString, ContentVisibility, CounterChange, CounterChangeList,
+        CounterChanges, CounterName, CounterStyle, CssWideKeyword, CustomPropertyName,
+        CustomPropertyValue, Declarations, DurationSeconds, EasingFunction, EasingList, Error,
+        ErrorCode, FilterFunction, FilterFunctionList, Flex, FontFamilyList, FontFeature,
+        FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
+        FontWeight, FontWeightNumber, ImageLayer, KeyframesIdent, KeyframesName, LayerOrder,
+        LayoutPosition, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType,
+        Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence, RuleTarget,
+        ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass,
+        StyleColor, StyleRole, StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor,
+        TextAlignLast, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+        TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+        TimeList, UserSelect, VariableDependentValue, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1943,6 +2014,53 @@ mod tests {
         sheet
             .push_authored_rule(Selector::tag("button").unwrap(), declarations, precedence)
             .unwrap();
+    }
+
+    #[test]
+    fn animation_longhand_declarations_resolve_typed_lists() {
+        let names = AnimationNameList::try_new([AnimationName::Keyframes(KeyframesName::Ident(
+            KeyframesIdent::try_new("fade-in").unwrap(),
+        ))])
+        .unwrap();
+        let durations = TimeList::try_new([DurationSeconds::new(0.25).unwrap()]).unwrap();
+        let delays = TimeList::try_new([DurationSeconds::new(0.05).unwrap()]).unwrap();
+        let timing = EasingList::try_new([EasingFunction::EaseInOut]).unwrap();
+        let iterations = AnimationIterationCountList::try_new([AnimationIterationCount::Number(
+            AnimationIterationNumber::try_new(2.0).unwrap(),
+        )])
+        .unwrap();
+        let directions = AnimationDirectionList::try_new([AnimationDirection::Alternate]).unwrap();
+        let fill_modes = AnimationFillModeList::try_new([AnimationFillMode::Both]).unwrap();
+        let play_states = AnimationPlayStateList::try_new([AnimationPlayState::Paused]).unwrap();
+
+        let style = resolve_single(
+            Declarations::new()
+                .animation_name(names.clone())
+                .unwrap()
+                .animation_duration(durations.clone())
+                .unwrap()
+                .animation_delay(delays.clone())
+                .unwrap()
+                .animation_timing_function(timing.clone())
+                .unwrap()
+                .animation_iteration_count(iterations.clone())
+                .unwrap()
+                .animation_direction(directions.clone())
+                .unwrap()
+                .animation_fill_mode(fill_modes.clone())
+                .unwrap()
+                .animation_play_state(play_states.clone())
+                .unwrap(),
+        );
+
+        assert_eq!(style.animation_name(), &names);
+        assert_eq!(style.animation_duration(), &durations);
+        assert_eq!(style.animation_delay(), &delays);
+        assert_eq!(style.animation_timing_function(), &timing);
+        assert_eq!(style.animation_iteration_count(), &iterations);
+        assert_eq!(style.animation_direction(), &directions);
+        assert_eq!(style.animation_fill_mode(), &fill_modes);
+        assert_eq!(style.animation_play_state(), &play_states);
     }
 
     #[test]

@@ -1,7 +1,10 @@
 use surgeist_style::{
-    AlignContent, AlignItems, Alpha, AnimationNameList, AspectRatio, AttributeCaseSensitivity,
-    AttributeMatcher, AttributeSelector, AuthoredDeclaration, AuthoredDeclarations,
-    AuthoredProperty, AuthoredTokens, AuthoredValue, BackgroundAttachment,
+    AlignContent, AlignItems, Alpha, AnimationDirection, AnimationDirectionList, AnimationFillMode,
+    AnimationFillModeList, AnimationIterationCount, AnimationIterationCountList,
+    AnimationIterationNumber, AnimationName, AnimationNameList, AnimationPlayState,
+    AnimationPlayStateList, AspectRatio, AttributeCaseSensitivity, AttributeMatcher,
+    AttributeSelector, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
+    AuthoredValue, BackgroundAttachment,
     BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
     BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
@@ -13,7 +16,7 @@ use surgeist_style::{
     DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, Filter,
     FilterFunction, FilterFunctionList, Flex, FlexFactor, Font, FontFamilyList, FontFeature,
     FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight,
-    GridTrackList,
+    GridTrackList, KeyframesIdent, KeyframesName, KeyframesString,
     HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
     LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
     ListStyleType, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector, Opacity, Order,
@@ -58,7 +61,9 @@ fn main() -> surgeist_style::Result<()> {
         )?
         .try_set(
             Property::AnimationName,
-            Value::AnimationNameList(AnimationNameList::new(["fade-in"])?),
+            Value::AnimationNameList(AnimationNameList::try_new([AnimationName::Keyframes(
+                KeyframesName::Ident(KeyframesIdent::try_new("fade-in")?),
+            )])?),
         )?;
     assert_eq!(declarations.len(), 2);
 
@@ -137,6 +142,41 @@ fn main() -> surgeist_style::Result<()> {
         .transition(transition.clone())?;
     assert_eq!(declarations.len(), 4);
     let _ = (time_list, easing_list, transition_properties, transition);
+
+    let animation_names = AnimationNameList::try_new([
+        AnimationName::None,
+        AnimationName::Keyframes(KeyframesName::Ident(KeyframesIdent::try_new("fade-in")?)),
+        AnimationName::Keyframes(KeyframesName::String(KeyframesString::try_new("fade in")?)),
+    ])?;
+    let animation_iterations = AnimationIterationCountList::try_new([
+        AnimationIterationCount::Number(AnimationIterationNumber::try_new(2.0)?),
+        AnimationIterationCount::Infinite,
+    ])?;
+    let animation_directions = AnimationDirectionList::try_new([
+        AnimationDirection::Normal,
+        AnimationDirection::AlternateReverse,
+    ])?;
+    let animation_fill_modes =
+        AnimationFillModeList::try_new([AnimationFillMode::None, AnimationFillMode::Forwards])?;
+    let animation_play_states =
+        AnimationPlayStateList::try_new([AnimationPlayState::Running, AnimationPlayState::Paused])?;
+    let declarations = Declarations::new()
+        .animation_name(animation_names.clone())?
+        .animation_duration(TimeList::try_new([DurationSeconds::new(0.2)?])?)?
+        .animation_delay(TimeList::try_new([DurationSeconds::new(0.05)?])?)?
+        .animation_timing_function(EasingList::try_new([EasingFunction::EaseIn])?)?
+        .animation_iteration_count(animation_iterations.clone())?
+        .animation_direction(animation_directions.clone())?
+        .animation_fill_mode(animation_fill_modes.clone())?
+        .animation_play_state(animation_play_states.clone())?;
+    assert_eq!(declarations.len(), 8);
+    let _ = (
+        animation_names,
+        animation_iterations,
+        animation_directions,
+        animation_fill_modes,
+        animation_play_states,
+    );
 
     let text_decoration_line = TextDecorationLine::try_new([
         TextDecorationLineComponent::Underline,

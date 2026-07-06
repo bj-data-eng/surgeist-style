@@ -4,8 +4,10 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, BasicShape, Border, BorderLineStyle, BorderRadii, BorderSide,
-    BorderStyles, BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color, ColorFunction,
+    AlignContent, AnimationDirectionList, AnimationFillModeList, AnimationIterationCount,
+    AnimationIterationCountList, AnimationName, AnimationNameList, AnimationPlayStateList,
+    AspectRatio, BasicShape, Border, BorderLineStyle, BorderRadii, BorderSide, BorderStyles,
+    BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color, ColorFunction,
     ColorInterpolationSpace, ColorMix, Content, ContentItem, ContentVisibility, CornerRadius,
     CounterChanges, CounterFunction, CounterStyle, CountersFunction, Cursor, DimensionLength,
     Display, DurationSeconds, EasingFunction, EasingList, Edges, Filter, FilterFunction, Flex,
@@ -25,7 +27,7 @@ use super::{
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
         BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, ImageLayer, ImageLayerList,
-        MaskLayerList, Position, PositionComponent, PositionList,
+        KeyframesName, MaskLayerList, Position, PositionComponent, PositionList,
     },
 };
 
@@ -794,6 +796,53 @@ impl Declarations {
         self.try_set(Property::Transition, Value::TransitionList(transitions))
     }
 
+    pub fn animation_name(self, names: AnimationNameList) -> Result<Self> {
+        self.try_set(Property::AnimationName, Value::AnimationNameList(names))
+    }
+
+    pub fn animation_duration(self, durations: TimeList) -> Result<Self> {
+        self.try_set(Property::AnimationDuration, Value::TimeList(durations))
+    }
+
+    pub fn animation_delay(self, delays: TimeList) -> Result<Self> {
+        self.try_set(Property::AnimationDelay, Value::TimeList(delays))
+    }
+
+    pub fn animation_timing_function(self, easings: EasingList) -> Result<Self> {
+        self.try_set(
+            Property::AnimationTimingFunction,
+            Value::EasingList(easings),
+        )
+    }
+
+    pub fn animation_iteration_count(self, values: AnimationIterationCountList) -> Result<Self> {
+        self.try_set(
+            Property::AnimationIterationCount,
+            Value::AnimationIterationCountList(values),
+        )
+    }
+
+    pub fn animation_direction(self, values: AnimationDirectionList) -> Result<Self> {
+        self.try_set(
+            Property::AnimationDirection,
+            Value::AnimationDirectionList(values),
+        )
+    }
+
+    pub fn animation_fill_mode(self, values: AnimationFillModeList) -> Result<Self> {
+        self.try_set(
+            Property::AnimationFillMode,
+            Value::AnimationFillModeList(values),
+        )
+    }
+
+    pub fn animation_play_state(self, values: AnimationPlayStateList) -> Result<Self> {
+        self.try_set(
+            Property::AnimationPlayState,
+            Value::AnimationPlayStateList(values),
+        )
+    }
+
     #[must_use]
     pub fn display(self, display: Display) -> Self {
         self.set(Property::Display, Value::Display(display))
@@ -1081,6 +1130,70 @@ impl Declarations {
     pub fn transition_delay_list(&self) -> Option<&TimeList> {
         match self.get(Property::TransitionDelay) {
             Some(Value::TimeList(delays)) => Some(delays),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_name_list(&self) -> Option<&AnimationNameList> {
+        match self.get(Property::AnimationName) {
+            Some(Value::AnimationNameList(names)) => Some(names),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_duration_list(&self) -> Option<&TimeList> {
+        match self.get(Property::AnimationDuration) {
+            Some(Value::TimeList(durations)) => Some(durations),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_delay_list(&self) -> Option<&TimeList> {
+        match self.get(Property::AnimationDelay) {
+            Some(Value::TimeList(delays)) => Some(delays),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_timing_function_list(&self) -> Option<&EasingList> {
+        match self.get(Property::AnimationTimingFunction) {
+            Some(Value::EasingList(easings)) => Some(easings),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_iteration_count_list(&self) -> Option<&AnimationIterationCountList> {
+        match self.get(Property::AnimationIterationCount) {
+            Some(Value::AnimationIterationCountList(values)) => Some(values),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_direction_list(&self) -> Option<&AnimationDirectionList> {
+        match self.get(Property::AnimationDirection) {
+            Some(Value::AnimationDirectionList(values)) => Some(values),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_fill_mode_list(&self) -> Option<&AnimationFillModeList> {
+        match self.get(Property::AnimationFillMode) {
+            Some(Value::AnimationFillModeList(values)) => Some(values),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn animation_play_state_list(&self) -> Option<&AnimationPlayStateList> {
+        match self.get(Property::AnimationPlayState) {
+            Some(Value::AnimationPlayStateList(values)) => Some(values),
             _ => None,
         }
     }
@@ -2029,6 +2142,22 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             102u8.hash(state);
             hash_transition_list(value, state);
         }
+        Value::AnimationIterationCountList(value) => {
+            103u8.hash(state);
+            hash_animation_iteration_count_list(value, state);
+        }
+        Value::AnimationDirectionList(value) => {
+            104u8.hash(state);
+            value.hash(state);
+        }
+        Value::AnimationFillModeList(value) => {
+            105u8.hash(state);
+            value.hash(state);
+        }
+        Value::AnimationPlayStateList(value) => {
+            106u8.hash(state);
+            value.hash(state);
+        }
         Value::Order(value) => {
             42u8.hash(state);
             value.get().hash(state);
@@ -2336,7 +2465,7 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         }
         Value::AnimationNameList(value) => {
             40u8.hash(state);
-            value.hash(state);
+            hash_animation_name_list(value, state);
         }
         Value::ShadowList(value) => {
             9u8.hash(state);
@@ -2520,6 +2649,52 @@ fn hash_transition_item(value: &TransitionItem, state: &mut DefaultHasher) {
             hash_easing_function(easing, state);
         }
         None => false.hash(state),
+    }
+}
+
+fn hash_animation_name_list(value: &AnimationNameList, state: &mut DefaultHasher) {
+    value.names().len().hash(state);
+    for name in value.names() {
+        match name {
+            AnimationName::None => {
+                0u8.hash(state);
+            }
+            AnimationName::Keyframes(name) => {
+                1u8.hash(state);
+                hash_keyframes_name(name, state);
+            }
+        }
+    }
+}
+
+fn hash_keyframes_name(value: &KeyframesName, state: &mut DefaultHasher) {
+    match value {
+        KeyframesName::Ident(ident) => {
+            0u8.hash(state);
+            ident.as_str().hash(state);
+        }
+        KeyframesName::String(string) => {
+            1u8.hash(state);
+            string.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_animation_iteration_count_list(
+    value: &AnimationIterationCountList,
+    state: &mut DefaultHasher,
+) {
+    value.values().len().hash(state);
+    for count in value.values() {
+        match count {
+            AnimationIterationCount::Infinite => {
+                0u8.hash(state);
+            }
+            AnimationIterationCount::Number(number) => {
+                1u8.hash(state);
+                hash_f32(number.get(), state);
+            }
+        }
     }
 }
 
