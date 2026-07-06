@@ -6,15 +6,17 @@ use surgeist_style::{
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
     BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
     BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, Combinator, Content, ContentItem,
-    ContentItemList, ContentString, ContentVisibility, Context, CornerRadius, CounterFunction,
-    CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx, CssWideKeyword,
+    ContentItemList, ContentString, ContentVisibility, Context, CornerRadius, CounterChange,
+    CounterChangeList, CounterChanges, CounterFunction, CounterName, CounterStyle,
+    CounterStyleName, CountersFunction, CssPx, CssWideKeyword,
     CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
     DimensionLength, DurationSeconds, Filter, FilterFunction, FilterFunctionList, Flex,
     FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
     FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
     HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
-    LetterSpacing, LetterSpacingLength, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector,
-    Opacity, Order, Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap,
+    LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
+    ListStyleType, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector, Opacity, Order,
+    Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap,
     PlaceContentAlignment, PlaceItemsAlignment, Position, PositionComponent, PositionList,
     Property, PseudoClassSelector, PseudoElement, RangeState, RelativeSelector,
     RelativeSelectorList, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale,
@@ -213,6 +215,35 @@ fn main() -> surgeist_style::Result<()> {
         CounterStyle::BuiltIn(BuiltInCounterStyle::UpperRoman),
         CounterStyle::BuiltIn(BuiltInCounterStyle::UpperRoman)
     ));
+    let list_style = ListStyle::try_new(
+        Some(ListStyleType::CounterStyle(CounterStyle::BuiltIn(
+            BuiltInCounterStyle::Disc,
+        ))),
+        Some(ListStylePosition::Outside),
+        Some(ListStyleImage::Url(StyleUrl::new("marker.svg")?)),
+    )?;
+    assert!(matches!(
+        list_style.style_type(),
+        Some(ListStyleType::CounterStyle(_))
+    ));
+    assert_eq!(list_style.position(), Some(ListStylePosition::Outside));
+    assert!(matches!(list_style.image(), Some(ListStyleImage::Url(_))));
+    assert!(matches!(ListStyleType::None, ListStyleType::None));
+    assert!(matches!(
+        ListStyleType::String(ContentString::try_new("*")?),
+        ListStyleType::String(_)
+    ));
+    assert!(matches!(ListStyleImage::None, ListStyleImage::None));
+    assert!(matches!(ListStylePosition::Inside, ListStylePosition::Inside));
+    let counter_change = CounterChange::new(CounterName::try_new("section")?, 1);
+    assert_eq!(counter_change.value(), 1);
+    let counter_changes = CounterChangeList::try_new([counter_change])?;
+    assert_eq!(counter_changes.changes().len(), 1);
+    assert!(matches!(
+        CounterChanges::Changes(counter_changes),
+        CounterChanges::Changes(_)
+    ));
+    assert!(matches!(CounterChanges::default(), CounterChanges::None));
 
     let filter_functions =
         FilterFunctionList::try_new([FilterFunction::Blur(SymbolicFunctionValue::new("4px")?)])?;

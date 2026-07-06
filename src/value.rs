@@ -1872,6 +1872,134 @@ pub enum Content {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ListStyleType {
+    None,
+    CounterStyle(CounterStyle),
+    String(ContentString),
+}
+
+impl Default for ListStyleType {
+    fn default() -> Self {
+        Self::CounterStyle(CounterStyle::BuiltIn(BuiltInCounterStyle::Disc))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum ListStylePosition {
+    Inside,
+    #[default]
+    Outside,
+}
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub enum ListStyleImage {
+    #[default]
+    None,
+    Url(StyleUrl),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ListStyle {
+    style_type: Option<ListStyleType>,
+    position: Option<ListStylePosition>,
+    image: Option<ListStyleImage>,
+}
+
+impl ListStyle {
+    pub fn try_new(
+        style_type: Option<ListStyleType>,
+        position: Option<ListStylePosition>,
+        image: Option<ListStyleImage>,
+    ) -> Result<Self> {
+        if style_type.is_none() && position.is_none() && image.is_none() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "list style shorthand requires at least one component",
+            ))
+        } else {
+            Ok(Self {
+                style_type,
+                position,
+                image,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn style_type(&self) -> Option<&ListStyleType> {
+        self.style_type.as_ref()
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<ListStylePosition> {
+        self.position
+    }
+
+    #[must_use]
+    pub const fn image(&self) -> Option<&ListStyleImage> {
+        self.image.as_ref()
+    }
+}
+
+/// A normalized counter mutation with an explicit integer value.
+///
+/// CSS omitted counter integers must be lowered before values reach this style
+/// model, so `value` is always the concrete mutation amount to apply.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CounterChange {
+    name: CounterName,
+    value: i32,
+}
+
+impl CounterChange {
+    #[must_use]
+    pub const fn new(name: CounterName, value: i32) -> Self {
+        Self { name, value }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CounterName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> i32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CounterChangeList {
+    changes: Vec<CounterChange>,
+}
+
+impl CounterChangeList {
+    pub fn try_new(changes: impl IntoIterator<Item = CounterChange>) -> Result<Self> {
+        let changes = changes.into_iter().collect::<Vec<_>>();
+        if changes.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "counter change list cannot be empty",
+            ))
+        } else {
+            Ok(Self { changes })
+        }
+    }
+
+    #[must_use]
+    pub fn changes(&self) -> &[CounterChange] {
+        &self.changes
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub enum CounterChanges {
+    #[default]
+    None,
+    Changes(CounterChangeList),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct SymbolicFunctionValue(String);
 
 impl SymbolicFunctionValue {
@@ -5317,10 +5445,11 @@ fn validate_decoration_brush(brush: Color) -> Result<()> {
 mod tests {
     use super::{
         AnimationNameList, BuiltInCounterStyle, Color, Content, ContentItem, ContentItemList,
-        ContentString, CounterFunction, CounterName, CounterStyle, CounterStyleName,
-        CountersFunction, CssPx, Decoration, DimensionLength, ErrorCode, FontFamilyList, Length,
-        OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight, TextWrap, Value,
-        WhiteSpace, WordBreak,
+        ContentString, CounterChange, CounterChangeList, CounterChanges, CounterFunction,
+        CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx, Decoration,
+        DimensionLength, ErrorCode, FontFamilyList, Length, ListStyle, ListStyleImage,
+        ListStylePosition, ListStyleType, OverflowWrap, StyleTextAlign, StyleUrl, TextSlant,
+        TextValue, TextWeight, TextWrap, Value, WhiteSpace, WordBreak,
     };
     use crate::StyleAttributeName;
 
@@ -5437,6 +5566,57 @@ mod tests {
 
         assert_eq!(content_string_error.code(), ErrorCode::InvalidString);
         assert_eq!(empty_list_error.code(), ErrorCode::InvalidValue);
+    }
+
+    #[test]
+    fn list_style_models_preserve_marker_policy() {
+        assert_eq!(
+            ListStyleType::default(),
+            ListStyleType::CounterStyle(CounterStyle::BuiltIn(BuiltInCounterStyle::Disc))
+        );
+        assert_eq!(ListStylePosition::default(), ListStylePosition::Outside);
+        assert_eq!(ListStyleImage::default(), ListStyleImage::None);
+
+        let style = ListStyle::try_new(
+            Some(ListStyleType::String(
+                ContentString::try_new("Section ").unwrap(),
+            )),
+            Some(ListStylePosition::Inside),
+            Some(ListStyleImage::Url(StyleUrl::new("marker.svg").unwrap())),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            style.style_type(),
+            Some(ListStyleType::String(string)) if string.as_str() == "Section "
+        ));
+        assert_eq!(style.position(), Some(ListStylePosition::Inside));
+        assert!(
+            matches!(style.image(), Some(ListStyleImage::Url(url)) if url.as_str() == "marker.svg")
+        );
+        assert_eq!(
+            ListStyle::try_new(None, None, None).unwrap_err().code(),
+            ErrorCode::InvalidValue
+        );
+    }
+
+    #[test]
+    fn counter_changes_require_explicit_values_and_non_empty_lists() {
+        let change = CounterChange::new(CounterName::try_new("section").unwrap(), -2);
+        assert_eq!(change.name().as_str(), "section");
+        assert_eq!(change.value(), -2);
+
+        let changes = CounterChangeList::try_new([change.clone()]).unwrap();
+        assert_eq!(changes.changes(), &[change]);
+        assert!(matches!(CounterChanges::default(), CounterChanges::None));
+        assert!(matches!(
+            CounterChanges::Changes(changes),
+            CounterChanges::Changes(_)
+        ));
+        assert_eq!(
+            CounterChangeList::try_new([]).unwrap_err().code(),
+            ErrorCode::InvalidValue
+        );
     }
 
     #[test]
