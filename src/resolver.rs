@@ -12,12 +12,13 @@ use super::{
     PointerEvents, Property, Result, Rotate, RulePrecedence, Scale, ScrollbarWidth,
     SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine,
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, Transform, Translate, Traversal, Tree, UserSelect, Value, Version,
-    VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak, ZIndex,
+    TextTransform, TextWrap, TimeList, Transform, TransitionPropertyList, Translate, Traversal,
+    Tree, UserSelect, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak,
+    ZIndex,
     declaration::hash_value,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList, Content,
-        CounterChanges, ImageLayerList, PositionList,
+        CounterChanges, EasingList, ImageLayerList, PositionList,
     },
 };
 use crate::{
@@ -636,26 +637,34 @@ impl Resolved {
     }
 
     #[must_use]
-    pub fn transition_properties(&self) -> &[Property] {
+    pub fn transition_properties(&self) -> &TransitionPropertyList {
         match self.get(Property::TransitionProperty) {
-            Value::PropertyList(properties) => properties,
-            _ => &[],
+            Value::TransitionPropertyList(properties) => properties,
+            _ => unreachable!("resolved transition-property stores transition property list"),
         }
     }
 
     #[must_use]
-    pub fn transition_duration(&self) -> f32 {
+    pub fn transition_duration(&self) -> &TimeList {
         match self.get(Property::TransitionDuration) {
-            Value::Number(duration) => *duration,
-            _ => 0.0,
+            Value::TimeList(durations) => durations,
+            _ => unreachable!("resolved transition-duration stores time list"),
         }
     }
 
     #[must_use]
-    pub fn transition_delay(&self) -> f32 {
+    pub fn transition_delay(&self) -> &TimeList {
         match self.get(Property::TransitionDelay) {
-            Value::Number(delay) => *delay,
-            _ => 0.0,
+            Value::TimeList(delays) => delays,
+            _ => unreachable!("resolved transition-delay stores time list"),
+        }
+    }
+
+    #[must_use]
+    pub fn transition_timing_function(&self) -> &EasingList {
+        match self.get(Property::TransitionTimingFunction) {
+            Value::EasingList(easings) => easings,
+            _ => unreachable!("resolved transition-timing-function stores easing list"),
         }
     }
 

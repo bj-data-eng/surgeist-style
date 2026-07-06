@@ -464,6 +464,35 @@ mod tests {
     }
 
     #[test]
+    fn transition_css_wide_keyword_expands_to_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Transition),
+            CssWideKeyword::Unset,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::Transition), None);
+        assert_eq!(
+            canonical.get(Property::TransitionProperty),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(
+            canonical.get(Property::TransitionDuration),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(
+            canonical.get(Property::TransitionDelay),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+        assert_eq!(
+            canonical.get(Property::TransitionTimingFunction),
+            Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+        );
+    }
+
+    #[test]
     fn text_decoration_css_wide_keyword_expands_to_longhands() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(

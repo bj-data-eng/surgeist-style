@@ -9,6 +9,7 @@ use super::{
     PlaceItemsAlignment, Result, Rotate, Scale, ScrollbarWidth, StyleColor, StyleTextAlign,
     TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationStyle,
     TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+    TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyTarget,
     Translate, UserSelect, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
     ZIndex,
     value::{
@@ -16,6 +17,7 @@ use super::{
         BackgroundRepeatList, BackgroundSize, BackgroundSizeList, ImageLayer, ImageLayerList,
         MaskLayer, MaskLayerList, Position, PositionList,
     },
+    value::{DurationSeconds, EasingFunction, EasingList},
     value::{validate_border_width_length, validate_font_size_length, validate_line_height_length},
 };
 
@@ -191,7 +193,8 @@ pub enum Property {
     TransitionProperty,
     TransitionDuration,
     TransitionDelay,
-    TransitionTiming,
+    TransitionTimingFunction,
+    Transition,
     AnimationName,
     Mask,
     MaskImage,
@@ -371,7 +374,8 @@ impl Property {
         Self::TransitionProperty,
         Self::TransitionDuration,
         Self::TransitionDelay,
-        Self::TransitionTiming,
+        Self::TransitionTimingFunction,
+        Self::Transition,
         Self::AnimationName,
         Self::Mask,
         Self::MaskImage,
@@ -415,6 +419,7 @@ impl Property {
                 | Self::GridColumn
                 | Self::GridArea
                 | Self::ListStyle
+                | Self::Transition
                 | Self::Mask
         )
     }
@@ -788,14 +793,29 @@ impl Property {
             Self::SelectionColor => Metadata::new(Value::Color(Color::TRANSPARENT))
                 .impact(Impact::empty().paint())
                 .interpolation(Interpolation::Color),
-            Self::TransitionProperty => {
-                Metadata::new(Value::PropertyList(Vec::new())).impact(Impact::empty().animation())
+            Self::TransitionProperty => Metadata::new(Value::TransitionPropertyList(
+                TransitionPropertyList::single_all(),
+            ))
+            .impact(Impact::empty().animation()),
+            Self::TransitionDuration | Self::TransitionDelay => {
+                Metadata::new(Value::TimeList(TimeList::single_zero()))
+                    .impact(Impact::empty().animation())
             }
-            Self::TransitionDuration | Self::TransitionDelay => Metadata::new(Value::Number(0.0))
-                .impact(Impact::empty().animation())
-                .interpolation(Interpolation::Number),
-            Self::TransitionTiming => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
-                .impact(Impact::empty().animation()),
+            Self::TransitionTimingFunction => {
+                Metadata::new(Value::EasingList(EasingList::single_ease()))
+                    .impact(Impact::empty().animation())
+            }
+            Self::Transition => Metadata::new(Value::TransitionList(
+                TransitionList::try_new([TransitionItem::try_new(
+                    Some(TransitionPropertyTarget::All),
+                    Some(DurationSeconds::new(0.0).unwrap()),
+                    Some(DurationSeconds::new(0.0).unwrap()),
+                    Some(EasingFunction::Ease),
+                )
+                .unwrap()])
+                .unwrap(),
+            ))
+            .impact(Impact::empty().animation()),
             Self::AnimationName => {
                 Metadata::new(Value::AnimationNameList(AnimationNameList::empty()))
                     .impact(Impact::empty().animation())
@@ -923,7 +943,6 @@ impl Property {
             return true;
         }
         match self {
-            Self::TransitionTiming => false,
             Self::Display => matches!(value, Value::Display(_)),
             Self::BoxSizing => matches!(value, Value::BoxSizing(_)),
             Self::Position => matches!(value, Value::Position(_)),
@@ -1032,9 +1051,7 @@ impl Property {
                 matches!(value, Value::CounterChanges(_))
             }
             Self::AspectRatio => matches!(value, Value::AspectRatio(_)),
-            Self::Opacity | Self::TransitionDuration | Self::TransitionDelay => {
-                matches!(value, Value::Number(_))
-            }
+            Self::Opacity => matches!(value, Value::Number(_)),
             Self::Background | Self::Color | Self::BorderColor | Self::OutlineColor => {
                 matches!(value, Value::StyleColor(_))
             }
@@ -1086,7 +1103,10 @@ impl Property {
             Self::Translate => matches!(value, Value::Translate(_)),
             Self::Rotate => matches!(value, Value::Rotate(_)),
             Self::Scale => matches!(value, Value::Scale(_)),
-            Self::TransitionProperty => matches!(value, Value::PropertyList(_)),
+            Self::TransitionProperty => matches!(value, Value::TransitionPropertyList(_)),
+            Self::TransitionDuration | Self::TransitionDelay => matches!(value, Value::TimeList(_)),
+            Self::TransitionTimingFunction => matches!(value, Value::EasingList(_)),
+            Self::Transition => matches!(value, Value::TransitionList(_)),
             Self::GridAutoFlow => matches!(value, Value::GridAutoFlow(_)),
             Self::GridFlowTolerance => matches!(value, Value::GridFlowTolerance(_)),
         }
@@ -1163,9 +1183,6 @@ impl Property {
             (Self::GridRow | Self::GridColumn, Value::GridPlacement(value)) => value.validate(),
             (Self::GridArea, Value::GridAreaPlacement(value)) => value.validate(),
             (Self::Opacity, Value::Number(value)) => validate_unit_number(*value, self),
-            (Self::TransitionDuration | Self::TransitionDelay, Value::Number(value)) => {
-                validate_non_negative_number(*value, self)
-            }
             _ => Ok(()),
         }
     }
@@ -1408,7 +1425,10 @@ fn value_kind(value: &Value) -> &'static str {
         Value::BackgroundBox(_) => "background box",
         Value::BackgroundAttachmentList(_) => "background attachment list",
         Value::MaskLayerList(_) => "mask layer list",
-        Value::PropertyList(_) => "property list",
+        Value::TransitionPropertyList(_) => "transition property list",
+        Value::TimeList(_) => "time list",
+        Value::EasingList(_) => "easing list",
+        Value::TransitionList(_) => "transition shorthand",
         Value::ShadowList(_) => "shadow list",
         Value::Stroke(_) => "stroke",
         Value::Text(_) => "text value",

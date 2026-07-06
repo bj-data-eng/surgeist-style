@@ -8,19 +8,20 @@ use super::{
     BorderStyles, BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color, ColorFunction,
     ColorInterpolationSpace, ColorMix, Content, ContentItem, ContentVisibility, CornerRadius,
     CounterChanges, CounterFunction, CounterStyle, CountersFunction, Cursor, DimensionLength,
-    Display, DurationSeconds, Edges, Filter, FilterFunction, Flex, FlexFactor, Font,
-    FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
-    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
-    GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
-    ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MaxTrackSizing, MinTrackSizing,
-    Opacity, Order, Outline, OutlineStyle, OutlineWidth, OverflowWrap, PlaceContentAlignment,
-    PlaceItemsAlignment, PointerEvents, Property, RelativeColor, Result, Rotate, Scale,
-    ScrollbarWidth, Shadow, Size, StyleColor, SubgridLineNameComponent,
+    Display, DurationSeconds, EasingFunction, EasingList, Edges, Filter, FilterFunction, Flex,
+    FlexFactor, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
+    GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement,
+    GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length,
+    LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MaxTrackSizing,
+    MinTrackSizing, Opacity, Order, Outline, OutlineStyle, OutlineWidth, OverflowWrap,
+    PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, Property, RelativeColor, Result,
+    Rotate, Scale, ScrollbarWidth, Shadow, Size, StyleColor, SubgridLineNameComponent,
     SymbolicComponentExpression, TextAlignLast, TextDecoration, TextDecorationLine,
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Translate, UserSelect,
-    Value, VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility,
-    WhiteSpace, WordBreak, ZIndex,
+    TextTransform, TextWrap, TimeList, TrackRepeatCount, TrackSizing, Transform, TransitionItem,
+    TransitionList, TransitionPropertyList, TransitionPropertyTarget, Translate, UserSelect, Value,
+    VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility, WhiteSpace,
+    WordBreak, ZIndex,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
         BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -88,10 +89,10 @@ impl TypedDeclaration {
     }
 
     #[must_use]
-    pub fn transition_duration(duration: DurationSeconds) -> Self {
+    pub fn transition_duration(durations: TimeList) -> Self {
         Self(Declaration::new(
             Property::TransitionDuration,
-            Value::Number(duration.get()),
+            Value::TimeList(durations),
         ))
     }
 
@@ -767,21 +768,30 @@ impl Declarations {
         self.set(Property::Scale, Value::Scale(value))
     }
 
-    pub fn try_transition_properties(self, properties: Vec<Property>) -> Result<Self> {
+    pub fn transition_property(self, properties: TransitionPropertyList) -> Result<Self> {
         self.try_set(
             Property::TransitionProperty,
-            Value::PropertyList(properties),
+            Value::TransitionPropertyList(properties),
         )
     }
 
-    #[must_use]
-    pub fn transition_duration(self, duration: DurationSeconds) -> Self {
-        self.set(Property::TransitionDuration, Value::Number(duration.get()))
+    pub fn transition_duration(self, durations: TimeList) -> Result<Self> {
+        self.try_set(Property::TransitionDuration, Value::TimeList(durations))
     }
 
-    #[must_use]
-    pub fn transition_delay(self, delay: DurationSeconds) -> Self {
-        self.set(Property::TransitionDelay, Value::Number(delay.get()))
+    pub fn transition_delay(self, delays: TimeList) -> Result<Self> {
+        self.try_set(Property::TransitionDelay, Value::TimeList(delays))
+    }
+
+    pub fn transition_timing_function(self, easings: EasingList) -> Result<Self> {
+        self.try_set(
+            Property::TransitionTimingFunction,
+            Value::EasingList(easings),
+        )
+    }
+
+    pub fn transition(self, transitions: TransitionList) -> Result<Self> {
+        self.try_set(Property::Transition, Value::TransitionList(transitions))
     }
 
     #[must_use]
@@ -1052,25 +1062,25 @@ impl Declarations {
     }
 
     #[must_use]
-    pub fn transition_property_list(&self) -> Option<&[Property]> {
+    pub fn transition_property_list(&self) -> Option<&TransitionPropertyList> {
         match self.get(Property::TransitionProperty) {
-            Some(Value::PropertyList(properties)) => Some(properties),
+            Some(Value::TransitionPropertyList(properties)) => Some(properties),
             _ => None,
         }
     }
 
     #[must_use]
-    pub fn transition_duration_number(&self) -> Option<f32> {
+    pub fn transition_duration_list(&self) -> Option<&TimeList> {
         match self.get(Property::TransitionDuration) {
-            Some(Value::Number(duration)) => Some(*duration),
+            Some(Value::TimeList(durations)) => Some(durations),
             _ => None,
         }
     }
 
     #[must_use]
-    pub fn transition_delay_number(&self) -> Option<f32> {
+    pub fn transition_delay_list(&self) -> Option<&TimeList> {
         match self.get(Property::TransitionDelay) {
-            Some(Value::Number(delay)) => Some(*delay),
+            Some(Value::TimeList(delays)) => Some(delays),
             _ => None,
         }
     }
@@ -1219,6 +1229,12 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::MaskPosition,
             Property::MaskSize,
             Property::MaskRepeat,
+        ],
+        Property::Transition => vec![
+            Property::TransitionProperty,
+            Property::TransitionDuration,
+            Property::TransitionDelay,
+            Property::TransitionTimingFunction,
         ],
         property => vec![property],
     }
@@ -1571,8 +1587,60 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Value::Keyword(keyword),
         ),
         (Property::Mask, Value::MaskLayerList(layers)) => mask_declarations(layers),
+        (Property::Transition, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Transition),
+            Value::Keyword(keyword),
+        ),
+        (Property::Transition, Value::TransitionList(value)) => transition_declarations(value),
         (property, value) => vec![Declaration::new(property, value)],
     }
+}
+
+fn transition_declarations(value: TransitionList) -> Vec<Declaration> {
+    let mut properties = Vec::new();
+    let mut durations = Vec::new();
+    let mut delays = Vec::new();
+    let mut easings = Vec::new();
+
+    for item in value.items() {
+        properties.push(
+            item.property()
+                .cloned()
+                .unwrap_or(TransitionPropertyTarget::All),
+        );
+        durations.push(
+            item.duration()
+                .unwrap_or_else(|| DurationSeconds::new(0.0).unwrap()),
+        );
+        delays.push(
+            item.delay()
+                .unwrap_or_else(|| DurationSeconds::new(0.0).unwrap()),
+        );
+        easings.push(
+            item.timing_function()
+                .cloned()
+                .unwrap_or(EasingFunction::Ease),
+        );
+    }
+
+    vec![
+        Declaration::new(
+            Property::TransitionProperty,
+            Value::TransitionPropertyList(TransitionPropertyList::try_new(properties).unwrap()),
+        ),
+        Declaration::new(
+            Property::TransitionDuration,
+            Value::TimeList(TimeList::try_new(durations).unwrap()),
+        ),
+        Declaration::new(
+            Property::TransitionDelay,
+            Value::TimeList(TimeList::try_new(delays).unwrap()),
+        ),
+        Declaration::new(
+            Property::TransitionTimingFunction,
+            Value::EasingList(EasingList::try_new(easings).unwrap()),
+        ),
+    ]
 }
 
 fn flex_declarations(value: Flex) -> Vec<Declaration> {
@@ -1945,6 +2013,22 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             98u8.hash(state);
             hash_counter_changes(value, state);
         }
+        Value::TransitionPropertyList(value) => {
+            99u8.hash(state);
+            hash_transition_property_list(value, state);
+        }
+        Value::TimeList(value) => {
+            100u8.hash(state);
+            hash_time_list(value, state);
+        }
+        Value::EasingList(value) => {
+            101u8.hash(state);
+            hash_easing_list(value, state);
+        }
+        Value::TransitionList(value) => {
+            102u8.hash(state);
+            hash_transition_list(value, state);
+        }
         Value::Order(value) => {
             42u8.hash(state);
             value.get().hash(state);
@@ -2254,10 +2338,6 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             40u8.hash(state);
             value.hash(state);
         }
-        Value::PropertyList(value) => {
-            8u8.hash(state);
-            value.hash(state);
-        }
         Value::ShadowList(value) => {
             9u8.hash(state);
             value.len().hash(state);
@@ -2342,6 +2422,104 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             15u8.hash(state);
             value.hash(state);
         }
+    }
+}
+
+fn hash_transition_property_list(value: &TransitionPropertyList, state: &mut DefaultHasher) {
+    value.values().len().hash(state);
+    for target in value.values() {
+        hash_transition_property_target(target, state);
+    }
+}
+
+fn hash_transition_property_target(value: &TransitionPropertyTarget, state: &mut DefaultHasher) {
+    match value {
+        TransitionPropertyTarget::All => {
+            0u8.hash(state);
+        }
+        TransitionPropertyTarget::None => {
+            1u8.hash(state);
+        }
+        TransitionPropertyTarget::Property(property) => {
+            2u8.hash(state);
+            property.hash(state);
+        }
+        TransitionPropertyTarget::Custom(name) => {
+            3u8.hash(state);
+            name.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_time_list(value: &TimeList, state: &mut DefaultHasher) {
+    value.seconds().len().hash(state);
+    for seconds in value.seconds() {
+        hash_f32(seconds.get(), state);
+    }
+}
+
+fn hash_easing_list(value: &EasingList, state: &mut DefaultHasher) {
+    value.values().len().hash(state);
+    for easing in value.values() {
+        hash_easing_function(easing, state);
+    }
+}
+
+fn hash_easing_function(value: &EasingFunction, state: &mut DefaultHasher) {
+    match value {
+        EasingFunction::Ease => 0u8.hash(state),
+        EasingFunction::Linear => 1u8.hash(state),
+        EasingFunction::EaseIn => 2u8.hash(state),
+        EasingFunction::EaseOut => 3u8.hash(state),
+        EasingFunction::EaseInOut => 4u8.hash(state),
+        EasingFunction::StepStart => 5u8.hash(state),
+        EasingFunction::StepEnd => 6u8.hash(state),
+        EasingFunction::CubicBezier(arguments) => {
+            7u8.hash(state);
+            arguments.as_css().hash(state);
+        }
+        EasingFunction::Steps(arguments) => {
+            8u8.hash(state);
+            arguments.as_css().hash(state);
+        }
+    }
+}
+
+fn hash_transition_list(value: &TransitionList, state: &mut DefaultHasher) {
+    value.items().len().hash(state);
+    for item in value.items() {
+        hash_transition_item(item, state);
+    }
+}
+
+fn hash_transition_item(value: &TransitionItem, state: &mut DefaultHasher) {
+    match value.property() {
+        Some(property) => {
+            true.hash(state);
+            hash_transition_property_target(property, state);
+        }
+        None => false.hash(state),
+    }
+    match value.duration() {
+        Some(duration) => {
+            true.hash(state);
+            hash_f32(duration.get(), state);
+        }
+        None => false.hash(state),
+    }
+    match value.delay() {
+        Some(delay) => {
+            true.hash(state);
+            hash_f32(delay.get(), state);
+        }
+        None => false.hash(state),
+    }
+    match value.timing_function() {
+        Some(easing) => {
+            true.hash(state);
+            hash_easing_function(easing, state);
+        }
+        None => false.hash(state),
     }
 }
 
@@ -3753,6 +3931,62 @@ mod tests {
             declarations.get(Property::TextDecorationThickness),
             Some(&Value::TextDecorationThickness(thickness))
         );
+    }
+
+    #[test]
+    fn transition_shorthand_lowers_to_typed_lists() {
+        let declarations = Declarations::new()
+            .transition(
+                TransitionList::try_new([TransitionItem::try_new(
+                    Some(TransitionPropertyTarget::Property(Property::Opacity)),
+                    Some(DurationSeconds::new(0.2).unwrap()),
+                    Some(DurationSeconds::new(0.05).unwrap()),
+                    Some(EasingFunction::EaseOut),
+                )
+                .unwrap()])
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(declarations.get(Property::Transition), None);
+        assert!(matches!(
+            declarations.get(Property::TransitionProperty),
+            Some(Value::TransitionPropertyList(_))
+        ));
+        assert!(matches!(
+            declarations.get(Property::TransitionDuration),
+            Some(Value::TimeList(_))
+        ));
+        assert!(matches!(
+            declarations.get(Property::TransitionTimingFunction),
+            Some(Value::EasingList(_))
+        ));
+    }
+
+    #[test]
+    fn transition_shorthand_resets_omitted_components_to_defaults() {
+        let declarations = Declarations::new()
+            .transition(
+                TransitionList::try_new([TransitionItem::try_new(
+                    Some(TransitionPropertyTarget::Property(Property::Opacity)),
+                    None,
+                    None,
+                    None,
+                )
+                .unwrap()])
+                .unwrap(),
+            )
+            .unwrap();
+
+        let durations = declarations
+            .get(Property::TransitionDuration)
+            .and_then(|value| match value {
+                Value::TimeList(values) => Some(values),
+                _ => None,
+            })
+            .unwrap();
+
+        assert_eq!(durations.seconds()[0].get(), 0.0);
     }
 
     #[test]

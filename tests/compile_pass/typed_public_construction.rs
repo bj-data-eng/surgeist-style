@@ -47,7 +47,7 @@ fn main() -> surgeist_style::Result<()> {
     let declarations = Declarations::new()
         .width(DimensionLength::px(CssPx::new(240.0)?)?)
         .opacity(Opacity::new(0.5)?)
-        .transition_duration(DurationSeconds::new(0.2)?)
+        .transition_duration(TimeList::try_new([DurationSeconds::new(0.2)?])?)?
         .try_grid_template_rows(GridTrackList::new(Vec::new()))?;
     assert_eq!(declarations.len(), 4);
 
@@ -129,6 +129,13 @@ fn main() -> surgeist_style::Result<()> {
         Some(DurationSeconds::new(0.05)?),
         Some(EasingFunction::EaseOut),
     )?])?;
+    let declarations = Declarations::new()
+        .transition_property(transition_properties.clone())?
+        .transition_duration(time_list.clone())?
+        .transition_delay(TimeList::try_new([DurationSeconds::new(0.05)?])?)?
+        .transition_timing_function(easing_list.clone())?
+        .transition(transition.clone())?;
+    assert_eq!(declarations.len(), 4);
     let _ = (time_list, easing_list, transition_properties, transition);
 
     let text_decoration_line = TextDecorationLine::try_new([

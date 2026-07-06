@@ -655,6 +655,17 @@ impl TimeList {
         &self.values
     }
 
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "time list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     #[must_use]
     pub fn single_zero() -> Self {
         Self {
@@ -727,6 +738,17 @@ impl EasingList {
         &self.values
     }
 
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "easing list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     #[must_use]
     pub fn single_ease() -> Self {
         Self {
@@ -786,6 +808,17 @@ impl TransitionPropertyList {
     #[must_use]
     pub fn values(&self) -> &[TransitionPropertyTarget] {
         &self.values
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.values.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "transition property list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     #[must_use]
@@ -867,6 +900,17 @@ impl TransitionList {
     #[must_use]
     pub fn items(&self) -> &[TransitionItem] {
         &self.items
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.items.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "transition list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -2966,7 +3010,10 @@ pub enum Value {
     BoxDecorationBreak(BoxDecorationBreak),
     Filter(Filter),
     ClipPath(ClipPath),
-    PropertyList(Vec<Property>),
+    TransitionPropertyList(TransitionPropertyList),
+    TimeList(TimeList),
+    EasingList(EasingList),
+    TransitionList(TransitionList),
     ShadowList(Vec<Shadow>),
     Stroke(Stroke),
     Text(TextValue),
@@ -3074,7 +3121,10 @@ impl Value {
             | Self::FontFeatureSettings(_)
             | Self::Font(_)
             | Self::AnimationNameList(_)
-            | Self::PropertyList(_)
+            | Self::TransitionPropertyList(_)
+            | Self::TimeList(_)
+            | Self::EasingList(_)
+            | Self::TransitionList(_)
             | Self::Text(_)
             | Self::Cursor(_)
             | Self::PointerEvents(_)
@@ -3217,7 +3267,6 @@ impl Value {
                 }
                 value.layers().iter().try_for_each(MaskLayer::validate)
             }
-            Self::PropertyList(_) => Ok(()),
             Self::ShadowList(shadows) => shadows.iter().try_for_each(|shadow| shadow.validate()),
             Self::Stroke(stroke) => stroke.validate(),
             Self::Text(text) => text.validate(),
@@ -3225,6 +3274,10 @@ impl Value {
             Self::BoxDecorationBreak(_) => Ok(()),
             Self::Filter(filter) => filter.validate(),
             Self::ClipPath(clip_path) => clip_path.validate(),
+            Self::TransitionPropertyList(value) => value.validate(),
+            Self::TimeList(value) => value.validate(),
+            Self::EasingList(value) => value.validate(),
+            Self::TransitionList(value) => value.validate(),
             Self::Translate(translate) => translate.validate(),
             Self::Rotate(rotate) => rotate.validate(),
             Self::Scale(scale) => scale.validate(),
