@@ -1,13 +1,13 @@
 use super::{
     AlignContent, AlignItems, AnimationDirectionList, AnimationFillModeList,
-    AnimationIterationCountList, AnimationNameList, AnimationPlayStateList, AspectRatio, Border,
-    BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak, BoxSizing, CalcLength,
-    CalcOperator, Clear, ClipPath, Color, Content, ContentVisibility, CornerRadius, CounterChanges,
-    Direction, Edges, Error, ErrorCode, Filter, Flex, FlexDirection, FlexFactor, FlexWrap, Float,
-    Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
-    GridFlowTolerance, LayoutPosition, Length, LetterSpacing, ListStyle, ListStyleImage,
-    ListStylePosition, ListStyleType, Order, Outline, OutlineStyle, OutlineWidth, Overflow,
-    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result, Rotate, Scale,
+    AnimationIterationCountList, AnimationList, AnimationNameList, AnimationPlayStateList,
+    AspectRatio, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak, BoxSizing,
+    CalcLength, CalcOperator, Clear, ClipPath, Color, Content, ContentVisibility, CornerRadius,
+    CounterChanges, Direction, Edges, Error, ErrorCode, Filter, Flex, FlexDirection, FlexFactor,
+    FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant,
+    FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing, ListStyle,
+    ListStyleImage, ListStylePosition, ListStyleType, Order, Outline, OutlineStyle, OutlineWidth,
+    Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result, Rotate, Scale,
     ScrollbarWidth, StyleColor, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
     TextTransform, TextWrap, TimeList, TransitionItem, TransitionList, TransitionPropertyList,
@@ -204,6 +204,7 @@ pub enum Property {
     AnimationDirection,
     AnimationFillMode,
     AnimationPlayState,
+    Animation,
     Mask,
     MaskImage,
     MaskSize,
@@ -392,6 +393,7 @@ impl Property {
         Self::AnimationDirection,
         Self::AnimationFillMode,
         Self::AnimationPlayState,
+        Self::Animation,
         Self::Mask,
         Self::MaskImage,
         Self::MaskSize,
@@ -435,6 +437,7 @@ impl Property {
                 | Self::GridArea
                 | Self::ListStyle
                 | Self::Transition
+                | Self::Animation
                 | Self::Mask
         )
     }
@@ -859,6 +862,8 @@ impl Property {
                 AnimationPlayStateList::single_running(),
             ))
             .impact(Impact::empty().animation()),
+            Self::Animation => Metadata::new(Value::AnimationList(AnimationList::single_initial()))
+                .impact(Impact::empty().animation()),
             Self::Mask => Metadata::new(Value::MaskLayerList(
                 MaskLayerList::try_new([MaskLayer::try_new(
                     Some(ImageLayer::None),
@@ -1138,6 +1143,7 @@ impl Property {
             Self::AnimationDirection => matches!(value, Value::AnimationDirectionList(_)),
             Self::AnimationFillMode => matches!(value, Value::AnimationFillModeList(_)),
             Self::AnimationPlayState => matches!(value, Value::AnimationPlayStateList(_)),
+            Self::Animation => matches!(value, Value::AnimationList(_)),
             Self::Cursor => matches!(value, Value::Cursor(_)),
             Self::PointerEvents => matches!(value, Value::PointerEvents(_)),
             Self::UserSelect => matches!(value, Value::UserSelect(_)),
@@ -1469,6 +1475,7 @@ fn value_kind(value: &Value) -> &'static str {
         Value::AnimationDirectionList(_) => "animation direction list",
         Value::AnimationFillModeList(_) => "animation fill mode list",
         Value::AnimationPlayStateList(_) => "animation play state list",
+        Value::AnimationList(_) => "animation shorthand",
         Value::ImageLayerList(_) => "image layer list",
         Value::PositionList(_) => "position list",
         Value::BackgroundSizeList(_) => "background size list",

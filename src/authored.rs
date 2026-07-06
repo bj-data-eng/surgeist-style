@@ -493,6 +493,36 @@ mod tests {
     }
 
     #[test]
+    fn animation_css_wide_keyword_expands_to_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Animation),
+            CssWideKeyword::RevertLayer,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::Animation), None);
+        for property in [
+            Property::AnimationName,
+            Property::AnimationDuration,
+            Property::AnimationDelay,
+            Property::AnimationTimingFunction,
+            Property::AnimationIterationCount,
+            Property::AnimationDirection,
+            Property::AnimationFillMode,
+            Property::AnimationPlayState,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::RevertLayer
+                ))
+            );
+        }
+    }
+
+    #[test]
     fn text_decoration_css_wide_keyword_expands_to_longhands() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(

@@ -2220,6 +2220,153 @@ impl AnimationPlayStateList {
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnimationItem {
+    name: Option<AnimationName>,
+    duration: Option<DurationSeconds>,
+    delay: Option<DurationSeconds>,
+    timing_function: Option<EasingFunction>,
+    iteration_count: Option<AnimationIterationCount>,
+    direction: Option<AnimationDirection>,
+    fill_mode: Option<AnimationFillMode>,
+    play_state: Option<AnimationPlayState>,
+}
+
+impl AnimationItem {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new(
+        name: Option<AnimationName>,
+        duration: Option<DurationSeconds>,
+        delay: Option<DurationSeconds>,
+        timing_function: Option<EasingFunction>,
+        iteration_count: Option<AnimationIterationCount>,
+        direction: Option<AnimationDirection>,
+        fill_mode: Option<AnimationFillMode>,
+        play_state: Option<AnimationPlayState>,
+    ) -> Result<Self> {
+        if name.is_none()
+            && duration.is_none()
+            && delay.is_none()
+            && timing_function.is_none()
+            && iteration_count.is_none()
+            && direction.is_none()
+            && fill_mode.is_none()
+            && play_state.is_none()
+        {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation item cannot be empty",
+            ));
+        }
+        Ok(Self {
+            name,
+            duration,
+            delay,
+            timing_function,
+            iteration_count,
+            direction,
+            fill_mode,
+            play_state,
+        })
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&AnimationName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub const fn duration(&self) -> Option<DurationSeconds> {
+        self.duration
+    }
+
+    #[must_use]
+    pub const fn delay(&self) -> Option<DurationSeconds> {
+        self.delay
+    }
+
+    #[must_use]
+    pub const fn timing_function(&self) -> Option<&EasingFunction> {
+        self.timing_function.as_ref()
+    }
+
+    #[must_use]
+    pub const fn iteration_count(&self) -> Option<AnimationIterationCount> {
+        self.iteration_count
+    }
+
+    #[must_use]
+    pub const fn direction(&self) -> Option<AnimationDirection> {
+        self.direction
+    }
+
+    #[must_use]
+    pub const fn fill_mode(&self) -> Option<AnimationFillMode> {
+        self.fill_mode
+    }
+
+    #[must_use]
+    pub const fn play_state(&self) -> Option<AnimationPlayState> {
+        self.play_state
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AnimationList {
+    items: Vec<AnimationItem>,
+}
+
+impl AnimationList {
+    pub fn try_new(items: impl IntoIterator<Item = AnimationItem>) -> Result<Self> {
+        let items = items.into_iter().collect::<Vec<_>>();
+        if items.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation list cannot be empty",
+            ));
+        }
+        Ok(Self { items })
+    }
+
+    #[must_use]
+    pub fn items(&self) -> &[AnimationItem] {
+        &self.items
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.items.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "animation list cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    #[must_use]
+    pub fn single_initial() -> Self {
+        Self {
+            items: vec![
+                AnimationItem::try_new(
+                    Some(AnimationName::None),
+                    Some(DurationSeconds::new(0.0).unwrap()),
+                    Some(DurationSeconds::new(0.0).unwrap()),
+                    Some(EasingFunction::Ease),
+                    Some(AnimationIterationCount::Number(
+                        AnimationIterationNumber::try_new(1.0).unwrap(),
+                    )),
+                    Some(AnimationDirection::Normal),
+                    Some(AnimationFillMode::None),
+                    Some(AnimationPlayState::Running),
+                )
+                .unwrap(),
+            ],
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StyleUrl(String);
 
@@ -3280,6 +3427,7 @@ pub enum Value {
     AnimationDirectionList(AnimationDirectionList),
     AnimationFillModeList(AnimationFillModeList),
     AnimationPlayStateList(AnimationPlayStateList),
+    AnimationList(AnimationList),
     ImageLayerList(ImageLayerList),
     PositionList(PositionList),
     BackgroundSizeList(BackgroundSizeList),
@@ -3405,6 +3553,7 @@ impl Value {
             | Self::AnimationDirectionList(_)
             | Self::AnimationFillModeList(_)
             | Self::AnimationPlayStateList(_)
+            | Self::AnimationList(_)
             | Self::TransitionPropertyList(_)
             | Self::TimeList(_)
             | Self::EasingList(_)
@@ -3497,6 +3646,7 @@ impl Value {
             Self::AnimationDirectionList(values) => values.validate(),
             Self::AnimationFillModeList(values) => values.validate(),
             Self::AnimationPlayStateList(values) => values.validate(),
+            Self::AnimationList(values) => values.validate(),
             Self::ImageLayerList(value) => {
                 if value.layers().is_empty() {
                     Err(Error::new(

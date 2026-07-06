@@ -1,7 +1,7 @@
 use surgeist_style::{
     AlignContent, AlignItems, Alpha, AnimationDirection, AnimationDirectionList, AnimationFillMode,
-    AnimationFillModeList, AnimationIterationCount, AnimationIterationCountList,
-    AnimationIterationNumber, AnimationName, AnimationNameList, AnimationPlayState,
+    AnimationFillModeList, AnimationItem, AnimationIterationCount, AnimationIterationCountList,
+    AnimationIterationNumber, AnimationList, AnimationName, AnimationNameList, AnimationPlayState,
     AnimationPlayStateList, AspectRatio, AttributeCaseSensitivity, AttributeMatcher,
     AttributeSelector, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
     AuthoredValue, BackgroundAttachment,
@@ -168,7 +168,19 @@ fn main() -> surgeist_style::Result<()> {
         .animation_iteration_count(animation_iterations.clone())?
         .animation_direction(animation_directions.clone())?
         .animation_fill_mode(animation_fill_modes.clone())?
-        .animation_play_state(animation_play_states.clone())?;
+        .animation_play_state(animation_play_states.clone())?
+        .animation(AnimationList::try_new([AnimationItem::try_new(
+            Some(AnimationName::Keyframes(KeyframesName::Ident(
+                KeyframesIdent::try_new("fade-in")?,
+            ))),
+            Some(DurationSeconds::new(0.3)?),
+            Some(DurationSeconds::new(0.05)?),
+            Some(EasingFunction::EaseInOut),
+            Some(AnimationIterationCount::Infinite),
+            Some(AnimationDirection::Alternate),
+            Some(AnimationFillMode::Both),
+            Some(AnimationPlayState::Paused),
+        )?])?)?;
     assert_eq!(declarations.len(), 8);
     let _ = (
         animation_names,

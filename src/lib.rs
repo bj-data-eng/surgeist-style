@@ -55,8 +55,8 @@ pub use state::StateFlag;
 pub use tree::{Node, Traversal, Tree};
 pub use value::{
     AlignContent, AlignItems, Alpha, AnimationDirection, AnimationDirectionList, AnimationFillMode,
-    AnimationFillModeList, AnimationIterationCount, AnimationIterationCountList,
-    AnimationIterationNumber, AnimationName, AnimationNameList, AnimationPlayState,
+    AnimationFillModeList, AnimationItem, AnimationIterationCount, AnimationIterationCountList,
+    AnimationIterationNumber, AnimationList, AnimationName, AnimationNameList, AnimationPlayState,
     AnimationPlayStateList, AspectRatio, BackgroundAttachment, BackgroundAttachmentList,
     BackgroundBox, BackgroundRepeat, BackgroundRepeatList, BackgroundRepeatStyle, BackgroundSize,
     BackgroundSizeComponent, BackgroundSizeList, BasicShape, Border, BorderLineStyle, BorderRadii,

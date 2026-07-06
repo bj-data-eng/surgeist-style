@@ -4,26 +4,27 @@ use std::{
 };
 
 use super::{
-    AlignContent, AnimationDirectionList, AnimationFillModeList, AnimationIterationCount,
-    AnimationIterationCountList, AnimationName, AnimationNameList, AnimationPlayStateList,
-    AspectRatio, BasicShape, Border, BorderLineStyle, BorderRadii, BorderSide, BorderStyles,
-    BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color, ColorFunction,
-    ColorInterpolationSpace, ColorMix, Content, ContentItem, ContentVisibility, CornerRadius,
-    CounterChanges, CounterFunction, CounterStyle, CountersFunction, Cursor, DimensionLength,
-    Display, DurationSeconds, EasingFunction, EasingList, Edges, Filter, FilterFunction, Flex,
-    FlexFactor, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
-    GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement,
-    GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length,
-    LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MaxTrackSizing,
-    MinTrackSizing, Opacity, Order, Outline, OutlineStyle, OutlineWidth, OverflowWrap,
-    PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, Property, RelativeColor, Result,
-    Rotate, Scale, ScrollbarWidth, Shadow, Size, StyleColor, SubgridLineNameComponent,
-    SymbolicComponentExpression, TextAlignLast, TextDecoration, TextDecorationLine,
-    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, TimeList, TrackRepeatCount, TrackSizing, Transform, TransitionItem,
-    TransitionList, TransitionPropertyList, TransitionPropertyTarget, Translate, UserSelect, Value,
-    VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility, WhiteSpace,
-    WordBreak, ZIndex,
+    AlignContent, AnimationDirection, AnimationDirectionList, AnimationFillMode,
+    AnimationFillModeList, AnimationItem, AnimationIterationCount, AnimationIterationCountList,
+    AnimationIterationNumber, AnimationList, AnimationName, AnimationNameList, AnimationPlayState,
+    AnimationPlayStateList, AspectRatio, BasicShape, Border, BorderLineStyle, BorderRadii,
+    BorderSide, BorderStyles, BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color,
+    ColorFunction, ColorInterpolationSpace, ColorMix, Content, ContentItem, ContentVisibility,
+    CornerRadius, CounterChanges, CounterFunction, CounterStyle, CountersFunction, Cursor,
+    DimensionLength, Display, DurationSeconds, EasingFunction, EasingList, Edges, Filter,
+    FilterFunction, Flex, FlexFactor, Font, FontFamilyList, FontFeatureSettings, FontStretch,
+    FontVariant, FontWeight, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance,
+    GridLine, GridPlacement, GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList,
+    LayoutPosition, Length, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition,
+    ListStyleType, MaxTrackSizing, MinTrackSizing, Opacity, Order, Outline, OutlineStyle,
+    OutlineWidth, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents,
+    Property, RelativeColor, Result, Rotate, Scale, ScrollbarWidth, Shadow, Size, StyleColor,
+    SubgridLineNameComponent, SymbolicComponentExpression, TextAlignLast, TextDecoration,
+    TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
+    TextSlant, TextTransform, TextWrap, TimeList, TrackRepeatCount, TrackSizing, Transform,
+    TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyTarget, Translate,
+    UserSelect, Value, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
+    Visibility, WhiteSpace, WordBreak, ZIndex,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
         BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -843,6 +844,10 @@ impl Declarations {
         )
     }
 
+    pub fn animation(self, animations: AnimationList) -> Result<Self> {
+        self.try_set(Property::Animation, Value::AnimationList(animations))
+    }
+
     #[must_use]
     pub fn display(self, display: Display) -> Self {
         self.set(Property::Display, Value::Display(display))
@@ -1349,6 +1354,16 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::TransitionDelay,
             Property::TransitionTimingFunction,
         ],
+        Property::Animation => vec![
+            Property::AnimationName,
+            Property::AnimationDuration,
+            Property::AnimationDelay,
+            Property::AnimationTimingFunction,
+            Property::AnimationIterationCount,
+            Property::AnimationDirection,
+            Property::AnimationFillMode,
+            Property::AnimationPlayState,
+        ],
         property => vec![property],
     }
 }
@@ -1705,6 +1720,11 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
             Value::Keyword(keyword),
         ),
         (Property::Transition, Value::TransitionList(value)) => transition_declarations(value),
+        (Property::Animation, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Animation),
+            Value::Keyword(keyword),
+        ),
+        (Property::Animation, Value::AnimationList(value)) => animation_declarations(value),
         (property, value) => vec![Declaration::new(property, value)],
     }
 }
@@ -1752,6 +1772,77 @@ fn transition_declarations(value: TransitionList) -> Vec<Declaration> {
         Declaration::new(
             Property::TransitionTimingFunction,
             Value::EasingList(EasingList::try_new(easings).unwrap()),
+        ),
+    ]
+}
+
+fn animation_declarations(value: AnimationList) -> Vec<Declaration> {
+    let mut names = Vec::new();
+    let mut durations = Vec::new();
+    let mut delays = Vec::new();
+    let mut easings = Vec::new();
+    let mut iteration_counts = Vec::new();
+    let mut directions = Vec::new();
+    let mut fill_modes = Vec::new();
+    let mut play_states = Vec::new();
+
+    for item in value.items() {
+        names.push(item.name().cloned().unwrap_or(AnimationName::None));
+        durations.push(
+            item.duration()
+                .unwrap_or_else(|| DurationSeconds::new(0.0).unwrap()),
+        );
+        delays.push(
+            item.delay()
+                .unwrap_or_else(|| DurationSeconds::new(0.0).unwrap()),
+        );
+        easings.push(
+            item.timing_function()
+                .cloned()
+                .unwrap_or(EasingFunction::Ease),
+        );
+        iteration_counts.push(item.iteration_count().unwrap_or_else(|| {
+            AnimationIterationCount::Number(AnimationIterationNumber::try_new(1.0).unwrap())
+        }));
+        directions.push(item.direction().unwrap_or(AnimationDirection::Normal));
+        fill_modes.push(item.fill_mode().unwrap_or(AnimationFillMode::None));
+        play_states.push(item.play_state().unwrap_or(AnimationPlayState::Running));
+    }
+
+    vec![
+        Declaration::new(
+            Property::AnimationName,
+            Value::AnimationNameList(AnimationNameList::try_new(names).unwrap()),
+        ),
+        Declaration::new(
+            Property::AnimationDuration,
+            Value::TimeList(TimeList::try_new(durations).unwrap()),
+        ),
+        Declaration::new(
+            Property::AnimationDelay,
+            Value::TimeList(TimeList::try_new(delays).unwrap()),
+        ),
+        Declaration::new(
+            Property::AnimationTimingFunction,
+            Value::EasingList(EasingList::try_new(easings).unwrap()),
+        ),
+        Declaration::new(
+            Property::AnimationIterationCount,
+            Value::AnimationIterationCountList(
+                AnimationIterationCountList::try_new(iteration_counts).unwrap(),
+            ),
+        ),
+        Declaration::new(
+            Property::AnimationDirection,
+            Value::AnimationDirectionList(AnimationDirectionList::try_new(directions).unwrap()),
+        ),
+        Declaration::new(
+            Property::AnimationFillMode,
+            Value::AnimationFillModeList(AnimationFillModeList::try_new(fill_modes).unwrap()),
+        ),
+        Declaration::new(
+            Property::AnimationPlayState,
+            Value::AnimationPlayStateList(AnimationPlayStateList::try_new(play_states).unwrap()),
         ),
     ]
 }
@@ -2157,6 +2248,10 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::AnimationPlayStateList(value) => {
             106u8.hash(state);
             value.hash(state);
+        }
+        Value::AnimationList(value) => {
+            107u8.hash(state);
+            hash_animation_list(value, state);
         }
         Value::Order(value) => {
             42u8.hash(state);
@@ -2655,14 +2750,18 @@ fn hash_transition_item(value: &TransitionItem, state: &mut DefaultHasher) {
 fn hash_animation_name_list(value: &AnimationNameList, state: &mut DefaultHasher) {
     value.names().len().hash(state);
     for name in value.names() {
-        match name {
-            AnimationName::None => {
-                0u8.hash(state);
-            }
-            AnimationName::Keyframes(name) => {
-                1u8.hash(state);
-                hash_keyframes_name(name, state);
-            }
+        hash_animation_name(name, state);
+    }
+}
+
+fn hash_animation_name(value: &AnimationName, state: &mut DefaultHasher) {
+    match value {
+        AnimationName::None => {
+            0u8.hash(state);
+        }
+        AnimationName::Keyframes(name) => {
+            1u8.hash(state);
+            hash_keyframes_name(name, state);
         }
     }
 }
@@ -2686,15 +2785,110 @@ fn hash_animation_iteration_count_list(
 ) {
     value.values().len().hash(state);
     for count in value.values() {
-        match count {
-            AnimationIterationCount::Infinite => {
-                0u8.hash(state);
-            }
-            AnimationIterationCount::Number(number) => {
-                1u8.hash(state);
-                hash_f32(number.get(), state);
-            }
+        hash_animation_iteration_count(*count, state);
+    }
+}
+
+fn hash_animation_iteration_count(value: AnimationIterationCount, state: &mut DefaultHasher) {
+    match value {
+        AnimationIterationCount::Infinite => {
+            0u8.hash(state);
         }
+        AnimationIterationCount::Number(number) => {
+            1u8.hash(state);
+            hash_f32(number.get(), state);
+        }
+    }
+}
+
+fn hash_animation_list(value: &AnimationList, state: &mut DefaultHasher) {
+    value.items().len().hash(state);
+    for item in value.items() {
+        hash_animation_item(item, state);
+    }
+}
+
+fn hash_animation_item(value: &AnimationItem, state: &mut DefaultHasher) {
+    match value.name() {
+        Some(name) => {
+            true.hash(state);
+            hash_animation_name(name, state);
+        }
+        None => false.hash(state),
+    }
+    match value.duration() {
+        Some(duration) => {
+            true.hash(state);
+            hash_f32(duration.get(), state);
+        }
+        None => false.hash(state),
+    }
+    match value.delay() {
+        Some(delay) => {
+            true.hash(state);
+            hash_f32(delay.get(), state);
+        }
+        None => false.hash(state),
+    }
+    match value.timing_function() {
+        Some(easing) => {
+            true.hash(state);
+            hash_easing_function(easing, state);
+        }
+        None => false.hash(state),
+    }
+    match value.iteration_count() {
+        Some(count) => {
+            true.hash(state);
+            hash_animation_iteration_count(count, state);
+        }
+        None => false.hash(state),
+    }
+    match value.direction() {
+        Some(direction) => {
+            true.hash(state);
+            hash_animation_direction(direction, state);
+        }
+        None => false.hash(state),
+    }
+    match value.fill_mode() {
+        Some(fill_mode) => {
+            true.hash(state);
+            hash_animation_fill_mode(fill_mode, state);
+        }
+        None => false.hash(state),
+    }
+    match value.play_state() {
+        Some(play_state) => {
+            true.hash(state);
+            hash_animation_play_state(play_state, state);
+        }
+        None => false.hash(state),
+    }
+}
+
+fn hash_animation_direction(value: AnimationDirection, state: &mut DefaultHasher) {
+    match value {
+        AnimationDirection::Normal => 0u8.hash(state),
+        AnimationDirection::Reverse => 1u8.hash(state),
+        AnimationDirection::Alternate => 2u8.hash(state),
+        AnimationDirection::AlternateReverse => 3u8.hash(state),
+    }
+}
+
+fn hash_animation_fill_mode(value: AnimationFillMode, state: &mut DefaultHasher) {
+    match value {
+        AnimationFillMode::None => 0u8.hash(state),
+        AnimationFillMode::Forwards => 1u8.hash(state),
+        AnimationFillMode::Backwards => 2u8.hash(state),
+        AnimationFillMode::Both => 3u8.hash(state),
+    }
+}
+
+fn hash_animation_play_state(value: AnimationPlayState, state: &mut DefaultHasher) {
+    match value {
+        AnimationPlayState::Running => 0u8.hash(state),
+        AnimationPlayState::Paused => 1u8.hash(state),
     }
 }
 
@@ -3706,21 +3900,21 @@ mod tests {
     use super::*;
     use crate::authored::AuthoredCascadeValue;
     use crate::{
-        AlignItems, Alpha, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty,
-        AuthoredTokens, BackgroundAttachment, BackgroundRepeatStyle, BoxSizing,
+        AlignItems, Alpha, AnimationItem, AnimationList, AuthoredDeclaration, AuthoredDeclarations,
+        AuthoredProperty, AuthoredTokens, BackgroundAttachment, BackgroundRepeatStyle, BoxSizing,
         BuiltInCounterStyle, CalcLength, CalcLengthTerm, ColorComponent, ColorInterpolationMethod,
         ColorInterpolationSpace, ColorMix, ColorMixComponent, Content, ContentItem,
         ContentItemList, ContentString, CounterChange, CounterChangeList, CounterChanges,
         CounterFunction, CounterName, CounterStyle, CssWideKeyword, CustomPropertyName, ErrorCode,
         FilterFunctionList, Font, FontFeature, FontFeatureSettings, FontFeatureTag,
         FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
-        GridFlowTolerance, HorizontalPositionKeyword, LetterSpacing, ListStyle, ListStyleImage,
-        ListStylePosition, ListStyleType, MaskLayer, OutlineWidthLength, OverflowWrap, StyleColor,
-        StyleUrl, SymbolicComponentExpression, SymbolicFunctionValue, SystemColor, TextAlignLast,
-        TextDecoration, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
-        TextDecorationThickness, TextIndent, TextOverflow, TextTransform, TextWrap, UserSelect,
-        VariableExpression, VariableFallback, VariableReference, VerticalAlign,
-        VerticalPositionKeyword, WhiteSpace, WordBreak,
+        GridFlowTolerance, HorizontalPositionKeyword, KeyframesIdent, LetterSpacing, ListStyle,
+        ListStyleImage, ListStylePosition, ListStyleType, MaskLayer, OutlineWidthLength,
+        OverflowWrap, StyleColor, StyleUrl, SymbolicComponentExpression, SymbolicFunctionValue,
+        SystemColor, TextAlignLast, TextDecoration, TextDecorationLine,
+        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
+        TextOverflow, TextTransform, TextWrap, UserSelect, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, VerticalPositionKeyword, WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -4162,6 +4356,152 @@ mod tests {
             .unwrap();
 
         assert_eq!(durations.seconds()[0].get(), 0.0);
+    }
+
+    #[test]
+    fn animation_shorthand_lowers_to_typed_longhand_lists() {
+        let fade = AnimationName::Keyframes(KeyframesName::Ident(
+            KeyframesIdent::try_new("fade-in").unwrap(),
+        ));
+        let slide = AnimationName::Keyframes(KeyframesName::Ident(
+            KeyframesIdent::try_new("slide-in").unwrap(),
+        ));
+
+        let declarations = Declarations::new()
+            .animation(
+                AnimationList::try_new([
+                    AnimationItem::try_new(
+                        Some(fade.clone()),
+                        Some(DurationSeconds::new(0.3).unwrap()),
+                        Some(DurationSeconds::new(0.1).unwrap()),
+                        Some(EasingFunction::EaseInOut),
+                        Some(AnimationIterationCount::Infinite),
+                        Some(AnimationDirection::Alternate),
+                        Some(AnimationFillMode::Both),
+                        Some(AnimationPlayState::Paused),
+                    )
+                    .unwrap(),
+                    AnimationItem::try_new(
+                        Some(slide.clone()),
+                        Some(DurationSeconds::new(0.6).unwrap()),
+                        Some(DurationSeconds::new(0.2).unwrap()),
+                        Some(EasingFunction::Linear),
+                        Some(AnimationIterationCount::Number(
+                            AnimationIterationNumber::try_new(2.0).unwrap(),
+                        )),
+                        Some(AnimationDirection::Reverse),
+                        Some(AnimationFillMode::Forwards),
+                        Some(AnimationPlayState::Running),
+                    )
+                    .unwrap(),
+                ])
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(declarations.get(Property::Animation), None);
+        assert_eq!(
+            declarations
+                .iter()
+                .map(Declaration::property)
+                .collect::<Vec<_>>(),
+            vec![
+                Property::AnimationName,
+                Property::AnimationDuration,
+                Property::AnimationDelay,
+                Property::AnimationTimingFunction,
+                Property::AnimationIterationCount,
+                Property::AnimationDirection,
+                Property::AnimationFillMode,
+                Property::AnimationPlayState,
+            ]
+        );
+        assert!(matches!(
+            declarations.get(Property::AnimationName),
+            Some(Value::AnimationNameList(values)) if values.names() == [fade, slide]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationDuration),
+            Some(Value::TimeList(values))
+                if values.seconds().iter().map(|value| value.get()).collect::<Vec<_>>()
+                    == vec![0.3, 0.6]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationIterationCount),
+            Some(Value::AnimationIterationCountList(values)) if values.values().len() == 2
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationDirection),
+            Some(Value::AnimationDirectionList(values))
+                if values.values() == [AnimationDirection::Alternate, AnimationDirection::Reverse]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationFillMode),
+            Some(Value::AnimationFillModeList(values))
+                if values.values() == [AnimationFillMode::Both, AnimationFillMode::Forwards]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationPlayState),
+            Some(Value::AnimationPlayStateList(values))
+                if values.values() == [AnimationPlayState::Paused, AnimationPlayState::Running]
+        ));
+    }
+
+    #[test]
+    fn animation_shorthand_resets_omitted_components_to_defaults() {
+        let declarations = Declarations::new()
+            .animation(
+                AnimationList::try_new([AnimationItem::try_new(
+                    Some(AnimationName::Keyframes(KeyframesName::Ident(
+                        KeyframesIdent::try_new("fade-in").unwrap(),
+                    ))),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .unwrap()])
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert!(matches!(
+            declarations.get(Property::AnimationDuration),
+            Some(Value::TimeList(values)) if values.seconds()[0].get() == 0.0
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationDelay),
+            Some(Value::TimeList(values)) if values.seconds()[0].get() == 0.0
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationTimingFunction),
+            Some(Value::EasingList(values)) if values.values() == [EasingFunction::Ease]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationIterationCount),
+            Some(Value::AnimationIterationCountList(values))
+                if matches!(
+                    values.values(),
+                    [AnimationIterationCount::Number(number)] if number.get() == 1.0
+                )
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationDirection),
+            Some(Value::AnimationDirectionList(values))
+                if values.values() == [AnimationDirection::Normal]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationFillMode),
+            Some(Value::AnimationFillModeList(values)) if values.values() == [AnimationFillMode::None]
+        ));
+        assert!(matches!(
+            declarations.get(Property::AnimationPlayState),
+            Some(Value::AnimationPlayStateList(values))
+                if values.values() == [AnimationPlayState::Running]
+        ));
     }
 
     #[test]
