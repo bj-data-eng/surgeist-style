@@ -22,9 +22,9 @@ use surgeist_style::{
     StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
     TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
     TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-    Translate, TranslateValues, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
-    VariableExpression, VariableFallback, VariableReference, VerticalAlign, VerticalAlignLength,
-    VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
+    Translate, TranslateValues, Traversal, Tree, TypedDeclaration, UserSelect, Value,
+    VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+    VerticalAlign, VerticalAlignLength, VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -154,6 +154,12 @@ fn main() -> surgeist_style::Result<()> {
         .scale(Scale::try_values([1.0, 2.0])?)
         .scale(Scale::Values(scale_values));
     assert_eq!(declarations.len(), 7);
+
+    let declarations = Declarations::new().user_select(UserSelect::Text);
+    assert_eq!(
+        declarations.get(Property::UserSelect),
+        Some(&Value::UserSelect(UserSelect::Text))
+    );
 
     let alpha = Alpha::new(0.5)?;
     let color = StyleColor::Hsl {

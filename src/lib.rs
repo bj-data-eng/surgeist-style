@@ -77,9 +77,9 @@ pub use value::{
     SystemColor, TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
     TextDecorationStyle, TextDecorationThickness, TextDecorationThicknessLength, TextIndent,
     TextOverflow, TextSlant, TextTransform, TextValue, TextWeight, TextWrap, TrackRepeat,
-    TrackRepeatCount, TrackSizing, Transform, TransformOp, Translate, TranslateValues, Value,
-    VerticalAlign, VerticalAlignLength, VerticalPositionKeyword, Visibility, WhiteSpace, WordBreak,
-    WritingMode, ZIndex,
+    TrackRepeatCount, TrackSizing, Transform, TransformOp, Translate, TranslateValues, UserSelect,
+    Value, VerticalAlign, VerticalAlignLength, VerticalPositionKeyword, Visibility, WhiteSpace,
+    WordBreak, WritingMode, ZIndex,
 };
 
 #[must_use]

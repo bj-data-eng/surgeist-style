@@ -2372,6 +2372,7 @@ pub enum Value {
     Scale(Scale),
     Cursor(Cursor),
     PointerEvents(PointerEvents),
+    UserSelect(UserSelect),
     Visibility(Visibility),
 }
 
@@ -2467,6 +2468,7 @@ impl Value {
             | Self::Text(_)
             | Self::Cursor(_)
             | Self::PointerEvents(_)
+            | Self::UserSelect(_)
             | Self::Visibility(_) => Interpolation::Discrete,
         }
     }
@@ -2610,7 +2612,7 @@ impl Value {
             Self::Translate(translate) => translate.validate(),
             Self::Rotate(rotate) => rotate.validate(),
             Self::Scale(scale) => scale.validate(),
-            Self::Cursor(_) | Self::PointerEvents(_) => Ok(()),
+            Self::Cursor(_) | Self::PointerEvents(_) | Self::UserSelect(_) => Ok(()),
             Self::Visibility(_) => Ok(()),
         }
     }
@@ -4992,6 +4994,16 @@ pub enum PointerEvents {
     #[default]
     Auto,
     None,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum UserSelect {
+    #[default]
+    Auto,
+    Text,
+    None,
+    All,
+    Contain,
 }
 
 fn validate_style_string(value: &str, field: &str) -> Result<()> {

@@ -16,9 +16,9 @@ use super::{
     RelativeColor, Result, Rotate, Scale, ScrollbarWidth, Shadow, Size, StyleColor,
     SubgridLineNameComponent, SymbolicComponentExpression, TextAlignLast, TextDecoration,
     TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
-    TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Translate, Value,
-    VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility, WhiteSpace,
-    WordBreak, ZIndex,
+    TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Translate,
+    UserSelect, Value, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
+    Visibility, WhiteSpace, WordBreak, ZIndex,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
         BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -631,6 +631,11 @@ impl Declarations {
             Property::PointerEvents,
             Value::PointerEvents(pointer_events),
         )
+    }
+
+    #[must_use]
+    pub fn user_select(self, value: UserSelect) -> Self {
+        self.set(Property::UserSelect, Value::UserSelect(value))
     }
 
     #[must_use]
@@ -2241,6 +2246,10 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             14u8.hash(state);
             value.hash(state);
         }
+        Value::UserSelect(value) => {
+            92u8.hash(state);
+            value.hash(state);
+        }
         Value::Visibility(value) => {
             15u8.hash(state);
             value.hash(state);
@@ -3119,7 +3128,7 @@ mod tests {
         OverflowWrap, StyleColor, StyleUrl, SymbolicComponentExpression, SymbolicFunctionValue,
         SystemColor, TextAlignLast, TextDecoration, TextDecorationLine,
         TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
-        TextOverflow, TextTransform, TextWrap, VariableExpression, VariableFallback,
+        TextOverflow, TextTransform, TextWrap, UserSelect, VariableExpression, VariableFallback,
         VariableReference, VerticalAlign, VerticalPositionKeyword, WhiteSpace, WordBreak,
     };
 
@@ -3254,6 +3263,34 @@ mod tests {
             declarations.get(Property::Scale),
             Some(&Value::Scale(scale))
         );
+    }
+
+    #[test]
+    fn interaction_properties_accept_typed_values() {
+        let declarations = Declarations::new()
+            .cursor(Cursor::Pointer)
+            .pointer_events(PointerEvents::None)
+            .user_select(UserSelect::All);
+
+        assert_eq!(
+            declarations.get(Property::Cursor),
+            Some(&Value::Cursor(Cursor::Pointer))
+        );
+        assert_eq!(
+            declarations.get(Property::PointerEvents),
+            Some(&Value::PointerEvents(PointerEvents::None))
+        );
+        assert_eq!(
+            declarations.get(Property::UserSelect),
+            Some(&Value::UserSelect(UserSelect::All))
+        );
+
+        let metadata = Property::UserSelect.metadata();
+        assert!(!metadata.is_inherited());
+        assert!(!metadata.impact_flags().affects_layout());
+        assert!(metadata.impact_flags().affects_paint());
+        assert!(!metadata.impact_flags().affects_text());
+        assert_eq!(metadata.default(), &Value::UserSelect(UserSelect::Auto));
     }
 
     #[test]

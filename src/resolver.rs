@@ -12,7 +12,8 @@ use super::{
     RulePrecedence, Scale, ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket,
     StyleColor, TextAlignLast, TextDecorationLine, TextDecorationStyle, TextDecorationThickness,
     TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap, Transform, Translate, Traversal,
-    Tree, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak, ZIndex,
+    Tree, UserSelect, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak,
+    ZIndex,
     declaration::hash_value,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList,
@@ -472,6 +473,14 @@ impl Resolved {
         match self.get(Property::PointerEvents) {
             Value::PointerEvents(pointer_events) => *pointer_events,
             _ => PointerEvents::Auto,
+        }
+    }
+
+    #[must_use]
+    pub fn user_select(&self) -> UserSelect {
+        match self.get(Property::UserSelect) {
+            Value::UserSelect(value) => *value,
+            _ => UserSelect::default(),
         }
     }
 
@@ -1685,16 +1694,17 @@ mod tests {
     use crate::{
         AspectRatio, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
         AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
-        CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, Flex,
-        FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue,
-        FontStretch, FontVariant, FontWeight, FontWeightNumber, LayerOrder, LayoutPosition,
-        LetterSpacing, Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence,
-        RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket,
-        StyleClass, StyleColor, StyleRole, StyleState, StyleTag, SystemColor, TextAlignLast,
+        CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, FilterFunction,
+        FilterFunctionList, Flex, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
+        FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber, ImageLayer,
+        LayerOrder, LayoutPosition, LetterSpacing, Node, Order, OverflowWrap,
+        PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth, Selector,
+        SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleColor, StyleRole,
+        StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor, TextAlignLast,
         TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
         TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
-        VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        UserSelect, VariableDependentValue, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -2146,6 +2156,53 @@ mod tests {
         assert_eq!(style.text_color(), &StyleColor::rgba(Color::BLACK));
         assert_eq!(style.background(), &background);
         assert_eq!(style.text_decoration_color(), &decoration);
+    }
+
+    #[test]
+    fn paint_operation_ten_values_resolve_together() {
+        let background = StyleColor::system(SystemColor::Canvas);
+        let border_color = StyleColor::current_color();
+        let corner = CornerRadius::new(Length::Px(8.0), Length::Px(12.0)).unwrap();
+        let images =
+            ImageLayerList::try_new([ImageLayer::url(StyleUrl::new("bg.png").unwrap())]).unwrap();
+        let filter = Filter::Functions(
+            FilterFunctionList::try_new([FilterFunction::Brightness(
+                SymbolicFunctionValue::new("120%").unwrap(),
+            )])
+            .unwrap(),
+        );
+        let translate = Translate::try_values([Length::Px(2.0)]).unwrap();
+        let scale = Scale::try_values([1.0, 1.2]).unwrap();
+
+        let style = resolve_single(
+            Declarations::new()
+                .try_background_color(background.clone())
+                .unwrap()
+                .background_image(images.clone())
+                .try_border_top_color(border_color.clone())
+                .unwrap()
+                .border_top_style(BorderLineStyle::Solid)
+                .try_border_top_left_radius(corner.clone())
+                .unwrap()
+                .box_decoration_break(BoxDecorationBreak::Clone)
+                .filter(filter.clone())
+                .clip_path(ClipPath::None)
+                .translate(translate.clone())
+                .scale(scale.clone())
+                .user_select(UserSelect::Text),
+        );
+
+        assert_eq!(style.background(), &background);
+        assert_eq!(style.background_image(), &images);
+        assert_eq!(style.border_top_color(), &border_color);
+        assert_eq!(style.border_top_style(), BorderLineStyle::Solid);
+        assert_eq!(style.border_top_left_radius(), &corner);
+        assert_eq!(style.box_decoration_break(), BoxDecorationBreak::Clone);
+        assert_eq!(style.filter(), &filter);
+        assert_eq!(style.clip_path(), &ClipPath::None);
+        assert_eq!(style.translate(), &translate);
+        assert_eq!(style.scale(), &scale);
+        assert_eq!(style.user_select(), UserSelect::Text);
     }
 
     #[test]

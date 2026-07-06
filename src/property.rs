@@ -8,7 +8,8 @@ use super::{
     PlaceItemsAlignment, Result, Rotate, Scale, ScrollbarWidth, StyleColor, StyleTextAlign,
     TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationStyle,
     TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-    Translate, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode, ZIndex,
+    Translate, UserSelect, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
+    ZIndex,
     value::{
         BackgroundAttachment, BackgroundAttachmentList, BackgroundBox, BackgroundRepeat,
         BackgroundRepeatList, BackgroundSize, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -166,6 +167,7 @@ pub enum Property {
     SelectionColor,
     Cursor,
     PointerEvents,
+    UserSelect,
     FocusOutline,
     SelectionPaint,
     BoxDecorationBreak,
@@ -337,6 +339,7 @@ impl Property {
         Self::SelectionColor,
         Self::Cursor,
         Self::PointerEvents,
+        Self::UserSelect,
         Self::FocusOutline,
         Self::SelectionPaint,
         Self::BoxDecorationBreak,
@@ -730,6 +733,8 @@ impl Property {
                 Metadata::new(Value::Cursor(super::Cursor::Default)).impact(Impact::empty().paint())
             }
             Self::PointerEvents => Metadata::new(Value::PointerEvents(super::PointerEvents::Auto)),
+            Self::UserSelect => Metadata::new(Value::UserSelect(UserSelect::default()))
+                .impact(Impact::empty().paint()),
             Self::FocusOutline | Self::SelectionPaint => Metadata::new(Value::Stroke(
                 super::Stroke::new(Length::ZERO, Color::TRANSPARENT),
             ))
@@ -1018,6 +1023,7 @@ impl Property {
             Self::AnimationName => matches!(value, Value::AnimationNameList(_)),
             Self::Cursor => matches!(value, Value::Cursor(_)),
             Self::PointerEvents => matches!(value, Value::PointerEvents(_)),
+            Self::UserSelect => matches!(value, Value::UserSelect(_)),
             Self::FocusOutline | Self::SelectionPaint => matches!(value, Value::Stroke(_)),
             Self::Transform => matches!(value, Value::Transform(_)),
             Self::TransformOrigin => matches!(value, Value::Size(_)),
@@ -1356,6 +1362,7 @@ fn value_kind(value: &Value) -> &'static str {
         Value::ClipPath(_) => "clip path",
         Value::Cursor(_) => "cursor",
         Value::PointerEvents(_) => "pointer events",
+        Value::UserSelect(_) => "user select",
         Value::Visibility(_) => "visibility",
     }
 }
