@@ -9,6 +9,11 @@ use super::{
     TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
     TextTransform, TextWrap, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
     ZIndex,
+    value::{
+        BackgroundAttachment, BackgroundAttachmentList, BackgroundBox, BackgroundRepeat,
+        BackgroundRepeatList, BackgroundSize, BackgroundSizeList, ImageLayer, ImageLayerList,
+        MaskLayer, MaskLayerList, Position, PositionList,
+    },
     value::{validate_border_width_length, validate_font_size_length, validate_line_height_length},
 };
 
@@ -98,6 +103,13 @@ pub enum Property {
     GridArea,
     Grid,
     Background,
+    BackgroundImage,
+    BackgroundPosition,
+    BackgroundSize,
+    BackgroundRepeat,
+    BackgroundOrigin,
+    BackgroundClip,
+    BackgroundAttachment,
     Foreground,
     Color,
     Border,
@@ -164,6 +176,11 @@ pub enum Property {
     TransitionDelay,
     TransitionTiming,
     AnimationName,
+    Mask,
+    MaskImage,
+    MaskSize,
+    MaskPosition,
+    MaskRepeat,
 }
 
 impl Property {
@@ -251,6 +268,13 @@ impl Property {
         Self::GridArea,
         Self::Grid,
         Self::Background,
+        Self::BackgroundImage,
+        Self::BackgroundPosition,
+        Self::BackgroundSize,
+        Self::BackgroundRepeat,
+        Self::BackgroundOrigin,
+        Self::BackgroundClip,
+        Self::BackgroundAttachment,
         Self::Foreground,
         Self::Color,
         Self::Border,
@@ -317,6 +341,11 @@ impl Property {
         Self::TransitionDelay,
         Self::TransitionTiming,
         Self::AnimationName,
+        Self::Mask,
+        Self::MaskImage,
+        Self::MaskSize,
+        Self::MaskPosition,
+        Self::MaskRepeat,
     ];
 
     #[must_use]
@@ -353,6 +382,7 @@ impl Property {
                 | Self::GridRow
                 | Self::GridColumn
                 | Self::GridArea
+                | Self::Mask
         )
     }
 
@@ -370,6 +400,30 @@ impl Property {
                     .interpolation(Interpolation::Color)
                     .animatable(true)
             }
+            Self::BackgroundImage => {
+                Metadata::new(Value::ImageLayerList(default_image_layer_list()))
+                    .impact(Impact::empty().paint())
+            }
+            Self::BackgroundPosition => Metadata::new(Value::PositionList(default_position_list()))
+                .impact(Impact::empty().paint()),
+            Self::BackgroundSize => {
+                Metadata::new(Value::BackgroundSizeList(default_background_size_list()))
+                    .impact(Impact::empty().paint())
+            }
+            Self::BackgroundRepeat => {
+                Metadata::new(Value::BackgroundRepeatList(default_background_repeat_list()))
+                    .impact(Impact::empty().paint())
+            }
+            Self::BackgroundOrigin => {
+                Metadata::new(Value::BackgroundBox(BackgroundBox::PaddingBox))
+                    .impact(Impact::empty().paint())
+            }
+            Self::BackgroundClip => Metadata::new(Value::BackgroundBox(BackgroundBox::BorderBox))
+                .impact(Impact::empty().paint()),
+            Self::BackgroundAttachment => Metadata::new(Value::BackgroundAttachmentList(
+                BackgroundAttachmentList::try_new([BackgroundAttachment::Scroll]).unwrap(),
+            ))
+            .impact(Impact::empty().paint()),
             Self::Foreground => Metadata::new(Value::Color(Color::BLACK))
                 .impact(Impact::empty().paint())
                 .interpolation(Interpolation::Color)
@@ -672,6 +726,29 @@ impl Property {
                 Metadata::new(Value::AnimationNameList(AnimationNameList::empty()))
                     .impact(Impact::empty().animation())
             }
+            Self::Mask => Metadata::new(Value::MaskLayerList(
+                MaskLayerList::try_new([MaskLayer::try_new(
+                    Some(ImageLayer::None),
+                    None,
+                    None,
+                    None,
+                )
+                .unwrap()])
+                .unwrap(),
+            ))
+            .impact(Impact::empty().paint()),
+            Self::MaskImage => Metadata::new(Value::ImageLayerList(default_image_layer_list()))
+                .impact(Impact::empty().paint()),
+            Self::MaskPosition => Metadata::new(Value::PositionList(default_position_list()))
+                .impact(Impact::empty().paint()),
+            Self::MaskSize => {
+                Metadata::new(Value::BackgroundSizeList(default_background_size_list()))
+                    .impact(Impact::empty().paint())
+            }
+            Self::MaskRepeat => {
+                Metadata::new(Value::BackgroundRepeatList(default_background_repeat_list()))
+                    .impact(Impact::empty().paint())
+            }
             Self::Display => Metadata::new(Value::Display(super::Display::default()))
                 .impact(Impact::empty().layout().paint()),
             Self::BoxSizing => Metadata::new(Value::BoxSizing(BoxSizing::default()))
@@ -871,6 +948,19 @@ impl Property {
             Self::Background | Self::Color | Self::BorderColor | Self::OutlineColor => {
                 matches!(value, Value::StyleColor(_))
             }
+            Self::BackgroundImage | Self::MaskImage => matches!(value, Value::ImageLayerList(_)),
+            Self::BackgroundPosition | Self::MaskPosition => {
+                matches!(value, Value::PositionList(_))
+            }
+            Self::BackgroundSize | Self::MaskSize => matches!(value, Value::BackgroundSizeList(_)),
+            Self::BackgroundRepeat | Self::MaskRepeat => {
+                matches!(value, Value::BackgroundRepeatList(_))
+            }
+            Self::BackgroundOrigin | Self::BackgroundClip => {
+                matches!(value, Value::BackgroundBox(_))
+            }
+            Self::BackgroundAttachment => matches!(value, Value::BackgroundAttachmentList(_)),
+            Self::Mask => matches!(value, Value::MaskLayerList(_)),
             Self::BorderTopColor
             | Self::BorderRightColor
             | Self::BorderBottomColor
@@ -1208,6 +1298,13 @@ fn value_kind(value: &Value) -> &'static str {
         Value::FontFeatureSettings(_) => "font feature settings",
         Value::Font(_) => "font shorthand",
         Value::AnimationNameList(_) => "animation name list",
+        Value::ImageLayerList(_) => "image layer list",
+        Value::PositionList(_) => "position list",
+        Value::BackgroundSizeList(_) => "background size list",
+        Value::BackgroundRepeatList(_) => "background repeat list",
+        Value::BackgroundBox(_) => "background box",
+        Value::BackgroundAttachmentList(_) => "background attachment list",
+        Value::MaskLayerList(_) => "mask layer list",
         Value::PropertyList(_) => "property list",
         Value::ShadowList(_) => "shadow list",
         Value::Stroke(_) => "stroke",
@@ -1217,6 +1314,22 @@ fn value_kind(value: &Value) -> &'static str {
         Value::PointerEvents(_) => "pointer events",
         Value::Visibility(_) => "visibility",
     }
+}
+
+fn default_image_layer_list() -> ImageLayerList {
+    ImageLayerList::try_new([ImageLayer::None]).unwrap()
+}
+
+fn default_position_list() -> PositionList {
+    PositionList::try_new([Position::origin()]).unwrap()
+}
+
+fn default_background_size_list() -> BackgroundSizeList {
+    BackgroundSizeList::try_new([BackgroundSize::auto()]).unwrap()
+}
+
+fn default_background_repeat_list() -> BackgroundRepeatList {
+    BackgroundRepeatList::try_new([BackgroundRepeat::repeat()]).unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1386,7 +1499,7 @@ mod tests {
     use super::*;
     use crate::{
         AlignContent, AlignItems, AspectRatio, ContentVisibility, Declarations, FlexFactor,
-        LayoutPosition, Order, ScrollbarWidth, ZIndex,
+        LayoutPosition, Order, PositionComponent, ScrollbarWidth, ZIndex,
     };
 
     #[test]
@@ -1460,5 +1573,45 @@ mod tests {
                 .try_set(Property::AlignTracks, Value::AlignItems(AlignItems::Center))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn background_and_mask_layer_metadata_is_explicit_paint_state() {
+        for property in [
+            Property::BackgroundImage,
+            Property::BackgroundPosition,
+            Property::BackgroundSize,
+            Property::BackgroundRepeat,
+            Property::BackgroundOrigin,
+            Property::BackgroundClip,
+            Property::BackgroundAttachment,
+            Property::Mask,
+            Property::MaskImage,
+            Property::MaskPosition,
+            Property::MaskSize,
+            Property::MaskRepeat,
+        ] {
+            let metadata = property.metadata();
+            assert!(!metadata.is_inherited());
+            assert!(metadata.impact_flags().affects_paint());
+            assert!(!metadata.impact_flags().affects_layout());
+            assert_eq!(metadata.interpolation_kind(), Interpolation::Discrete);
+        }
+
+        assert!(!Property::Mask.is_canonical());
+        assert_eq!(
+            Property::BackgroundPosition.metadata().default(),
+            Property::MaskPosition.metadata().default()
+        );
+        match Property::BackgroundPosition.metadata().default() {
+            Value::PositionList(positions) => assert_eq!(
+                positions.positions()[0].components(),
+                &[
+                    PositionComponent::Length(crate::Length::Percent(0.0)),
+                    PositionComponent::Length(crate::Length::Percent(0.0)),
+                ]
+            ),
+            _ => unreachable!("background-position metadata default is a position list"),
+        }
     }
 }

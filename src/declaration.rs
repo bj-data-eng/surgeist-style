@@ -18,6 +18,11 @@ use super::{
     TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Value,
     VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility, WhiteSpace,
     WordBreak, ZIndex,
+    value::{
+        BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
+        BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, ImageLayer, ImageLayerList,
+        MaskLayerList, Position, PositionComponent, PositionList,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -207,6 +212,71 @@ impl Declarations {
 
     pub fn try_concrete_background_color(self, color: Color) -> Result<Self> {
         self.try_background_color(StyleColor::rgba(color))
+    }
+
+    #[must_use]
+    pub fn background_image(self, value: ImageLayerList) -> Self {
+        self.set(Property::BackgroundImage, Value::ImageLayerList(value))
+    }
+
+    #[must_use]
+    pub fn background_position(self, value: PositionList) -> Self {
+        self.set(Property::BackgroundPosition, Value::PositionList(value))
+    }
+
+    #[must_use]
+    pub fn background_size(self, value: BackgroundSizeList) -> Self {
+        self.set(Property::BackgroundSize, Value::BackgroundSizeList(value))
+    }
+
+    #[must_use]
+    pub fn background_repeat(self, value: BackgroundRepeatList) -> Self {
+        self.set(
+            Property::BackgroundRepeat,
+            Value::BackgroundRepeatList(value),
+        )
+    }
+
+    #[must_use]
+    pub fn background_origin(self, value: BackgroundBox) -> Self {
+        self.set(Property::BackgroundOrigin, Value::BackgroundBox(value))
+    }
+
+    #[must_use]
+    pub fn background_clip(self, value: BackgroundBox) -> Self {
+        self.set(Property::BackgroundClip, Value::BackgroundBox(value))
+    }
+
+    #[must_use]
+    pub fn background_attachment(self, value: BackgroundAttachmentList) -> Self {
+        self.set(
+            Property::BackgroundAttachment,
+            Value::BackgroundAttachmentList(value),
+        )
+    }
+
+    pub fn mask(self, value: MaskLayerList) -> Result<Self> {
+        self.try_set(Property::Mask, Value::MaskLayerList(value))
+    }
+
+    #[must_use]
+    pub fn mask_image(self, value: ImageLayerList) -> Self {
+        self.set(Property::MaskImage, Value::ImageLayerList(value))
+    }
+
+    #[must_use]
+    pub fn mask_position(self, value: PositionList) -> Self {
+        self.set(Property::MaskPosition, Value::PositionList(value))
+    }
+
+    #[must_use]
+    pub fn mask_size(self, value: BackgroundSizeList) -> Self {
+        self.set(Property::MaskSize, Value::BackgroundSizeList(value))
+    }
+
+    #[must_use]
+    pub fn mask_repeat(self, value: BackgroundRepeatList) -> Self {
+        self.set(Property::MaskRepeat, Value::BackgroundRepeatList(value))
     }
 
     pub fn try_text_color(self, color: StyleColor) -> Result<Self> {
@@ -1002,6 +1072,12 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::GridRowEnd,
             Property::GridColumnEnd,
         ],
+        Property::Mask => vec![
+            Property::MaskImage,
+            Property::MaskPosition,
+            Property::MaskSize,
+            Property::MaskRepeat,
+        ],
         property => vec![property],
     }
 }
@@ -1343,6 +1419,11 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
                 Declaration::new(Property::GridColumnEnd, Value::GridLine(column_end)),
             ]
         }
+        (Property::Mask, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::Mask),
+            Value::Keyword(keyword),
+        ),
+        (Property::Mask, Value::MaskLayerList(layers)) => mask_declarations(layers),
         (property, value) => vec![Declaration::new(property, value)],
     }
 }
@@ -1429,10 +1510,69 @@ fn text_decoration_declarations(value: TextDecoration) -> Vec<Declaration> {
     ]
 }
 
+fn mask_declarations(layers: MaskLayerList) -> Vec<Declaration> {
+    let mut images = Vec::new();
+    let mut positions = Vec::new();
+    let mut sizes = Vec::new();
+    let mut repeats = Vec::new();
+
+    for layer in layers.layers() {
+        images.push(layer.image().cloned().unwrap_or(ImageLayer::None));
+        positions.push(
+            layer
+                .position()
+                .cloned()
+                .unwrap_or_else(default_layer_position),
+        );
+        sizes.push(layer.size().cloned().unwrap_or_else(default_layer_size));
+        repeats.push(layer.repeat().unwrap_or_else(default_layer_repeat));
+    }
+
+    vec![
+        Declaration::new(
+            Property::MaskImage,
+            Value::ImageLayerList(ImageLayerList::try_new(images).unwrap()),
+        ),
+        Declaration::new(
+            Property::MaskPosition,
+            Value::PositionList(PositionList::try_new(positions).unwrap()),
+        ),
+        Declaration::new(
+            Property::MaskSize,
+            Value::BackgroundSizeList(BackgroundSizeList::try_new(sizes).unwrap()),
+        ),
+        Declaration::new(
+            Property::MaskRepeat,
+            Value::BackgroundRepeatList(BackgroundRepeatList::try_new(repeats).unwrap()),
+        ),
+    ]
+}
+
 fn default_line_height() -> Length {
     match Property::LineHeight.metadata().default() {
         Value::Length(length) => length.clone(),
         _ => unreachable!("line-height metadata default is a length"),
+    }
+}
+
+fn default_layer_position() -> Position {
+    match Property::MaskPosition.metadata().default() {
+        Value::PositionList(positions) => positions.positions()[0].clone(),
+        _ => unreachable!("mask-position metadata default is a position list"),
+    }
+}
+
+fn default_layer_size() -> BackgroundSize {
+    match Property::MaskSize.metadata().default() {
+        Value::BackgroundSizeList(sizes) => sizes.sizes()[0].clone(),
+        _ => unreachable!("mask-size metadata default is a background size list"),
+    }
+}
+
+fn default_layer_repeat() -> BackgroundRepeat {
+    match Property::MaskRepeat.metadata().default() {
+        Value::BackgroundRepeatList(repeats) => repeats.repeats()[0],
+        _ => unreachable!("mask-repeat metadata default is a background repeat list"),
     }
 }
 
@@ -1758,6 +1898,34 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::OutlineWidth(value) => {
             78u8.hash(state);
             hash_outline_width(value, state);
+        }
+        Value::ImageLayerList(value) => {
+            79u8.hash(state);
+            hash_image_layer_list(value, state);
+        }
+        Value::PositionList(value) => {
+            80u8.hash(state);
+            hash_position_list(value, state);
+        }
+        Value::BackgroundSizeList(value) => {
+            81u8.hash(state);
+            hash_background_size_list(value, state);
+        }
+        Value::BackgroundRepeatList(value) => {
+            82u8.hash(state);
+            value.hash(state);
+        }
+        Value::BackgroundBox(value) => {
+            83u8.hash(state);
+            value.hash(state);
+        }
+        Value::BackgroundAttachmentList(value) => {
+            84u8.hash(state);
+            value.hash(state);
+        }
+        Value::MaskLayerList(value) => {
+            85u8.hash(state);
+            hash_mask_layer_list(value, state);
         }
         Value::WritingMode(value) => {
             33u8.hash(state);
@@ -2096,6 +2264,109 @@ fn hash_outline_width(value: &OutlineWidth, state: &mut DefaultHasher) {
             3u8.hash(state);
             hash_length(length.length(), state);
         }
+    }
+}
+
+fn hash_image_layer_list(value: &ImageLayerList, state: &mut DefaultHasher) {
+    value.layers().len().hash(state);
+    for layer in value.layers() {
+        hash_image_layer(layer, state);
+    }
+}
+
+fn hash_image_layer(value: &ImageLayer, state: &mut DefaultHasher) {
+    match value {
+        ImageLayer::None => 0u8.hash(state),
+        ImageLayer::Url(url) => {
+            1u8.hash(state);
+            url.hash(state);
+        }
+    }
+}
+
+fn hash_position_list(value: &PositionList, state: &mut DefaultHasher) {
+    value.positions().len().hash(state);
+    for position in value.positions() {
+        hash_layer_position(position, state);
+    }
+}
+
+fn hash_layer_position(value: &Position, state: &mut DefaultHasher) {
+    value.components().len().hash(state);
+    for component in value.components() {
+        match component {
+            PositionComponent::Horizontal(keyword) => {
+                0u8.hash(state);
+                keyword.hash(state);
+            }
+            PositionComponent::Vertical(keyword) => {
+                1u8.hash(state);
+                keyword.hash(state);
+            }
+            PositionComponent::Length(length) => {
+                2u8.hash(state);
+                hash_length(length, state);
+            }
+        }
+    }
+}
+
+fn hash_background_size_list(value: &BackgroundSizeList, state: &mut DefaultHasher) {
+    value.sizes().len().hash(state);
+    for size in value.sizes() {
+        hash_background_size(size, state);
+    }
+}
+
+fn hash_background_size(value: &BackgroundSize, state: &mut DefaultHasher) {
+    match value {
+        BackgroundSize::Cover => 0u8.hash(state),
+        BackgroundSize::Contain => 1u8.hash(state),
+        BackgroundSize::Explicit { width, height } => {
+            2u8.hash(state);
+            hash_background_size_component(width, state);
+            if let Some(height) = height {
+                true.hash(state);
+                hash_background_size_component(height, state);
+            } else {
+                false.hash(state);
+            }
+        }
+    }
+}
+
+fn hash_background_size_component(value: &BackgroundSizeComponent, state: &mut DefaultHasher) {
+    match value {
+        BackgroundSizeComponent::Auto => 0u8.hash(state),
+        BackgroundSizeComponent::Length(length) => {
+            1u8.hash(state);
+            hash_length(length, state);
+        }
+    }
+}
+
+fn hash_mask_layer_list(value: &MaskLayerList, state: &mut DefaultHasher) {
+    value.layers().len().hash(state);
+    for layer in value.layers() {
+        if let Some(image) = layer.image() {
+            true.hash(state);
+            hash_image_layer(image, state);
+        } else {
+            false.hash(state);
+        }
+        if let Some(position) = layer.position() {
+            true.hash(state);
+            hash_layer_position(position, state);
+        } else {
+            false.hash(state);
+        }
+        if let Some(size) = layer.size() {
+            true.hash(state);
+            hash_background_size(size, state);
+        } else {
+            false.hash(state);
+        }
+        layer.repeat().hash(state);
     }
 }
 
@@ -2587,16 +2858,17 @@ mod tests {
     use crate::authored::AuthoredCascadeValue;
     use crate::{
         AlignItems, Alpha, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty,
-        AuthoredTokens, BoxSizing, CalcLength, CalcLengthTerm, ColorComponent,
-        ColorInterpolationMethod, ColorInterpolationSpace, ColorMix, ColorMixComponent,
-        CssWideKeyword, CustomPropertyName, ErrorCode, Font, FontFeature, FontFeatureSettings,
-        FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
-        GridFlowTolerance, LetterSpacing, OutlineWidthLength, OverflowWrap, StyleColor,
+        AuthoredTokens, BackgroundAttachment, BackgroundRepeatStyle, BoxSizing, CalcLength,
+        CalcLengthTerm, ColorComponent, ColorInterpolationMethod, ColorInterpolationSpace,
+        ColorMix, ColorMixComponent, CssWideKeyword, CustomPropertyName, ErrorCode, Font,
+        FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch,
+        FontVariant, FontWeight, FontWeightNumber, GridFlowTolerance, HorizontalPositionKeyword,
+        LetterSpacing, MaskLayer, OutlineWidthLength, OverflowWrap, StyleColor, StyleUrl,
         SymbolicComponentExpression, SystemColor, TextAlignLast, TextDecoration,
         TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
         TextDecorationThickness, TextIndent, TextOverflow, TextTransform, TextWrap,
-        VariableExpression, VariableFallback, VariableReference, VerticalAlign, WhiteSpace,
-        WordBreak,
+        VariableExpression, VariableFallback, VariableReference, VerticalAlign,
+        VerticalPositionKeyword, WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -2628,6 +2900,84 @@ mod tests {
             value_hash(&Value::Length(Length::Calc(calc_a))),
             value_hash(&Value::Length(Length::Calc(calc_b)))
         );
+    }
+
+    #[test]
+    fn background_layer_properties_accept_symbolic_values() {
+        let images =
+            ImageLayerList::try_new([ImageLayer::url(StyleUrl::new("hero.png").unwrap())]).unwrap();
+        let position = Position::try_new([
+            PositionComponent::Horizontal(HorizontalPositionKeyword::Left),
+            PositionComponent::Length(Length::Percent(25.0)),
+        ])
+        .unwrap();
+        let positions = PositionList::try_new([position.clone()]).unwrap();
+        let size = BackgroundSize::Explicit {
+            width: BackgroundSizeComponent::Length(Length::Percent(100.0)),
+            height: Some(BackgroundSizeComponent::Auto),
+        };
+        let sizes = BackgroundSizeList::try_new([size.clone()]).unwrap();
+
+        let declarations = Declarations::new()
+            .background_image(images.clone())
+            .background_position(positions.clone())
+            .background_size(sizes.clone())
+            .background_repeat(BackgroundRepeatList::try_new([BackgroundRepeat::RepeatX]).unwrap())
+            .background_origin(BackgroundBox::PaddingBox)
+            .background_clip(BackgroundBox::ContentBox)
+            .background_attachment(
+                BackgroundAttachmentList::try_new([BackgroundAttachment::Fixed]).unwrap(),
+            );
+
+        assert_eq!(
+            declarations.get(Property::BackgroundImage),
+            Some(&Value::ImageLayerList(images))
+        );
+        assert_eq!(
+            declarations.get(Property::BackgroundPosition),
+            Some(&Value::PositionList(positions))
+        );
+        assert_eq!(
+            declarations.get(Property::BackgroundSize),
+            Some(&Value::BackgroundSizeList(sizes))
+        );
+    }
+
+    #[test]
+    fn mask_shorthand_lowers_to_layer_longhands() {
+        let layer = MaskLayer::try_new(
+            Some(ImageLayer::url(StyleUrl::new("mask.svg").unwrap())),
+            Some(
+                Position::try_new([PositionComponent::Vertical(VerticalPositionKeyword::Top)])
+                    .unwrap(),
+            ),
+            Some(BackgroundSize::Contain),
+            Some(BackgroundRepeat::Axes {
+                x: BackgroundRepeatStyle::NoRepeat,
+                y: BackgroundRepeatStyle::NoRepeat,
+            }),
+        )
+        .unwrap();
+        let mask = MaskLayerList::try_new([layer]).unwrap();
+        let declarations = Declarations::new().mask(mask.clone()).unwrap();
+
+        assert_eq!(declarations.get(Property::Mask), None);
+        assert!(matches!(
+            declarations.get(Property::MaskImage),
+            Some(Value::ImageLayerList(_))
+        ));
+        assert!(matches!(
+            declarations.get(Property::MaskPosition),
+            Some(Value::PositionList(_))
+        ));
+        assert!(matches!(
+            declarations.get(Property::MaskSize),
+            Some(Value::BackgroundSizeList(_))
+        ));
+        assert!(matches!(
+            declarations.get(Property::MaskRepeat),
+            Some(Value::BackgroundRepeatList(_))
+        ));
     }
 
     #[test]

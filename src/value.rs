@@ -1663,6 +1663,455 @@ impl AnimationNameList {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct StyleUrl(String);
+
+impl StyleUrl {
+    pub fn new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "style URL cannot be empty",
+            ))
+        } else {
+            Ok(Self(value))
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ImageLayer {
+    None,
+    Url(StyleUrl),
+}
+
+impl ImageLayer {
+    #[must_use]
+    pub const fn url(url: StyleUrl) -> Self {
+        Self::Url(url)
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ImageLayerList {
+    layers: Vec<ImageLayer>,
+}
+
+impl ImageLayerList {
+    pub fn try_new(layers: impl IntoIterator<Item = ImageLayer>) -> Result<Self> {
+        let layers = layers.into_iter().collect::<Vec<_>>();
+        if layers.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "image layer list cannot be empty",
+            ))
+        } else {
+            Ok(Self { layers })
+        }
+    }
+
+    #[must_use]
+    pub fn layers(&self) -> &[ImageLayer] {
+        &self.layers
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum HorizontalPositionKeyword {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum VerticalPositionKeyword {
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum PositionComponent {
+    Horizontal(HorizontalPositionKeyword),
+    Vertical(VerticalPositionKeyword),
+    Length(Length),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Position {
+    components: Vec<PositionComponent>,
+}
+
+impl Position {
+    pub fn try_new(components: impl IntoIterator<Item = PositionComponent>) -> Result<Self> {
+        let components = components.into_iter().collect::<Vec<_>>();
+        validate_position_components(&components)?;
+        Ok(Self { components })
+    }
+
+    #[must_use]
+    pub fn origin() -> Self {
+        Self {
+            components: vec![
+                PositionComponent::Length(Length::Percent(0.0)),
+                PositionComponent::Length(Length::Percent(0.0)),
+            ],
+        }
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[PositionComponent] {
+        &self.components
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        validate_position_components(&self.components)
+    }
+}
+
+fn validate_position_components(components: &[PositionComponent]) -> Result<()> {
+    if components.is_empty() {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "position cannot be empty",
+        ));
+    }
+    if components.len() > 4 {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "position cannot contain more than four components",
+        ));
+    }
+
+    let mut horizontal_sides = 0;
+    let mut vertical_sides = 0;
+    for component in components {
+        match component {
+            PositionComponent::Horizontal(
+                HorizontalPositionKeyword::Left | HorizontalPositionKeyword::Right,
+            ) => horizontal_sides += 1,
+            PositionComponent::Vertical(
+                VerticalPositionKeyword::Top | VerticalPositionKeyword::Bottom,
+            ) => vertical_sides += 1,
+            PositionComponent::Length(length) => length.validate()?,
+            PositionComponent::Horizontal(HorizontalPositionKeyword::Center)
+            | PositionComponent::Vertical(VerticalPositionKeyword::Center) => {}
+        }
+    }
+    if horizontal_sides > 1 {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "position cannot contain duplicate horizontal side keywords",
+        ));
+    }
+    if vertical_sides > 1 {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "position cannot contain duplicate vertical side keywords",
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PositionList {
+    positions: Vec<Position>,
+}
+
+impl PositionList {
+    pub fn try_new(positions: impl IntoIterator<Item = Position>) -> Result<Self> {
+        let positions = positions.into_iter().collect::<Vec<_>>();
+        if positions.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "position list cannot be empty",
+            ));
+        }
+        for position in &positions {
+            position.validate()?;
+        }
+        Ok(Self { positions })
+    }
+
+    #[must_use]
+    pub fn positions(&self) -> &[Position] {
+        &self.positions
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BackgroundSizeComponent {
+    Auto,
+    Length(Length),
+}
+
+impl BackgroundSizeComponent {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Auto => Ok(()),
+            Self::Length(length) => length.validate(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BackgroundSize {
+    Cover,
+    Contain,
+    Explicit {
+        width: BackgroundSizeComponent,
+        height: Option<BackgroundSizeComponent>,
+    },
+}
+
+impl BackgroundSize {
+    #[must_use]
+    pub const fn auto() -> Self {
+        Self::Explicit {
+            width: BackgroundSizeComponent::Auto,
+            height: None,
+        }
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Cover | Self::Contain => Ok(()),
+            Self::Explicit { width, height } => {
+                width.validate()?;
+                if let Some(height) = height {
+                    height.validate()?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackgroundSizeList {
+    sizes: Vec<BackgroundSize>,
+}
+
+impl BackgroundSizeList {
+    pub fn try_new(sizes: impl IntoIterator<Item = BackgroundSize>) -> Result<Self> {
+        let sizes = sizes.into_iter().collect::<Vec<_>>();
+        if sizes.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "background size list cannot be empty",
+            ));
+        }
+        for size in &sizes {
+            size.validate()?;
+        }
+        Ok(Self { sizes })
+    }
+
+    #[must_use]
+    pub fn sizes(&self) -> &[BackgroundSize] {
+        &self.sizes
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BackgroundRepeatStyle {
+    Repeat,
+    Space,
+    Round,
+    NoRepeat,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BackgroundRepeat {
+    Axes {
+        x: BackgroundRepeatStyle,
+        y: BackgroundRepeatStyle,
+    },
+    RepeatX,
+    RepeatY,
+}
+
+impl BackgroundRepeat {
+    #[must_use]
+    pub const fn repeat() -> Self {
+        Self::Axes {
+            x: BackgroundRepeatStyle::Repeat,
+            y: BackgroundRepeatStyle::Repeat,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct BackgroundRepeatList {
+    repeats: Vec<BackgroundRepeat>,
+}
+
+impl BackgroundRepeatList {
+    pub fn try_new(repeats: impl IntoIterator<Item = BackgroundRepeat>) -> Result<Self> {
+        let repeats = repeats.into_iter().collect::<Vec<_>>();
+        if repeats.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "background repeat list cannot be empty",
+            ))
+        } else {
+            Ok(Self { repeats })
+        }
+    }
+
+    #[must_use]
+    pub fn repeats(&self) -> &[BackgroundRepeat] {
+        &self.repeats
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BackgroundBox {
+    BorderBox,
+    PaddingBox,
+    ContentBox,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BackgroundAttachment {
+    Scroll,
+    Fixed,
+    Local,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct BackgroundAttachmentList {
+    attachments: Vec<BackgroundAttachment>,
+}
+
+impl BackgroundAttachmentList {
+    pub fn try_new(attachments: impl IntoIterator<Item = BackgroundAttachment>) -> Result<Self> {
+        let attachments = attachments.into_iter().collect::<Vec<_>>();
+        if attachments.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "background attachment list cannot be empty",
+            ))
+        } else {
+            Ok(Self { attachments })
+        }
+    }
+
+    #[must_use]
+    pub fn attachments(&self) -> &[BackgroundAttachment] {
+        &self.attachments
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MaskLayer {
+    image: Option<ImageLayer>,
+    position: Option<Position>,
+    size: Option<BackgroundSize>,
+    repeat: Option<BackgroundRepeat>,
+}
+
+impl MaskLayer {
+    pub fn try_new(
+        image: Option<ImageLayer>,
+        position: Option<Position>,
+        size: Option<BackgroundSize>,
+        repeat: Option<BackgroundRepeat>,
+    ) -> Result<Self> {
+        if image.is_none() && position.is_none() && size.is_none() && repeat.is_none() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "mask layer requires at least one component",
+            ));
+        }
+        if let Some(position) = &position {
+            position.validate()?;
+        }
+        if let Some(size) = &size {
+            size.validate()?;
+        }
+        Ok(Self {
+            image,
+            position,
+            size,
+            repeat,
+        })
+    }
+
+    #[must_use]
+    pub const fn image(&self) -> Option<&ImageLayer> {
+        self.image.as_ref()
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<&Position> {
+        self.position.as_ref()
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> Option<&BackgroundSize> {
+        self.size.as_ref()
+    }
+
+    #[must_use]
+    pub const fn repeat(&self) -> Option<BackgroundRepeat> {
+        self.repeat
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if let Some(position) = &self.position {
+            position.validate()?;
+        }
+        if let Some(size) = &self.size {
+            size.validate()?;
+        }
+        if self.image.is_some()
+            || self.position.is_some()
+            || self.size.is_some()
+            || self.repeat.is_some()
+        {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "mask layer requires at least one component",
+            ))
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MaskLayerList {
+    layers: Vec<MaskLayer>,
+}
+
+impl MaskLayerList {
+    pub fn try_new(layers: impl IntoIterator<Item = MaskLayer>) -> Result<Self> {
+        let layers = layers.into_iter().collect::<Vec<_>>();
+        if layers.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "mask layer list cannot be empty",
+            ));
+        }
+        for layer in &layers {
+            layer.validate()?;
+        }
+        Ok(Self { layers })
+    }
+
+    #[must_use]
+    pub fn layers(&self) -> &[MaskLayer] {
+        &self.layers
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Keyword(Keyword),
@@ -1735,6 +2184,13 @@ pub enum Value {
     FontFeatureSettings(FontFeatureSettings),
     Font(Font),
     AnimationNameList(AnimationNameList),
+    ImageLayerList(ImageLayerList),
+    PositionList(PositionList),
+    BackgroundSizeList(BackgroundSizeList),
+    BackgroundRepeatList(BackgroundRepeatList),
+    BackgroundBox(BackgroundBox),
+    BackgroundAttachmentList(BackgroundAttachmentList),
+    MaskLayerList(MaskLayerList),
     PropertyList(Vec<Property>),
     ShadowList(Vec<Shadow>),
     Stroke(Stroke),
@@ -1769,6 +2225,13 @@ impl Value {
                 Interpolation::Length
             }
             Self::TextDecorationThickness(_) => Interpolation::Length,
+            Self::ImageLayerList(_)
+            | Self::PositionList(_)
+            | Self::BackgroundSizeList(_)
+            | Self::BackgroundRepeatList(_)
+            | Self::BackgroundBox(_)
+            | Self::BackgroundAttachmentList(_)
+            | Self::MaskLayerList(_) => Interpolation::Discrete,
             Self::Keyword(_)
             | Self::Display(_)
             | Self::BoxSizing(_)
@@ -1900,6 +2363,64 @@ impl Value {
             Self::TextSlant(value) => validate_slant(*value),
             Self::Font(value) => value.validate(),
             Self::AnimationNameList(values) => values.validate(),
+            Self::ImageLayerList(value) => {
+                if value.layers().is_empty() {
+                    Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "image layer list cannot be empty",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            Self::PositionList(value) => {
+                if value.positions().is_empty() {
+                    return Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "position list cannot be empty",
+                    ));
+                }
+                value.positions().iter().try_for_each(Position::validate)
+            }
+            Self::BackgroundSizeList(value) => {
+                if value.sizes().is_empty() {
+                    return Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "background size list cannot be empty",
+                    ));
+                }
+                value.sizes().iter().try_for_each(BackgroundSize::validate)
+            }
+            Self::BackgroundRepeatList(value) => {
+                if value.repeats().is_empty() {
+                    Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "background repeat list cannot be empty",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            Self::BackgroundBox(_) => Ok(()),
+            Self::BackgroundAttachmentList(value) => {
+                if value.attachments().is_empty() {
+                    Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "background attachment list cannot be empty",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            Self::MaskLayerList(value) => {
+                if value.layers().is_empty() {
+                    return Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "mask layer list cannot be empty",
+                    ));
+                }
+                value.layers().iter().try_for_each(MaskLayer::validate)
+            }
             Self::PropertyList(_) => Ok(()),
             Self::ShadowList(shadows) => shadows.iter().try_for_each(|shadow| shadow.validate()),
             Self::Stroke(stroke) => stroke.validate(),

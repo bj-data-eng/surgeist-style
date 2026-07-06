@@ -12,7 +12,12 @@ use super::{
     Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine, TextDecorationStyle,
     TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
     Transform, Traversal, Tree, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace,
-    WordBreak, ZIndex, declaration::hash_value,
+    WordBreak, ZIndex,
+    declaration::hash_value,
+    value::{
+        BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList,
+        ImageLayerList, PositionList,
+    },
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
@@ -80,6 +85,94 @@ impl Resolved {
         match self.get(Property::Background) {
             Value::StyleColor(color) => color,
             _ => unreachable!("resolved background stores a style color"),
+        }
+    }
+
+    #[must_use]
+    pub fn background_image(&self) -> &ImageLayerList {
+        match self.get(Property::BackgroundImage) {
+            Value::ImageLayerList(value) => value,
+            _ => unreachable!("resolved background-image stores an image layer list"),
+        }
+    }
+
+    #[must_use]
+    pub fn background_position(&self) -> &PositionList {
+        match self.get(Property::BackgroundPosition) {
+            Value::PositionList(value) => value,
+            _ => unreachable!("resolved background-position stores a position list"),
+        }
+    }
+
+    #[must_use]
+    pub fn background_size(&self) -> &BackgroundSizeList {
+        match self.get(Property::BackgroundSize) {
+            Value::BackgroundSizeList(value) => value,
+            _ => unreachable!("resolved background-size stores a background size list"),
+        }
+    }
+
+    #[must_use]
+    pub fn background_repeat(&self) -> &BackgroundRepeatList {
+        match self.get(Property::BackgroundRepeat) {
+            Value::BackgroundRepeatList(value) => value,
+            _ => unreachable!("resolved background-repeat stores a background repeat list"),
+        }
+    }
+
+    #[must_use]
+    pub fn background_origin(&self) -> BackgroundBox {
+        match self.get(Property::BackgroundOrigin) {
+            Value::BackgroundBox(value) => *value,
+            _ => BackgroundBox::PaddingBox,
+        }
+    }
+
+    #[must_use]
+    pub fn background_clip(&self) -> BackgroundBox {
+        match self.get(Property::BackgroundClip) {
+            Value::BackgroundBox(value) => *value,
+            _ => BackgroundBox::BorderBox,
+        }
+    }
+
+    #[must_use]
+    pub fn background_attachment(&self) -> &BackgroundAttachmentList {
+        match self.get(Property::BackgroundAttachment) {
+            Value::BackgroundAttachmentList(value) => value,
+            _ => unreachable!("resolved background-attachment stores an attachment list"),
+        }
+    }
+
+    #[must_use]
+    pub fn mask_image(&self) -> &ImageLayerList {
+        match self.get(Property::MaskImage) {
+            Value::ImageLayerList(value) => value,
+            _ => unreachable!("resolved mask-image stores an image layer list"),
+        }
+    }
+
+    #[must_use]
+    pub fn mask_position(&self) -> &PositionList {
+        match self.get(Property::MaskPosition) {
+            Value::PositionList(value) => value,
+            _ => unreachable!("resolved mask-position stores a position list"),
+        }
+    }
+
+    #[must_use]
+    pub fn mask_size(&self) -> &BackgroundSizeList {
+        match self.get(Property::MaskSize) {
+            Value::BackgroundSizeList(value) => value,
+            _ => unreachable!("resolved mask-size stores a background size list"),
+        }
+    }
+
+    #[must_use]
+    pub fn mask_repeat(&self) -> &BackgroundRepeatList {
+        match self.get(Property::MaskRepeat) {
+            Value::BackgroundRepeatList(value) => value,
+            _ => unreachable!("resolved mask-repeat stores a background repeat list"),
         }
     }
 

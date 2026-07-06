@@ -1,24 +1,28 @@
 use surgeist_style::{
     AlignContent, AlignItems, Alpha, AnimationNameList, AspectRatio, AttributeCaseSensitivity,
     AttributeMatcher, AttributeSelector, AuthoredDeclaration, AuthoredDeclarations,
-    AuthoredProperty, AuthoredTokens, AuthoredValue, Border, BorderLineStyle, BorderRadii,
-    BorderStyles, Change, Color, ColorComponent, Combinator, ContentVisibility, Context,
-    CornerRadius, CssPx, CssWideKeyword, CustomPropertyName,
+    AuthoredProperty, AuthoredTokens, AuthoredValue, BackgroundAttachment,
+    BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
+    BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, Border,
+    BorderLineStyle, BorderRadii, BorderStyles, Change, Color, ColorComponent, Combinator,
+    ContentVisibility, Context, CornerRadius, CssPx, CssWideKeyword, CustomPropertyName,
     CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
     DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
     FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
-    LayerOrder, LayoutPosition, Length, LetterSpacing, LetterSpacingLength, Node, NthPattern,
-    NthSelector, Opacity, Order, Outline, OutlineStyle, OutlineWidth, OutlineWidthLength,
-    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Property, PseudoClassSelector,
-    PseudoElement, RangeState, RelativeSelector, RelativeSelectorList, RulePrecedence, RuleTarget,
-    RuntimePseudoClass, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
-    SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
-    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole, StyleState,
-    StyleTag, TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationLineComponent,
-    TextDecorationStyle, TextDecorationThickness, TextDecorationThicknessLength, TextIndent,
-    TextOverflow, TextSlant, TextTransform, TextWrap, Traversal, Tree, TypedDeclaration, Value,
-    VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
-    VerticalAlignLength, WhiteSpace, WordBreak, ZIndex,
+    HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
+    LetterSpacing, LetterSpacingLength, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector,
+    Opacity, Order, Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap,
+    PlaceContentAlignment, PlaceItemsAlignment, Position, PositionComponent, PositionList,
+    Property, PseudoClassSelector, PseudoElement, RangeState, RelativeSelector,
+    RelativeSelectorList, RulePrecedence, RuleTarget, RuntimePseudoClass, ScrollbarWidth, Selector,
+    SelectorList, SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet,
+    SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue, StyleBucket,
+    StyleBucketPolicy, StyleColor, StyleRole, StyleState, StyleTag, StyleUrl, TextAlignLast,
+    TextDecoration, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+    TextDecorationThickness, TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
+    VariableExpression, VariableFallback, VariableReference, VerticalAlign, VerticalAlignLength,
+    VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -140,6 +144,83 @@ fn main() -> surgeist_style::Result<()> {
         .try_text_color(color.clone())?
         .try_text_decoration_color(StyleColor::current_color())?;
     assert_eq!(declarations.len(), 2);
+
+    let hero_url = StyleUrl::new("hero.png")?;
+    assert_eq!(hero_url.as_str(), "hero.png");
+    let image_layers = ImageLayerList::try_new([ImageLayer::url(hero_url)])?;
+    assert_eq!(image_layers.layers().len(), 1);
+    assert!(ImageLayerList::try_new([]).is_err());
+    let position = Position::try_new([
+        PositionComponent::Horizontal(HorizontalPositionKeyword::Left),
+        PositionComponent::Length(Length::Percent(25.0)),
+    ])?;
+    assert_eq!(position.components().len(), 2);
+    assert_eq!(
+        Position::origin().components(),
+        &[
+            PositionComponent::Length(Length::Percent(0.0)),
+            PositionComponent::Length(Length::Percent(0.0)),
+        ]
+    );
+    assert!(Position::try_new([]).is_err());
+    assert!(
+        Position::try_new([
+            PositionComponent::Horizontal(HorizontalPositionKeyword::Left),
+            PositionComponent::Horizontal(HorizontalPositionKeyword::Right),
+        ])
+        .is_err()
+    );
+    assert!(
+        Position::try_new([
+            PositionComponent::Vertical(VerticalPositionKeyword::Top),
+            PositionComponent::Vertical(VerticalPositionKeyword::Bottom),
+        ])
+        .is_err()
+    );
+    let position_layers = PositionList::try_new([position.clone()])?;
+    let size = BackgroundSize::Explicit {
+        width: BackgroundSizeComponent::Length(Length::Percent(100.0)),
+        height: Some(BackgroundSizeComponent::Auto),
+    };
+    let size_layers = BackgroundSizeList::try_new([size.clone()])?;
+    let repeat = BackgroundRepeat::Axes {
+        x: BackgroundRepeatStyle::NoRepeat,
+        y: BackgroundRepeatStyle::NoRepeat,
+    };
+    let repeat_layers = BackgroundRepeatList::try_new([repeat])?;
+    let attachments = BackgroundAttachmentList::try_new([BackgroundAttachment::Fixed])?;
+    let mask_layer = MaskLayer::try_new(
+        Some(ImageLayer::None),
+        Some(Position::try_new([PositionComponent::Vertical(
+            VerticalPositionKeyword::Top,
+        )])?),
+        Some(BackgroundSize::Contain),
+        Some(BackgroundRepeat::RepeatX),
+    )?;
+    assert!(MaskLayer::try_new(None, None, None, None).is_err());
+    let mask_layers = MaskLayerList::try_new([mask_layer])?;
+    let declarations = Declarations::new()
+        .background_image(image_layers.clone())
+        .background_position(position_layers.clone())
+        .background_size(size_layers.clone())
+        .background_repeat(repeat_layers.clone())
+        .background_origin(BackgroundBox::PaddingBox)
+        .background_clip(BackgroundBox::ContentBox)
+        .background_attachment(attachments)
+        .mask(mask_layers)?
+        .mask_image(image_layers)
+        .mask_position(position_layers)
+        .mask_size(size_layers)
+        .mask_repeat(repeat_layers);
+    assert_eq!(declarations.get(Property::Mask), None);
+    assert!(matches!(
+        declarations.get(Property::BackgroundImage),
+        Some(Value::ImageLayerList(_))
+    ));
+    assert!(matches!(
+        declarations.get(Property::MaskPosition),
+        Some(Value::PositionList(_))
+    ));
 
     let declarations = Declarations::new()
         .try_inset_top(Length::Auto)?
