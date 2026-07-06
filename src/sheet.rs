@@ -577,10 +577,10 @@ impl Sheet {
         self.version = Version::next();
     }
 
-    fn condition_change(&self, predicate: impl Fn(Condition) -> bool) -> Change {
+    fn condition_change(&self, predicate: impl Fn(&Condition) -> bool) -> Change {
         let mut change = Change::empty();
         for rule in &self.rules {
-            if !rule.conditions().iter().copied().any(&predicate) {
+            if !rule.conditions().iter().any(&predicate) {
                 continue;
             }
             change.rematch = true;

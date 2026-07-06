@@ -8,24 +8,29 @@ use surgeist_style::{
     BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
     BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
-    BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, Combinator, Content, ContentItem,
-    ContentItemList, ContentString, ContentVisibility, Context, CornerRadius, CounterChange,
-    CounterChangeList, CounterChanges, CounterFunction, CounterName, CounterStyle,
-    CounterStyleName, CountersFunction, CssPx, CssWideKeyword,
+    BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, ColorSchemePreference,
+    Combinator, Condition, Content, ContentItem, ContentItemList, ContentString,
+    ContentVisibility, Context, ContrastPreference, CornerRadius, CounterChange, CounterChangeList, CounterChanges,
+    CounterFunction, CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx,
+    CssWideKeyword, DisplayMode,
     CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
     DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, Filter,
     FilterFunction, FilterFunctionList, Flex, FlexFactor, Font, FontFamilyList, FontFeature,
     FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight,
-    GridTrackList, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
-    KeyframesName, KeyframesRule, KeyframesString,
-    HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
+    ForcedColorsMode, GridTrackList, HoverCapability, HorizontalPositionKeyword, ImageLayer,
+    ImageLayerList, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
+    KeyframesName, KeyframesRule, KeyframesString, LayerOrder, LayoutPosition, Length,
     LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
-    ListStyleType, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector, Opacity, Order,
-    Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap,
+    ListStyleType, MaskLayer, MaskLayerList, MediaCondition, MediaConditionList,
+    MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, MediaQueryModifier,
+    MediaType, Node, NonNegativeInteger, NthPattern, NthSelector, Opacity, Order, Orientation,
+    Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap, PointerCapability,
     PlaceContentAlignment, PlaceItemsAlignment, Position, PositionComponent, PositionList,
-    Property, PseudoClassSelector, PseudoElement, RangeState, RelativeSelector,
-    RelativeSelectorList, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale,
-    ScaleValues, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
+    Property, PseudoClassSelector, PseudoElement, QueryComparison, QueryLength, QueryLengthBasis,
+    QueryLengthUnit, RangeFeature, RangeState, Ratio, ReducedMotionPreference,
+    ReducedTransparencyPreference, RelativeSelector, RelativeSelectorList, Resolution,
+    ResolutionUnit, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale, ScaleValues,
+    ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass, TypedMediaQuery,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
     StyleAttributeName, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole,
     StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration,
@@ -617,6 +622,76 @@ fn main() -> surgeist_style::Result<()> {
     let selector_change = Change::from_selector_fact_change(SelectorFactChange::Class);
     assert!(selector_change.rematch);
     assert!(selector_change.scope.whole_tree);
+
+    let rem = QueryLength::try_new(1.0, QueryLengthUnit::Rem)?;
+    let media_basis = QueryLengthBasis::new()
+        .root_font_size(QueryLength::try_new(16.0, QueryLengthUnit::Px)?)
+        .viewport_width(QueryLength::try_new(1024.0, QueryLengthUnit::Px)?)
+        .viewport_height(QueryLength::try_new(768.0, QueryLengthUnit::Px)?);
+    assert_eq!(rem.unit(), QueryLengthUnit::Rem);
+    assert_eq!(rem.to_css_px(&media_basis), Some(16.0));
+    assert_eq!(media_basis.viewport_width_basis().unwrap().value(), 1024.0);
+
+    let resolution = Resolution::try_new(192.0, ResolutionUnit::Dpi)?;
+    assert_eq!(resolution.to_dppx(), 2.0);
+    let ratio = Ratio::try_new(16.0, 9.0)?;
+    assert!(ratio.value() > 1.0);
+    let color_bits = NonNegativeInteger::new(8);
+    assert_eq!(color_bits.value(), 8);
+
+    let media_conditions = MediaConditionList::try_new([
+        MediaCondition::Feature(MediaFeatureQuery::Hover(HoverCapability::Hover)),
+        MediaCondition::Not(Box::new(MediaCondition::Feature(
+            MediaFeatureQuery::ForcedColors(ForcedColorsMode::Active),
+        ))),
+    ])?;
+    assert_eq!(media_conditions.conditions().len(), 2);
+
+    let typed_query = TypedMediaQuery::new(
+        Some(MediaQueryModifier::Only),
+        MediaType::Screen,
+        Some(MediaCondition::And(media_conditions)),
+    );
+    assert_eq!(typed_query.media_type(), MediaType::Screen);
+    assert_eq!(typed_query.modifier(), Some(MediaQueryModifier::Only));
+    assert!(typed_query.condition().is_some());
+
+    let media_query_list = MediaQueryList::try_new([
+        MediaQuery::Condition(MediaCondition::Feature(MediaFeatureQuery::Width(
+            RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(40.0, QueryLengthUnit::Rem)?,
+            ),
+        ))),
+        MediaQuery::Typed(typed_query),
+    ])?;
+    assert_eq!(media_query_list.queries().len(), 2);
+    let media_environment = MediaEnvironment::new()
+        .media_type(MediaType::Screen)
+        .width(QueryLength::try_new(800.0, QueryLengthUnit::Px)?)
+        .height(QueryLength::try_new(400.0, QueryLengthUnit::Px)?)
+        .with_length_basis(media_basis)
+        .resolution(resolution)
+        .color(color_bits)
+        .monochrome(NonNegativeInteger::new(0))
+        .with_orientation(Orientation::Landscape)
+        .prefers_color_scheme(ColorSchemePreference::Dark)
+        .prefers_reduced_motion(ReducedMotionPreference::NoPreference)
+        .prefers_reduced_transparency(ReducedTransparencyPreference::NoPreference)
+        .prefers_contrast(ContrastPreference::NoPreference)
+        .forced_colors(ForcedColorsMode::None)
+        .hover(HoverCapability::Hover)
+        .any_hover(HoverCapability::Hover)
+        .pointer(PointerCapability::Fine)
+        .any_pointer(PointerCapability::Fine)
+        .display_mode(DisplayMode::Browser);
+    assert!(media_query_list.matches(&media_environment));
+    assert_eq!(
+        media_environment.orientation_fact(),
+        Some(Orientation::Landscape)
+    );
+    assert_eq!(media_environment.orientation(), Some(Orientation::Landscape));
+    assert!(Condition::media(media_query_list).is_media());
 
     let custom_name = CustomPropertyName::try_new("--brand")?;
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");
