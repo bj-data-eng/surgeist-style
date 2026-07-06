@@ -10,9 +10,10 @@ use surgeist_style::{
     CounterChangeList, CounterChanges, CounterFunction, CounterName, CounterStyle,
     CounterStyleName, CountersFunction, CssPx, CssWideKeyword,
     CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
-    DimensionLength, DurationSeconds, Filter, FilterFunction, FilterFunctionList, Flex,
-    FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
-    FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
+    DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, Filter,
+    FilterFunction, FilterFunctionList, Flex, FlexFactor, Font, FontFamilyList, FontFeature,
+    FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight,
+    GridTrackList,
     HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
     LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
     ListStyleType, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector, Opacity, Order,
@@ -26,9 +27,11 @@ use surgeist_style::{
     StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration,
     TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
     TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-    Translate, TranslateValues, Traversal, Tree, TypedDeclaration, UserSelect, Value,
-    VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
-    VerticalAlignLength, VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
+    TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
+    TransitionPropertyTarget, Translate, TranslateValues, Traversal, Tree, TypedDeclaration,
+    UserSelect, Value, VariableDependentValue, VariableExpression, VariableFallback,
+    VariableReference, VerticalAlign, VerticalAlignLength, VerticalPositionKeyword, WhiteSpace,
+    WordBreak, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -107,6 +110,26 @@ fn main() -> surgeist_style::Result<()> {
         .overflow_wrap(OverflowWrap::Anywhere)
         .text_overflow(TextOverflow::Ellipsis);
     assert_eq!(declarations.len(), 5);
+
+    let time_list = TimeList::try_new([
+        DurationSeconds::new(0.2)?,
+        DurationSeconds::new(0.4)?,
+    ])?;
+    let easing_list = EasingList::try_new([
+        EasingFunction::EaseInOut,
+        EasingFunction::CubicBezier(EasingArguments::try_new("0.4, 0, 0.2, 1")?),
+    ])?;
+    let transition_properties = TransitionPropertyList::try_new([
+        TransitionPropertyTarget::All,
+        TransitionPropertyTarget::Custom(TransitionPropertyName::try_new("opacity")?),
+    ])?;
+    let transition = TransitionList::try_new([TransitionItem::try_new(
+        Some(TransitionPropertyTarget::Property(Property::Opacity)),
+        Some(DurationSeconds::new(0.2)?),
+        Some(DurationSeconds::new(0.05)?),
+        Some(EasingFunction::EaseOut),
+    )?])?;
+    let _ = (time_list, easing_list, transition_properties, transition);
 
     let text_decoration_line = TextDecorationLine::try_new([
         TextDecorationLineComponent::Underline,

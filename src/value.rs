@@ -633,6 +633,243 @@ impl DurationSeconds {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimeList {
+    values: Vec<DurationSeconds>,
+}
+
+impl TimeList {
+    pub fn try_new(values: impl IntoIterator<Item = DurationSeconds>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "time list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn seconds(&self) -> &[DurationSeconds] {
+        &self.values
+    }
+
+    #[must_use]
+    pub fn single_zero() -> Self {
+        Self {
+            values: vec![DurationSeconds::new(0.0).expect("zero seconds is valid")],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct EasingArguments {
+    authored: String,
+}
+
+impl EasingArguments {
+    pub fn try_new(authored: impl Into<String>) -> Result<Self> {
+        let authored = authored.into();
+        if authored.trim().is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidString,
+                "easing arguments cannot be empty",
+            ));
+        }
+        if authored.contains('\0') {
+            return Err(Error::new(
+                ErrorCode::InvalidString,
+                "easing arguments cannot contain U+0000",
+            ));
+        }
+        Ok(Self { authored })
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        &self.authored
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum EasingFunction {
+    Ease,
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+    StepStart,
+    StepEnd,
+    CubicBezier(EasingArguments),
+    Steps(EasingArguments),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct EasingList {
+    values: Vec<EasingFunction>,
+}
+
+impl EasingList {
+    pub fn try_new(values: impl IntoIterator<Item = EasingFunction>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "easing list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[EasingFunction] {
+        &self.values
+    }
+
+    #[must_use]
+    pub fn single_ease() -> Self {
+        Self {
+            values: vec![EasingFunction::Ease],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TransitionPropertyName {
+    value: String,
+}
+
+impl TransitionPropertyName {
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self> {
+        let value = validate_timing_ident(value.as_ref(), "transition property name")?;
+        if value.eq_ignore_ascii_case("none") || value.eq_ignore_ascii_case("all") {
+            return Err(Error::new(
+                ErrorCode::InvalidString,
+                "transition property name cannot be `none` or `all`",
+            ));
+        }
+        Ok(Self { value })
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum TransitionPropertyTarget {
+    All,
+    None,
+    Property(Property),
+    Custom(TransitionPropertyName),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct TransitionPropertyList {
+    values: Vec<TransitionPropertyTarget>,
+}
+
+impl TransitionPropertyList {
+    pub fn try_new(values: impl IntoIterator<Item = TransitionPropertyTarget>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "transition property list cannot be empty",
+            ));
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[TransitionPropertyTarget] {
+        &self.values
+    }
+
+    #[must_use]
+    pub fn single_all() -> Self {
+        Self {
+            values: vec![TransitionPropertyTarget::All],
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransitionItem {
+    property: Option<TransitionPropertyTarget>,
+    duration: Option<DurationSeconds>,
+    delay: Option<DurationSeconds>,
+    timing_function: Option<EasingFunction>,
+}
+
+impl TransitionItem {
+    pub fn try_new(
+        property: Option<TransitionPropertyTarget>,
+        duration: Option<DurationSeconds>,
+        delay: Option<DurationSeconds>,
+        timing_function: Option<EasingFunction>,
+    ) -> Result<Self> {
+        if property.is_none() && duration.is_none() && delay.is_none() && timing_function.is_none()
+        {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "transition item cannot be empty",
+            ));
+        }
+        Ok(Self {
+            property,
+            duration,
+            delay,
+            timing_function,
+        })
+    }
+
+    #[must_use]
+    pub const fn property(&self) -> Option<&TransitionPropertyTarget> {
+        self.property.as_ref()
+    }
+
+    #[must_use]
+    pub const fn duration(&self) -> Option<DurationSeconds> {
+        self.duration
+    }
+
+    #[must_use]
+    pub const fn delay(&self) -> Option<DurationSeconds> {
+        self.delay
+    }
+
+    #[must_use]
+    pub const fn timing_function(&self) -> Option<&EasingFunction> {
+        self.timing_function.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransitionList {
+    items: Vec<TransitionItem>,
+}
+
+impl TransitionList {
+    pub fn try_new(items: impl IntoIterator<Item = TransitionItem>) -> Result<Self> {
+        let items = items.into_iter().collect::<Vec<_>>();
+        if items.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "transition list cannot be empty",
+            ));
+        }
+        Ok(Self { items })
+    }
+
+    #[must_use]
+    pub fn items(&self) -> &[TransitionItem] {
+        &self.items
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum ContentVisibility {
     #[default]
@@ -5446,6 +5683,36 @@ fn validate_counter_identifier(value: &str, field: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+fn validate_timing_ident(value: &str, label: &str) -> Result<String> {
+    if value.is_empty() {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{label} cannot be empty"),
+        ));
+    }
+    if value.contains('\0') {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{label} cannot contain U+0000"),
+        ));
+    }
+    if is_css_wide_keyword(value) || matches!(value.to_ascii_lowercase().as_str(), "span" | "auto")
+    {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{label} uses a reserved CSS identifier"),
+        ));
+    }
+    Ok(value.to_owned())
+}
+
+fn is_css_wide_keyword(value: &str) -> bool {
+    matches!(
+        value.to_ascii_lowercase().as_str(),
+        "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+    )
+}
+
 fn validate_grid_line_name(name: &str) -> Result<()> {
     validate_style_string(name, "grid line name")?;
     if matches!(name, "auto" | "span") {
@@ -5512,9 +5779,11 @@ mod tests {
         AnimationNameList, BuiltInCounterStyle, Color, Content, ContentItem, ContentItemList,
         ContentString, CounterChange, CounterChangeList, CounterChanges, CounterFunction,
         CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx, Decoration,
-        DimensionLength, ErrorCode, FontFamilyList, Length, ListStyle, ListStyleImage,
-        ListStylePosition, ListStyleType, OverflowWrap, StyleTextAlign, StyleUrl, TextSlant,
-        TextValue, TextWeight, TextWrap, Value, WhiteSpace, WordBreak,
+        DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, ErrorCode,
+        FontFamilyList, Length, ListStyle, ListStyleImage, ListStylePosition, ListStyleType,
+        OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight, TextWrap,
+        TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
+        TransitionPropertyTarget, Value, WhiteSpace, WordBreak,
     };
     use crate::StyleAttributeName;
 
@@ -5547,6 +5816,48 @@ mod tests {
 
         assert_eq!(font_error.code(), ErrorCode::InvalidString);
         assert_eq!(animation_error.code(), ErrorCode::InvalidString);
+    }
+
+    #[test]
+    fn timing_lists_and_easing_values_preserve_symbolic_payloads() {
+        let times = TimeList::try_new([
+            DurationSeconds::new(0.2).unwrap(),
+            DurationSeconds::new(1.0).unwrap(),
+        ])
+        .unwrap();
+        assert_eq!(times.seconds().len(), 2);
+        assert!(TimeList::try_new([]).is_err());
+
+        let easing =
+            EasingFunction::CubicBezier(EasingArguments::try_new("0.4, 0, 0.2, 1").unwrap());
+        let list = EasingList::try_new([easing.clone()]).unwrap();
+        assert_eq!(list.values(), &[easing]);
+        assert_eq!(
+            EasingArguments::try_new("").unwrap_err().code(),
+            ErrorCode::InvalidString
+        );
+    }
+
+    #[test]
+    fn transition_models_require_non_empty_lists_and_items() {
+        let property =
+            TransitionPropertyTarget::Custom(TransitionPropertyName::try_new("opacity").unwrap());
+        let item = TransitionItem::try_new(
+            Some(property.clone()),
+            Some(DurationSeconds::new(0.15).unwrap()),
+            None,
+            Some(EasingFunction::EaseOut),
+        )
+        .unwrap();
+        let list = TransitionList::try_new([item]).unwrap();
+        assert!(matches!(list.items()[0].property(), Some(value) if value == &property));
+        assert!(TransitionItem::try_new(None, None, None, None).is_err());
+        assert!(TransitionList::try_new([]).is_err());
+        assert!(TransitionPropertyList::try_new([]).is_err());
+        assert!(TransitionPropertyName::try_new("none").is_err());
+        assert!(TransitionPropertyName::try_new("-webkit-transform").is_ok());
+        assert!(TransitionPropertyName::try_new("フェード").is_ok());
+        assert!(TransitionPropertyName::try_new("auto").is_err());
     }
 
     #[test]
