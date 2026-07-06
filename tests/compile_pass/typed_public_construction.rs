@@ -9,7 +9,7 @@ use surgeist_style::{
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
     BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
     BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, ColorSchemePreference,
-    Combinator, Condition, ContainerCondition, ContainerConditionList, ContainerFacts,
+    Combinator, Condition, ConditionFacts, ContainerCondition, ContainerConditionList, ContainerFacts,
     ContainerFeatureQuery, ContainerName, ContainerStyleQuery, Content, ContentItem, ContentItemList, ContentString,
     ContentVisibility, Context, ContrastPreference, CornerRadius, CounterChange, CounterChangeList, CounterChanges,
     CounterFunction, CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx,
@@ -726,6 +726,10 @@ fn main() -> surgeist_style::Result<()> {
         400.0
     );
     assert!(Condition::container(container_condition).is_container());
+    let condition_facts = ConditionFacts::new()
+        .media(MediaEnvironment::new().width(QueryLength::try_new(800.0, QueryLengthUnit::Px)?))
+        .container(ContainerFacts::new().width(QueryLength::try_new(320.0, QueryLengthUnit::Px)?));
+    assert!(condition_facts.container_facts().is_some());
 
     let custom_name = CustomPropertyName::try_new("--brand")?;
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");

@@ -549,12 +549,12 @@ impl Sheet {
     }
 
     #[must_use]
-    pub fn viewport_change(&self) -> Change {
-        self.condition_change(Condition::is_viewport)
+    pub fn media_condition_change(&self) -> Change {
+        self.condition_change(Condition::is_media)
     }
 
     #[must_use]
-    pub fn container_change(&self) -> Change {
+    pub fn container_condition_change(&self) -> Change {
         self.condition_change(Condition::is_container)
     }
 
@@ -650,9 +650,11 @@ mod precedence_tests {
     use super::*;
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
-        CssWideKeyword, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
-        KeyframesName, KeyframesRule, LayerOrder, Property, RulePrecedence, Selector,
-        SelectorSpecificity, SourceOrder, StyleColor, Value, Viewport,
+        ContainerCondition, ContainerFeatureQuery, CssWideKeyword, KeyframeBlock, KeyframeOffset,
+        KeyframeSelectorList, KeyframesIdent, KeyframesName, KeyframesRule, LayerOrder,
+        MediaCondition, MediaFeatureQuery, MediaQuery, MediaQueryList, Property, QueryComparison,
+        QueryLength, QueryLengthUnit, RangeFeature, RulePrecedence, Selector, SelectorSpecificity,
+        SourceOrder, StyleColor, Value,
     };
 
     fn authored_color(color: Color) -> AuthoredDeclarations {
@@ -742,7 +744,15 @@ mod precedence_tests {
             Declarations::new()
                 .try_concrete_text_color(Color::TRANSPARENT)
                 .unwrap(),
-            [Condition::viewport(Viewport::min_width(320.0))],
+            [Condition::media(
+                MediaQueryList::try_new([MediaQuery::Condition(MediaCondition::Feature(
+                    MediaFeatureQuery::Width(RangeFeature::new(
+                        Some(QueryComparison::GreaterThanOrEqual),
+                        QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap(),
+                    )),
+                ))])
+                .unwrap(),
+            )],
         );
 
         assert_eq!(
@@ -750,6 +760,61 @@ mod precedence_tests {
             RulePrecedence::new(LayerOrder::default(), SourceOrder::new(1))
                 .with_specificity(SelectorSpecificity::new(0, 1, 0))
         );
+    }
+
+    #[test]
+    fn media_condition_change_includes_conditional_rule_properties() {
+        let sheet = Sheet::new()
+            .rule(
+                Selector::tag("button").unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::BLACK)
+                    .unwrap(),
+            )
+            .conditional_rule(
+                Selector::tag("button").unwrap(),
+                Declarations::new()
+                    .try_set(Property::Width, Value::Length(crate::Length::Px(48.0)))
+                    .unwrap(),
+                [Condition::media(
+                    MediaQueryList::try_new([MediaQuery::Condition(MediaCondition::Feature(
+                        MediaFeatureQuery::Width(RangeFeature::new(
+                            Some(QueryComparison::GreaterThanOrEqual),
+                            QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap(),
+                        )),
+                    ))])
+                    .unwrap(),
+                )],
+            );
+
+        let change = sheet.media_condition_change();
+
+        assert!(change.rematch);
+        assert!(change.invalidation.layout);
+        assert!(!change.invalidation.paint);
+    }
+
+    #[test]
+    fn container_condition_change_includes_conditional_rule_properties() {
+        let sheet = Sheet::new().conditional_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::TRANSPARENT)
+                .unwrap(),
+            [Condition::container(ContainerCondition::Feature(
+                ContainerFeatureQuery::Width(RangeFeature::new(
+                    Some(QueryComparison::GreaterThanOrEqual),
+                    QueryLength::try_new(300.0, QueryLengthUnit::Px).unwrap(),
+                )),
+            ))],
+        );
+
+        let change = sheet.container_condition_change();
+
+        assert!(change.rematch);
+        assert!(change.invalidation.paint);
+        assert!(!change.invalidation.layout);
+        assert!(!sheet.media_condition_change().invalidation.paint);
     }
 
     #[test]

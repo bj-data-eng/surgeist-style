@@ -6,16 +6,17 @@ use std::{
 use super::{
     AlignContent, AnimationDirectionList, AnimationFillModeList, AnimationIterationCountList,
     AnimationNameList, AnimationPlayStateList, AspectRatio, BorderLineStyle, BorderRadii,
-    BoxDecorationBreak, ClipPath, Condition, Container, ContentVisibility, CornerRadius, Corners,
-    CssWideKeyword, Cursor, Declarations, Display, Edges, Filter, FlexFactor, FontFamilyList,
-    FontFeatureSettings, FontStretch, FontVariant, FontWeight, LayoutPosition, Length,
-    LetterSpacing, ListStyleImage, ListStylePosition, ListStyleType, Order, OutlineStyle,
-    OutlineWidth, OverflowWrap, PointerEvents, Property, Result, Rotate, RulePrecedence, Scale,
+    BoxDecorationBreak, ClipPath, Condition, ConditionFacts, ContainerFacts, ContentVisibility,
+    CornerRadius, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges, Filter,
+    FlexFactor, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
+    LayoutPosition, Length, LetterSpacing, ListStyleImage, ListStylePosition, ListStyleType,
+    MediaEnvironment, Order, OutlineStyle, OutlineWidth, OverflowWrap, PointerEvents, Property,
+    QueryLength, QueryLengthBasis, Ratio, Resolution, Result, Rotate, RulePrecedence, Scale,
     ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast,
     TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
     TextSlant, TextTransform, TextWrap, TimeList, Transform, TransitionPropertyList, Translate,
-    Traversal, Tree, UserSelect, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace,
-    WordBreak, ZIndex,
+    Traversal, Tree, UserSelect, Value, Version, VerticalAlign, Visibility, WhiteSpace, WordBreak,
+    ZIndex,
     declaration::hash_value,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList, Content,
@@ -949,16 +950,15 @@ impl Default for Resolved {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Context<'a, T: Tree> {
     pub tree: &'a T,
     pub node: T::Id,
     pub traversal: Traversal,
-    pub viewport: Viewport,
-    pub container: Option<Container>,
     pub parent: Option<&'a Resolved>,
     pub local: Option<&'a Declarations>,
     pub animated: Option<&'a Declarations>,
+    condition_facts: ConditionFacts,
     style_bucket: StyleBucket,
     selector_root: Option<T::Id>,
     selector_scope: Option<T::Id>,
@@ -971,11 +971,10 @@ impl<'a, T: Tree> Context<'a, T> {
             tree,
             node,
             traversal: Traversal::Projected,
-            viewport: Viewport::default(),
-            container: None,
             parent: None,
             local: None,
             animated: None,
+            condition_facts: ConditionFacts::new(),
             style_bucket: StyleBucket::Element,
             selector_root: None,
             selector_scope: None,
@@ -989,14 +988,20 @@ impl<'a, T: Tree> Context<'a, T> {
     }
 
     #[must_use]
-    pub const fn viewport(mut self, viewport: Viewport) -> Self {
-        self.viewport = viewport;
+    pub fn condition_facts(mut self, facts: ConditionFacts) -> Self {
+        self.condition_facts = facts;
         self
     }
 
     #[must_use]
-    pub const fn container(mut self, container: Container) -> Self {
-        self.container = Some(container);
+    pub fn media_environment(mut self, media: MediaEnvironment) -> Self {
+        self.condition_facts = self.condition_facts.media(media);
+        self
+    }
+
+    #[must_use]
+    pub fn container_facts(mut self, container: ContainerFacts) -> Self {
+        self.condition_facts = self.condition_facts.container(container);
         self
     }
 
@@ -1034,6 +1039,11 @@ impl<'a, T: Tree> Context<'a, T> {
     pub const fn selector_scope(mut self, scope: T::Id) -> Self {
         self.selector_scope = Some(scope);
         self
+    }
+
+    #[must_use]
+    pub const fn conditions(&self) -> &ConditionFacts {
+        &self.condition_facts
     }
 }
 
@@ -1109,7 +1119,7 @@ impl Resolver {
             if rule.style_bucket() != context.style_bucket {
                 continue;
             }
-            if !Condition::matches_all(rule.conditions(), context.viewport, context.container) {
+            if !Condition::matches_all(rule.conditions(), context.conditions()) {
                 continue;
             }
             let mut selector_context = SelectorMatchContext::new(context.node, context.traversal);
@@ -1199,11 +1209,7 @@ impl Resolver {
         node_hash.hash(&mut hasher);
         context.traversal.hash(&mut hasher);
         hash_state(&node.state, &mut hasher);
-        context.viewport.cache_values().hash(&mut hasher);
-        context
-            .container
-            .map(Container::cache_values)
-            .hash(&mut hasher);
+        hash_condition_facts(context.conditions(), &mut hasher);
         context.parent.map(Resolved::fingerprint).hash(&mut hasher);
         context
             .local
@@ -1765,6 +1771,101 @@ fn hash_state(state: &super::StyleState, hasher: &mut impl Hasher) {
     state.range_state().hash(hasher);
 }
 
+fn hash_condition_facts(facts: &ConditionFacts, hasher: &mut impl Hasher) {
+    hash_media_environment(facts.media_environment(), hasher);
+    facts.container_facts().is_some().hash(hasher);
+    if let Some(container) = facts.container_facts() {
+        hash_container_facts(container, hasher);
+    }
+}
+
+fn hash_media_environment(environment: &MediaEnvironment, hasher: &mut impl Hasher) {
+    environment.media_type_fact().hash(hasher);
+    hash_query_length_option(environment.width_fact(), hasher);
+    hash_query_length_option(environment.height_fact(), hasher);
+    hash_query_length_basis(environment.length_basis(), hasher);
+    hash_resolution_option(environment.resolution_fact(), hasher);
+    environment.color_fact().hash(hasher);
+    environment.monochrome_fact().hash(hasher);
+    environment.orientation_fact().hash(hasher);
+    environment.prefers_color_scheme_fact().hash(hasher);
+    environment.prefers_reduced_motion_fact().hash(hasher);
+    environment.prefers_reduced_transparency_fact().hash(hasher);
+    environment.prefers_contrast_fact().hash(hasher);
+    environment.forced_colors_fact().hash(hasher);
+    environment.hover_fact().hash(hasher);
+    environment.any_hover_fact().hash(hasher);
+    environment.pointer_fact().hash(hasher);
+    environment.any_pointer_fact().hash(hasher);
+    environment.display_mode_fact().hash(hasher);
+}
+
+fn hash_container_facts(facts: &ContainerFacts, hasher: &mut impl Hasher) {
+    facts.name_fact().hash(hasher);
+    hash_query_length_option(facts.width_fact(), hasher);
+    hash_query_length_option(facts.height_fact(), hasher);
+    hash_query_length_option(facts.inline_size_fact(), hasher);
+    hash_query_length_option(facts.block_size_fact(), hasher);
+    hash_query_length_basis(facts.length_basis(), hasher);
+    hash_ratio_option(facts.aspect_ratio_fact(), hasher);
+    facts.orientation_fact().hash(hasher);
+    for (name, value) in facts.custom_properties() {
+        name.hash(hasher);
+        value.hash(hasher);
+    }
+}
+
+fn hash_query_length_basis(basis: &QueryLengthBasis, hasher: &mut impl Hasher) {
+    hash_query_length_option(basis.font_size_basis(), hasher);
+    hash_query_length_option(basis.root_font_size_basis(), hasher);
+    hash_query_length_option(basis.ex_size_basis(), hasher);
+    hash_query_length_option(basis.cap_size_basis(), hasher);
+    hash_query_length_option(basis.ch_size_basis(), hasher);
+    hash_query_length_option(basis.ic_size_basis(), hasher);
+    hash_query_length_option(basis.line_height_basis(), hasher);
+    hash_query_length_option(basis.root_ex_size_basis(), hasher);
+    hash_query_length_option(basis.root_cap_size_basis(), hasher);
+    hash_query_length_option(basis.root_ch_size_basis(), hasher);
+    hash_query_length_option(basis.root_ic_size_basis(), hasher);
+    hash_query_length_option(basis.root_line_height_basis(), hasher);
+    hash_query_length_option(basis.viewport_width_basis(), hasher);
+    hash_query_length_option(basis.viewport_height_basis(), hasher);
+    hash_query_length_option(basis.small_viewport_width_basis(), hasher);
+    hash_query_length_option(basis.small_viewport_height_basis(), hasher);
+    hash_query_length_option(basis.large_viewport_width_basis(), hasher);
+    hash_query_length_option(basis.large_viewport_height_basis(), hasher);
+    hash_query_length_option(basis.dynamic_viewport_width_basis(), hasher);
+    hash_query_length_option(basis.dynamic_viewport_height_basis(), hasher);
+    hash_query_length_option(basis.container_width_basis(), hasher);
+    hash_query_length_option(basis.container_height_basis(), hasher);
+    hash_query_length_option(basis.container_inline_size_basis(), hasher);
+    hash_query_length_option(basis.container_block_size_basis(), hasher);
+}
+
+fn hash_query_length_option(value: Option<QueryLength>, hasher: &mut impl Hasher) {
+    value.is_some().hash(hasher);
+    if let Some(value) = value {
+        value.value().to_bits().hash(hasher);
+        value.unit().hash(hasher);
+    }
+}
+
+fn hash_resolution_option(value: Option<Resolution>, hasher: &mut impl Hasher) {
+    value.is_some().hash(hasher);
+    if let Some(value) = value {
+        value.value().to_bits().hash(hasher);
+        value.unit().hash(hasher);
+    }
+}
+
+fn hash_ratio_option(value: Option<Ratio>, hasher: &mut impl Hasher) {
+    value.is_some().hash(hasher);
+    if let Some(value) = value {
+        value.numerator().to_bits().hash(hasher);
+        value.denominator().to_bits().hash(hasher);
+    }
+}
+
 fn hash_node<T: Hash>(node: &T) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     node.hash(&mut hasher);
@@ -1826,21 +1927,24 @@ mod tests {
         AnimationIterationCount, AnimationIterationCountList, AnimationIterationNumber,
         AnimationName, AnimationNameList, AnimationPlayState, AnimationPlayStateList, AspectRatio,
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens, AuthoredValue,
-        BuiltInCounterStyle, Color, Combinator, ComplexSelectorPart, Content, ContentItem,
-        ContentItemList, ContentString, ContentVisibility, CounterChange, CounterChangeList,
-        CounterChanges, CounterName, CounterStyle, CssWideKeyword, CustomPropertyName,
-        CustomPropertyValue, Declarations, DurationSeconds, EasingFunction, EasingList, Error,
-        ErrorCode, FilterFunction, FilterFunctionList, Flex, FontFamilyList, FontFeature,
-        FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant,
-        FontWeight, FontWeightNumber, ImageLayer, KeyframesIdent, KeyframesName, LayerOrder,
-        LayoutPosition, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType,
-        Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence, RuleTarget,
-        ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass,
-        StyleColor, StyleRole, StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor,
-        TextAlignLast, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
-        TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-        TimeList, UserSelect, VariableDependentValue, VariableExpression, VariableFallback,
-        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        BuiltInCounterStyle, Color, Combinator, ComplexSelectorPart, ContainerCondition,
+        ContainerFacts, ContainerFeatureQuery, Content, ContentItem, ContentItemList,
+        ContentString, ContentVisibility, CounterChange, CounterChangeList, CounterChanges,
+        CounterName, CounterStyle, CssWideKeyword, CustomPropertyName, CustomPropertyValue,
+        Declarations, DurationSeconds, EasingFunction, EasingList, Error, ErrorCode,
+        FilterFunction, FilterFunctionList, Flex, FontFamilyList, FontFeature, FontFeatureSettings,
+        FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
+        ImageLayer, KeyframesIdent, KeyframesName, LayerOrder, LayoutPosition, LetterSpacing,
+        ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MediaCondition,
+        MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, Node, Order, OverflowWrap,
+        PlaceContentAlignment, QueryComparison, QueryLength, QueryLengthUnit, RangeFeature,
+        RulePrecedence, RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder,
+        StyleBucket, StyleClass, StyleColor, StyleRole, StyleState, StyleTag, StyleUrl,
+        SymbolicFunctionValue, SystemColor, TextAlignLast, TextDecorationLine,
+        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
+        TextOverflow, TextSlant, TextTransform, TextWrap, TimeList, UserSelect,
+        VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
+        VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -2014,6 +2118,83 @@ mod tests {
         sheet
             .push_authored_rule(Selector::tag("button").unwrap(), declarations, precedence)
             .unwrap();
+    }
+
+    #[test]
+    fn media_condition_rules_match_environment_facts() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let query = MediaQueryList::try_new([MediaQuery::Condition(MediaCondition::Feature(
+            MediaFeatureQuery::Width(RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(640.0, QueryLengthUnit::Px).unwrap(),
+            )),
+        ))])
+        .unwrap();
+        let sheet = Sheet::new().conditional_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                .unwrap(),
+            [Condition::media(query)],
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let matching = resolver
+            .resolve(
+                Context::new(&tree, 0).media_environment(
+                    MediaEnvironment::new()
+                        .width(QueryLength::try_new(800.0, QueryLengthUnit::Px).unwrap()),
+                ),
+            )
+            .unwrap();
+        let non_matching = resolver
+            .resolve(
+                Context::new(&tree, 0).media_environment(
+                    MediaEnvironment::new()
+                        .width(QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap()),
+                ),
+            )
+            .unwrap();
+
+        assert_eq!(
+            matching.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+        );
+        assert_eq!(non_matching.text_color(), &StyleColor::rgba(Color::BLACK));
+    }
+
+    #[test]
+    fn container_condition_rules_match_container_facts() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let condition =
+            ContainerCondition::Feature(ContainerFeatureQuery::Width(RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(300.0, QueryLengthUnit::Px).unwrap(),
+            )));
+        let sheet = Sheet::new().conditional_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+                .unwrap(),
+            [Condition::container(condition)],
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let matching = resolver
+            .resolve(
+                Context::new(&tree, 0).container_facts(
+                    ContainerFacts::new()
+                        .width(QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap()),
+                ),
+            )
+            .unwrap();
+        let missing = resolver.resolve(Context::new(&tree, 0)).unwrap();
+
+        assert_eq!(
+            matching.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+        );
+        assert_eq!(missing.text_color(), &StyleColor::rgba(Color::BLACK));
     }
 
     #[test]

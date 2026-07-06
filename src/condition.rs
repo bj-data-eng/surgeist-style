@@ -1486,10 +1486,44 @@ impl ContainerStyleQuery {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ConditionFacts {
+    media: MediaEnvironment,
+    container: Option<ContainerFacts>,
+}
+
+impl ConditionFacts {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn media(mut self, media: MediaEnvironment) -> Self {
+        self.media = media;
+        self
+    }
+
+    #[must_use]
+    pub fn container(mut self, container: ContainerFacts) -> Self {
+        self.container = Some(container);
+        self
+    }
+
+    #[must_use]
+    pub const fn media_environment(&self) -> &MediaEnvironment {
+        &self.media
+    }
+
+    #[must_use]
+    pub const fn container_facts(&self) -> Option<&ContainerFacts> {
+        self.container.as_ref()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Condition {
     Media(MediaQueryList),
-    Viewport(Viewport),
     Container(ContainerCondition),
 }
 
@@ -1500,21 +1534,17 @@ impl Condition {
     }
 
     #[must_use]
-    pub const fn viewport(viewport: Viewport) -> Self {
-        Self::Viewport(viewport)
-    }
-
-    #[must_use]
     pub fn container(condition: ContainerCondition) -> Self {
         Self::Container(condition)
     }
 
     #[must_use]
-    pub fn matches(&self, viewport: Viewport, _container: Option<Container>) -> bool {
+    pub fn matches(&self, facts: &ConditionFacts) -> bool {
         match self {
-            Self::Media(_) => false,
-            Self::Viewport(query) => query.matches(viewport),
-            Self::Container(_) => false,
+            Self::Media(query) => query.matches(facts.media_environment()),
+            Self::Container(condition) => facts
+                .container_facts()
+                .is_some_and(|container| condition.matches(container)),
         }
     }
 
@@ -1524,221 +1554,13 @@ impl Condition {
     }
 
     #[must_use]
-    pub const fn is_viewport(&self) -> bool {
-        matches!(self, Self::Viewport(_))
-    }
-
-    #[must_use]
     pub const fn is_container(&self) -> bool {
         matches!(self, Self::Container(_))
     }
 
     #[must_use]
-    pub fn matches_all(
-        conditions: &[Self],
-        viewport: Viewport,
-        container: Option<Container>,
-    ) -> bool {
-        conditions
-            .iter()
-            .all(|condition| condition.matches(viewport, container))
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Viewport {
-    width: Option<f32>,
-    height: Option<f32>,
-    min_width: Option<f32>,
-    max_width: Option<f32>,
-    min_height: Option<f32>,
-    max_height: Option<f32>,
-}
-
-impl Viewport {
-    #[must_use]
-    pub const fn new(width: f32, height: f32) -> Self {
-        Self {
-            width: Some(width),
-            height: Some(height),
-            min_width: None,
-            max_width: None,
-            min_height: None,
-            max_height: None,
-        }
-    }
-
-    #[must_use]
-    pub const fn min_width(width: f32) -> Self {
-        Self {
-            min_width: Some(width),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn max_width(width: f32) -> Self {
-        Self {
-            max_width: Some(width),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn min_height(height: f32) -> Self {
-        Self {
-            min_height: Some(height),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn max_height(height: f32) -> Self {
-        Self {
-            max_height: Some(height),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn query() -> Self {
-        Self {
-            width: None,
-            height: None,
-            min_width: None,
-            max_width: None,
-            min_height: None,
-            max_height: None,
-        }
-    }
-
-    #[must_use]
-    pub const fn width(self) -> Option<f32> {
-        self.width
-    }
-
-    #[must_use]
-    pub const fn height(self) -> Option<f32> {
-        self.height
-    }
-
-    fn matches(self, viewport: Self) -> bool {
-        let width = viewport.width.unwrap_or(0.0);
-        let height = viewport.height.unwrap_or(0.0);
-        self.min_width.is_none_or(|min| width >= min)
-            && self.max_width.is_none_or(|max| width <= max)
-            && self.min_height.is_none_or(|min| height >= min)
-            && self.max_height.is_none_or(|max| height <= max)
-    }
-
-    pub(crate) fn cache_values(self) -> [Option<u32>; 6] {
-        [
-            self.width.map(f32::to_bits),
-            self.height.map(f32::to_bits),
-            self.min_width.map(f32::to_bits),
-            self.max_width.map(f32::to_bits),
-            self.min_height.map(f32::to_bits),
-            self.max_height.map(f32::to_bits),
-        ]
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Container {
-    width: Option<f32>,
-    height: Option<f32>,
-    min_width: Option<f32>,
-    max_width: Option<f32>,
-    min_height: Option<f32>,
-    max_height: Option<f32>,
-}
-
-impl Container {
-    #[must_use]
-    pub const fn new(width: f32, height: f32) -> Self {
-        Self {
-            width: Some(width),
-            height: Some(height),
-            min_width: None,
-            max_width: None,
-            min_height: None,
-            max_height: None,
-        }
-    }
-
-    #[must_use]
-    pub const fn min_width(width: f32) -> Self {
-        Self {
-            min_width: Some(width),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn max_width(width: f32) -> Self {
-        Self {
-            max_width: Some(width),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn min_height(height: f32) -> Self {
-        Self {
-            min_height: Some(height),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn max_height(height: f32) -> Self {
-        Self {
-            max_height: Some(height),
-            ..Self::query()
-        }
-    }
-
-    #[must_use]
-    pub const fn query() -> Self {
-        Self {
-            width: None,
-            height: None,
-            min_width: None,
-            max_width: None,
-            min_height: None,
-            max_height: None,
-        }
-    }
-
-    #[must_use]
-    pub const fn width(self) -> Option<f32> {
-        self.width
-    }
-
-    #[must_use]
-    pub const fn height(self) -> Option<f32> {
-        self.height
-    }
-
-    #[allow(dead_code)]
-    fn matches(self, container: Self) -> bool {
-        let width = container.width.unwrap_or(0.0);
-        let height = container.height.unwrap_or(0.0);
-        self.min_width.is_none_or(|min| width >= min)
-            && self.max_width.is_none_or(|max| width <= max)
-            && self.min_height.is_none_or(|min| height >= min)
-            && self.max_height.is_none_or(|max| height <= max)
-    }
-
-    pub(crate) fn cache_values(self) -> [Option<u32>; 6] {
-        [
-            self.width.map(f32::to_bits),
-            self.height.map(f32::to_bits),
-            self.min_width.map(f32::to_bits),
-            self.max_width.map(f32::to_bits),
-            self.min_height.map(f32::to_bits),
-            self.max_height.map(f32::to_bits),
-        ]
+    pub fn matches_all(conditions: &[Self], facts: &ConditionFacts) -> bool {
+        conditions.iter().all(|condition| condition.matches(facts))
     }
 }
 
@@ -1837,13 +1659,37 @@ mod tests {
     }
 
     #[test]
-    fn media_query_condition_bridge_does_not_match_legacy_api() {
+    fn condition_facts_match_media_and_container_conditions() {
         let query = MediaQueryList::try_new([MediaQuery::Condition(MediaCondition::Feature(
             MediaFeatureQuery::Hover(HoverCapability::Hover),
         ))])
         .unwrap();
+        let container =
+            ContainerCondition::Feature(ContainerFeatureQuery::Width(RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap(),
+            )));
+        let facts = ConditionFacts::new()
+            .media(MediaEnvironment::new().hover(HoverCapability::Hover))
+            .container(
+                ContainerFacts::new()
+                    .width(QueryLength::try_new(400.0, QueryLengthUnit::Px).unwrap()),
+            );
 
-        assert!(!Condition::media(query).matches(Viewport::new(800.0, 600.0), None));
+        assert!(Condition::media(query).matches(&facts));
+        assert!(Condition::container(container).matches(&facts));
+    }
+
+    #[test]
+    fn container_conditions_do_not_match_without_container_facts() {
+        let condition = Condition::container(ContainerCondition::Feature(
+            ContainerFeatureQuery::Width(RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap(),
+            )),
+        ));
+
+        assert!(!condition.matches(&ConditionFacts::new()));
     }
 
     #[test]
