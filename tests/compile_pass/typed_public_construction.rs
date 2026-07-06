@@ -9,7 +9,8 @@ use surgeist_style::{
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
     BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
     BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, ColorSchemePreference,
-    Combinator, Condition, Content, ContentItem, ContentItemList, ContentString,
+    Combinator, Condition, ContainerCondition, ContainerConditionList, ContainerFacts,
+    ContainerFeatureQuery, ContainerName, ContainerStyleQuery, Content, ContentItem, ContentItemList, ContentString,
     ContentVisibility, Context, ContrastPreference, CornerRadius, CounterChange, CounterChangeList, CounterChanges,
     CounterFunction, CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx,
     CssWideKeyword, DisplayMode,
@@ -692,6 +693,39 @@ fn main() -> surgeist_style::Result<()> {
     );
     assert_eq!(media_environment.orientation(), Some(Orientation::Landscape));
     assert!(Condition::media(media_query_list).is_media());
+
+    let container_name = ContainerName::try_new("sidebar")?;
+    let container_condition = ContainerCondition::And(ContainerConditionList::try_new([
+        ContainerCondition::Feature(ContainerFeatureQuery::InlineSize(RangeFeature::new(
+            Some(QueryComparison::GreaterThanOrEqual),
+            QueryLength::try_new(320.0, QueryLengthUnit::Px)?,
+        ))),
+        ContainerCondition::Style(ContainerStyleQuery::CustomPropertyPresence(
+            CustomPropertyName::try_new("--theme")?,
+        )),
+    ])?);
+    let container_facts = ContainerFacts::new()
+        .name(container_name.clone())
+        .inline_size(QueryLength::try_new(400.0, QueryLengthUnit::Px)?)
+        .with_length_basis(QueryLengthBasis::new().container_inline_size(
+            QueryLength::try_new(400.0, QueryLengthUnit::Px)?,
+        ))
+        .custom_property(
+            CustomPropertyName::try_new("--theme")?,
+            AuthoredTokens::new("dark"),
+        );
+    assert!(container_condition.matches(&container_facts));
+    assert_eq!(container_name.as_str(), "sidebar");
+    assert_eq!(container_facts.name_fact(), Some(&container_name));
+    assert_eq!(
+        container_facts
+            .length_basis()
+            .container_inline_size_basis()
+            .unwrap()
+            .value(),
+        400.0
+    );
+    assert!(Condition::container(container_condition).is_container());
 
     let custom_name = CustomPropertyName::try_new("--brand")?;
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");

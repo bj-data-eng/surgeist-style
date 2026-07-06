@@ -1,4 +1,6 @@
-use crate::{Error, ErrorCode, Result};
+use std::collections::BTreeMap;
+
+use crate::{AuthoredTokens, CustomPropertyName, Error, ErrorCode, Result};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MediaQueryList {
@@ -1194,11 +1196,301 @@ fn compare_values(comparison: Option<QueryComparison>, actual: f32, expected: f3
     }
 }
 
+fn validate_condition_ident(value: &str, label: &'static str) -> Result<()> {
+    if value.is_empty() || value.contains('\0') {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{label} cannot be empty or contain U+0000"),
+        ));
+    }
+    if matches!(
+        value.to_ascii_lowercase().as_str(),
+        "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+    ) {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            format!("{label} cannot be a CSS-wide keyword"),
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ContainerName {
+    value: String,
+}
+
+impl ContainerName {
+    pub fn try_new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        validate_condition_ident(&value, "container name")?;
+        if matches!(
+            value.to_ascii_lowercase().as_str(),
+            "none" | "and" | "or" | "not" | "style"
+        ) {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "container name is reserved",
+            ));
+        }
+        Ok(Self { value })
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ContainerFacts {
+    name: Option<ContainerName>,
+    width: Option<QueryLength>,
+    height: Option<QueryLength>,
+    inline_size: Option<QueryLength>,
+    block_size: Option<QueryLength>,
+    length_basis: QueryLengthBasis,
+    aspect_ratio: Option<Ratio>,
+    orientation: Option<Orientation>,
+    custom_properties: BTreeMap<CustomPropertyName, AuthoredTokens>,
+}
+
+impl ContainerFacts {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn name(mut self, name: ContainerName) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    #[must_use]
+    pub const fn width(mut self, width: QueryLength) -> Self {
+        self.width = Some(width);
+        self
+    }
+
+    #[must_use]
+    pub const fn height(mut self, height: QueryLength) -> Self {
+        self.height = Some(height);
+        self
+    }
+
+    #[must_use]
+    pub const fn inline_size(mut self, inline_size: QueryLength) -> Self {
+        self.inline_size = Some(inline_size);
+        self
+    }
+
+    #[must_use]
+    pub const fn block_size(mut self, block_size: QueryLength) -> Self {
+        self.block_size = Some(block_size);
+        self
+    }
+
+    #[must_use]
+    pub fn with_length_basis(mut self, length_basis: QueryLengthBasis) -> Self {
+        self.length_basis = length_basis;
+        self
+    }
+
+    #[must_use]
+    pub const fn aspect_ratio(mut self, aspect_ratio: Ratio) -> Self {
+        self.aspect_ratio = Some(aspect_ratio);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_orientation(mut self, orientation: Orientation) -> Self {
+        self.orientation = Some(orientation);
+        self
+    }
+
+    #[must_use]
+    pub fn custom_property(mut self, name: CustomPropertyName, value: AuthoredTokens) -> Self {
+        self.custom_properties.insert(name, value);
+        self
+    }
+
+    #[must_use]
+    pub const fn name_fact(&self) -> Option<&ContainerName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub const fn width_fact(&self) -> Option<QueryLength> {
+        self.width
+    }
+
+    #[must_use]
+    pub const fn height_fact(&self) -> Option<QueryLength> {
+        self.height
+    }
+
+    #[must_use]
+    pub const fn inline_size_fact(&self) -> Option<QueryLength> {
+        self.inline_size
+    }
+
+    #[must_use]
+    pub const fn block_size_fact(&self) -> Option<QueryLength> {
+        self.block_size
+    }
+
+    #[must_use]
+    pub const fn length_basis(&self) -> &QueryLengthBasis {
+        &self.length_basis
+    }
+
+    #[must_use]
+    pub const fn aspect_ratio_fact(&self) -> Option<Ratio> {
+        self.aspect_ratio
+    }
+
+    #[must_use]
+    pub const fn orientation_fact(&self) -> Option<Orientation> {
+        self.orientation
+    }
+
+    #[must_use]
+    pub fn orientation(&self) -> Option<Orientation> {
+        if let Some(orientation) = self.orientation {
+            return Some(orientation);
+        }
+        let width = self.width?.to_css_px(&self.length_basis)?;
+        let height = self.height?.to_css_px(&self.length_basis)?;
+        Some(if width >= height {
+            Orientation::Landscape
+        } else {
+            Orientation::Portrait
+        })
+    }
+
+    #[must_use]
+    pub fn custom_property_fact(&self, name: &CustomPropertyName) -> Option<&AuthoredTokens> {
+        self.custom_properties.get(name)
+    }
+
+    #[must_use]
+    pub const fn custom_properties(&self) -> &BTreeMap<CustomPropertyName, AuthoredTokens> {
+        &self.custom_properties
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContainerCondition {
+    Feature(ContainerFeatureQuery),
+    Style(ContainerStyleQuery),
+    Not(Box<ContainerCondition>),
+    And(ContainerConditionList),
+    Or(ContainerConditionList),
+}
+
+impl ContainerCondition {
+    #[must_use]
+    pub fn matches(&self, facts: &ContainerFacts) -> bool {
+        match self {
+            Self::Feature(query) => query.matches(facts),
+            Self::Style(query) => query.matches(facts),
+            Self::Not(condition) => !condition.matches(facts),
+            Self::And(conditions) => conditions
+                .conditions()
+                .iter()
+                .all(|condition| condition.matches(facts)),
+            Self::Or(conditions) => conditions
+                .conditions()
+                .iter()
+                .any(|condition| condition.matches(facts)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContainerConditionList {
+    conditions: Vec<ContainerCondition>,
+}
+
+impl ContainerConditionList {
+    pub fn try_new(conditions: impl IntoIterator<Item = ContainerCondition>) -> Result<Self> {
+        let conditions = conditions.into_iter().collect::<Vec<_>>();
+        if conditions.len() < 2 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "container condition list requires at least two conditions",
+            ));
+        }
+        Ok(Self { conditions })
+    }
+
+    #[must_use]
+    pub fn conditions(&self) -> &[ContainerCondition] {
+        &self.conditions
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContainerFeatureQuery {
+    Width(RangeFeature<QueryLength>),
+    Height(RangeFeature<QueryLength>),
+    InlineSize(RangeFeature<QueryLength>),
+    BlockSize(RangeFeature<QueryLength>),
+    AspectRatio(RangeFeature<Ratio>),
+    Orientation(Orientation),
+}
+
+impl ContainerFeatureQuery {
+    #[must_use]
+    pub fn matches(&self, facts: &ContainerFacts) -> bool {
+        match self {
+            Self::Width(query) => matches_length_range(query, facts.width, facts.length_basis()),
+            Self::Height(query) => matches_length_range(query, facts.height, facts.length_basis()),
+            Self::InlineSize(query) => {
+                matches_length_range(query, facts.inline_size, facts.length_basis())
+            }
+            Self::BlockSize(query) => {
+                matches_length_range(query, facts.block_size, facts.length_basis())
+            }
+            Self::AspectRatio(query) => matches_float_range(
+                query,
+                facts.aspect_ratio.map(Ratio::value),
+                query.value().value(),
+            ),
+            Self::Orientation(query) => facts
+                .orientation()
+                .is_some_and(|orientation| orientation == *query),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ContainerStyleQuery {
+    CustomPropertyPresence(CustomPropertyName),
+    CustomPropertyValue {
+        name: CustomPropertyName,
+        value: AuthoredTokens,
+    },
+}
+
+impl ContainerStyleQuery {
+    #[must_use]
+    pub fn matches(&self, facts: &ContainerFacts) -> bool {
+        match self {
+            Self::CustomPropertyPresence(name) => facts.custom_properties.contains_key(name),
+            Self::CustomPropertyValue { name, value } => facts
+                .custom_property_fact(name)
+                .is_some_and(|fact| fact == value),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Condition {
     Media(MediaQueryList),
     Viewport(Viewport),
-    Container(Container),
+    Container(ContainerCondition),
 }
 
 impl Condition {
@@ -1213,16 +1505,16 @@ impl Condition {
     }
 
     #[must_use]
-    pub const fn container(container: Container) -> Self {
-        Self::Container(container)
+    pub fn container(condition: ContainerCondition) -> Self {
+        Self::Container(condition)
     }
 
     #[must_use]
-    pub fn matches(&self, viewport: Viewport, container: Option<Container>) -> bool {
+    pub fn matches(&self, viewport: Viewport, _container: Option<Container>) -> bool {
         match self {
             Self::Media(_) => false,
             Self::Viewport(query) => query.matches(viewport),
-            Self::Container(query) => container.is_some_and(|container| query.matches(container)),
+            Self::Container(_) => false,
         }
     }
 
@@ -1428,6 +1720,7 @@ impl Container {
         self.height
     }
 
+    #[allow(dead_code)]
     fn matches(self, container: Self) -> bool {
         let width = container.width.unwrap_or(0.0);
         let height = container.height.unwrap_or(0.0);
@@ -1451,6 +1744,8 @@ impl Container {
 
 #[cfg(test)]
 mod tests {
+    use crate::{AuthoredTokens, CustomPropertyName};
+
     use super::*;
 
     #[test]
@@ -1549,5 +1844,54 @@ mod tests {
         .unwrap();
 
         assert!(!Condition::media(query).matches(Viewport::new(800.0, 600.0), None));
+    }
+
+    #[test]
+    fn container_conditions_match_named_container_facts() {
+        let name = ContainerName::try_new("sidebar").unwrap();
+        let condition =
+            ContainerCondition::Feature(ContainerFeatureQuery::InlineSize(RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap(),
+            )));
+        let facts = ContainerFacts::new()
+            .name(name.clone())
+            .inline_size(QueryLength::try_new(400.0, QueryLengthUnit::Px).unwrap())
+            .block_size(QueryLength::try_new(600.0, QueryLengthUnit::Px).unwrap());
+
+        assert!(condition.matches(&facts));
+        assert_eq!(facts.name_fact(), Some(&name));
+    }
+
+    #[test]
+    fn container_conditions_require_two_children_for_and_or() {
+        assert!(
+            ContainerConditionList::try_new([ContainerCondition::Feature(
+                ContainerFeatureQuery::Orientation(Orientation::Portrait),
+            )])
+            .is_err()
+        );
+    }
+
+    mod container_conditions {
+        use super::*;
+
+        #[test]
+        fn container_style_queries_match_custom_property_facts() {
+            let name = CustomPropertyName::try_new("--theme").unwrap();
+            let value = AuthoredTokens::new("dark");
+            let facts = ContainerFacts::new().custom_property(name.clone(), value.clone());
+
+            assert!(
+                ContainerCondition::Style(ContainerStyleQuery::CustomPropertyPresence(
+                    name.clone(),
+                ))
+                .matches(&facts)
+            );
+            assert!(
+                ContainerCondition::Style(ContainerStyleQuery::CustomPropertyValue { name, value })
+                    .matches(&facts)
+            );
+        }
     }
 }
