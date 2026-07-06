@@ -16,7 +16,8 @@ use surgeist_style::{
     DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, Filter,
     FilterFunction, FilterFunctionList, Flex, FlexFactor, Font, FontFamilyList, FontFeature,
     FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight,
-    GridTrackList, KeyframesIdent, KeyframesName, KeyframesString,
+    GridTrackList, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
+    KeyframesName, KeyframesRule, KeyframesString,
     HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
     LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
     ListStyleType, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector, Opacity, Order,
@@ -189,6 +190,21 @@ fn main() -> surgeist_style::Result<()> {
         animation_fill_modes,
         animation_play_states,
     );
+
+    let mut keyframe_declarations = AuthoredDeclarations::new();
+    keyframe_declarations.try_push(AuthoredDeclaration::try_new(
+        AuthoredProperty::Property(Property::Opacity),
+        AuthoredValue::Value(Value::Number(1.0)),
+    )?)?;
+    let keyframes = KeyframesRule::try_new(
+        KeyframesName::Ident(KeyframesIdent::try_new("fade-in")?),
+        [KeyframeBlock::try_new(
+            KeyframeSelectorList::try_new([KeyframeOffset::from(), KeyframeOffset::to()])?,
+            keyframe_declarations,
+        )?],
+    )?;
+    let sheet = Sheet::new().keyframes_rule(keyframes);
+    assert_eq!(sheet.keyframes_rule_count(), 1);
 
     let text_decoration_line = TextDecorationLine::try_new([
         TextDecorationLineComponent::Underline,

@@ -4,8 +4,8 @@ use std::{
 };
 
 use super::{
-    AuthoredDeclarations, Change, Condition, Declarations, Property, Result, RulePrecedence,
-    Selector, SourceOrder, StyleBucket, Tree, Value,
+    AuthoredDeclarations, Change, Condition, Declarations, KeyframesRule, Property, Result,
+    RulePrecedence, Selector, SourceOrder, StyleBucket, Tree, Value,
     selector::{PrimaryKey, SelectorSpecificity},
 };
 use crate::{
@@ -352,6 +352,7 @@ enum RuleSourceOrderPolicy {
 #[derive(Clone, Debug)]
 pub struct Sheet {
     rules: Vec<Rule>,
+    keyframes: Vec<KeyframesRule>,
     index: RuleIndex,
     version: Version,
 }
@@ -360,6 +361,7 @@ impl Default for Sheet {
     fn default() -> Self {
         Self {
             rules: Vec::new(),
+            keyframes: Vec::new(),
             index: RuleIndex::default(),
             version: Version::next(),
         }
@@ -368,7 +370,7 @@ impl Default for Sheet {
 
 impl PartialEq for Sheet {
     fn eq(&self, other: &Self) -> bool {
-        self.rules == other.rules
+        self.rules == other.rules && self.keyframes == other.keyframes
     }
 }
 
@@ -387,6 +389,12 @@ impl Sheet {
     #[must_use]
     pub fn targeted_rule(mut self, target: RuleTarget, declarations: Declarations) -> Self {
         self.push_targeted_rule(target, declarations);
+        self
+    }
+
+    #[must_use]
+    pub fn keyframes_rule(mut self, rule: KeyframesRule) -> Self {
+        self.push_keyframes_rule(rule);
         self
     }
 
@@ -462,9 +470,20 @@ impl Sheet {
         self
     }
 
+    pub fn push_keyframes_rule(&mut self, rule: KeyframesRule) -> &mut Self {
+        self.keyframes.push(rule);
+        self.version = Version::next();
+        self
+    }
+
     #[must_use]
     pub fn rule_count(&self) -> usize {
         self.rules.len()
+    }
+
+    #[must_use]
+    pub fn keyframes_rule_count(&self) -> usize {
+        self.keyframes.len()
     }
 
     #[must_use]
@@ -474,6 +493,11 @@ impl Sheet {
 
     pub fn rules(&self) -> &[Rule] {
         &self.rules
+    }
+
+    #[must_use]
+    pub fn keyframes_rules(&self) -> &[KeyframesRule] {
+        &self.keyframes
     }
 
     pub fn rules_for_selector<'a>(
@@ -626,8 +650,9 @@ mod precedence_tests {
     use super::*;
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
-        CssWideKeyword, LayerOrder, Property, RulePrecedence, Selector, SelectorSpecificity,
-        SourceOrder, StyleColor, Value, Viewport,
+        CssWideKeyword, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
+        KeyframesName, KeyframesRule, LayerOrder, Property, RulePrecedence, Selector,
+        SelectorSpecificity, SourceOrder, StyleColor, Value, Viewport,
     };
 
     fn authored_color(color: Color) -> AuthoredDeclarations {
@@ -796,6 +821,63 @@ mod precedence_tests {
         let indexed_rules: Vec<_> = sheet.rules_for_class(&class).collect();
         assert_eq!(indexed_rules.len(), 1);
         assert_eq!(indexed_rules[0].style_bucket(), StyleBucket::After);
+    }
+
+    #[test]
+    fn keyframes_store_on_sheet_without_entering_rule_index() {
+        let mut first_declarations = AuthoredDeclarations::new();
+        first_declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Opacity),
+                    AuthoredValue::Value(Value::Number(0.0)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let first_keyframes = KeyframesRule::try_new(
+            KeyframesName::Ident(KeyframesIdent::try_new("fade-in").unwrap()),
+            [KeyframeBlock::try_new(
+                KeyframeSelectorList::try_new([KeyframeOffset::from()]).unwrap(),
+                first_declarations,
+            )
+            .unwrap()],
+        )
+        .unwrap();
+
+        let mut second_declarations = AuthoredDeclarations::new();
+        second_declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Opacity),
+                    AuthoredValue::Value(Value::Number(1.0)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let second_keyframes = KeyframesRule::try_new(
+            KeyframesName::Ident(KeyframesIdent::try_new("fade-out").unwrap()),
+            [KeyframeBlock::try_new(
+                KeyframeSelectorList::try_new([KeyframeOffset::to()]).unwrap(),
+                second_declarations,
+            )
+            .unwrap()],
+        )
+        .unwrap();
+
+        let mut sheet = Sheet::new().keyframes_rule(first_keyframes.clone());
+        sheet.push_keyframes_rule(second_keyframes.clone());
+        sheet.push_rule(Selector::class("badge").unwrap(), Declarations::new());
+
+        assert_eq!(sheet.rule_count(), 1);
+        assert_eq!(sheet.keyframes_rule_count(), 2);
+        assert_eq!(sheet.keyframes_rules()[0], first_keyframes);
+        assert_eq!(sheet.keyframes_rules()[1], second_keyframes);
+
+        let class = StyleClass::new("badge").unwrap();
+        assert_eq!(sheet.rules_for_class(&class).count(), 1);
+        let missing_class = StyleClass::new("fade-in").unwrap();
+        assert_eq!(sheet.rules_for_class(&missing_class).count(), 0);
     }
 
     #[test]

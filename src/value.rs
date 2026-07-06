@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 
-use crate::{AuthoredTokens, CustomPropertyName, StyleAttributeName, VariableReference};
+use crate::{
+    AuthoredDeclarations, AuthoredTokens, CustomPropertyName, StyleAttributeName, VariableReference,
+};
 
 use super::{
     CalcLength, CalcOperator, Error, ErrorCode, Interpolation, Property, Result,
@@ -1958,6 +1960,156 @@ impl KeyframesString {
 pub enum KeyframesName {
     Ident(KeyframesIdent),
     String(KeyframesString),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct KeyframeOffset {
+    percent: f32,
+}
+
+impl KeyframeOffset {
+    pub fn try_new(percent: f32) -> Result<Self> {
+        validate_finite(percent, "keyframe offset")?;
+        if !(0.0..=100.0).contains(&percent) {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "keyframe offset must be between 0 and 100 percent",
+            ));
+        }
+        Ok(Self { percent })
+    }
+
+    #[must_use]
+    pub fn from() -> Self {
+        Self::try_new(0.0).expect("from keyframe offset is valid")
+    }
+
+    #[must_use]
+    pub fn to() -> Self {
+        Self::try_new(100.0).expect("to keyframe offset is valid")
+    }
+
+    #[must_use]
+    pub const fn percent(self) -> f32 {
+        self.percent
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyframeSelectorList {
+    offsets: Vec<KeyframeOffset>,
+}
+
+impl KeyframeSelectorList {
+    pub fn try_new(offsets: impl IntoIterator<Item = KeyframeOffset>) -> Result<Self> {
+        let offsets = offsets.into_iter().collect::<Vec<_>>();
+        if offsets.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "keyframe selector list cannot be empty",
+            ));
+        }
+
+        let mut seen = Vec::new();
+        for offset in &offsets {
+            let percent = offset.percent();
+            if seen.contains(&percent) {
+                return Err(Error::new(
+                    ErrorCode::InvalidValue,
+                    "keyframe selector list cannot contain duplicate offsets",
+                ));
+            }
+            seen.push(percent);
+        }
+
+        Ok(Self { offsets })
+    }
+
+    #[must_use]
+    pub fn offsets(&self) -> &[KeyframeOffset] {
+        &self.offsets
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyframeBlock {
+    selectors: KeyframeSelectorList,
+    declarations: AuthoredDeclarations,
+}
+
+impl KeyframeBlock {
+    pub fn try_new(
+        selectors: KeyframeSelectorList,
+        declarations: AuthoredDeclarations,
+    ) -> Result<Self> {
+        if declarations.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "keyframe block declarations cannot be empty",
+            ));
+        }
+        Ok(Self {
+            selectors,
+            declarations,
+        })
+    }
+
+    #[must_use]
+    pub const fn selectors(&self) -> &KeyframeSelectorList {
+        &self.selectors
+    }
+
+    #[must_use]
+    pub const fn declarations(&self) -> &AuthoredDeclarations {
+        &self.declarations
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyframesRule {
+    name: KeyframesName,
+    blocks: Vec<KeyframeBlock>,
+}
+
+impl KeyframesRule {
+    pub fn try_new(
+        name: KeyframesName,
+        blocks: impl IntoIterator<Item = KeyframeBlock>,
+    ) -> Result<Self> {
+        let blocks = blocks.into_iter().collect::<Vec<_>>();
+        if blocks.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "keyframes rule must contain at least one block",
+            ));
+        }
+
+        let mut seen = Vec::new();
+        for block in &blocks {
+            for offset in block.selectors().offsets() {
+                let percent = offset.percent();
+                if seen.contains(&percent) {
+                    return Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "keyframes rule cannot contain duplicate offsets",
+                    ));
+                }
+                seen.push(percent);
+            }
+        }
+
+        Ok(Self { name, blocks })
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &KeyframesName {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn blocks(&self) -> &[KeyframeBlock] {
+        &self.blocks
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -6274,12 +6426,16 @@ mod tests {
         CounterChange, CounterChangeList, CounterChanges, CounterFunction, CounterName,
         CounterStyle, CounterStyleName, CountersFunction, CssPx, Decoration, DimensionLength,
         DurationSeconds, EasingArguments, EasingFunction, EasingList, ErrorCode, FontFamilyList,
-        KeyframesIdent, KeyframesName, Length, ListStyle, ListStyleImage, ListStylePosition,
-        ListStyleType, OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight,
-        TextWrap, TimeList, TransitionItem, TransitionList, TransitionPropertyList,
-        TransitionPropertyName, TransitionPropertyTarget, Value, WhiteSpace, WordBreak,
+        KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent, KeyframesName,
+        KeyframesRule, Length, ListStyle, ListStyleImage, ListStylePosition, ListStyleType,
+        OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight, TextWrap,
+        TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
+        TransitionPropertyTarget, Value, WhiteSpace, WordBreak,
     };
-    use crate::StyleAttributeName;
+    use crate::{
+        AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Property,
+        StyleAttributeName,
+    };
 
     #[test]
     fn dimension_length_px_rejects_negative_css_px() {
@@ -6396,6 +6552,83 @@ mod tests {
         .unwrap();
         assert_eq!(play_states.values().len(), 2);
         assert!(AnimationPlayStateList::try_new([]).is_err());
+    }
+
+    #[test]
+    fn keyframes_require_non_empty_unique_offsets_and_declarations() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Opacity),
+                    AuthoredValue::Value(Value::Number(1.0)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let selectors =
+            KeyframeSelectorList::try_new([KeyframeOffset::from(), KeyframeOffset::to()]).unwrap();
+        let block = KeyframeBlock::try_new(selectors, declarations).unwrap();
+        let rule = KeyframesRule::try_new(
+            KeyframesName::Ident(KeyframesIdent::try_new("fade-in").unwrap()),
+            [block],
+        )
+        .unwrap();
+
+        assert_eq!(rule.blocks().len(), 1);
+        assert_eq!(KeyframeOffset::from().percent(), 0.0);
+        assert_eq!(KeyframeOffset::to().percent(), 100.0);
+        assert!(KeyframeOffset::try_new(f32::NAN).is_err());
+        assert!(KeyframeOffset::try_new(-1.0).is_err());
+        assert!(KeyframeOffset::try_new(101.0).is_err());
+        assert!(KeyframeSelectorList::try_new([]).is_err());
+        assert!(
+            KeyframeSelectorList::try_new([KeyframeOffset::from(), KeyframeOffset::from()])
+                .is_err()
+        );
+        assert!(
+            KeyframeBlock::try_new(
+                KeyframeSelectorList::try_new([KeyframeOffset::to()]).unwrap(),
+                AuthoredDeclarations::new(),
+            )
+            .is_err()
+        );
+        assert!(
+            KeyframesRule::try_new(
+                KeyframesName::Ident(KeyframesIdent::try_new("fade-in").unwrap()),
+                []
+            )
+            .is_err()
+        );
+
+        let mut duplicate_declarations = AuthoredDeclarations::new();
+        duplicate_declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Opacity),
+                    AuthoredValue::Value(Value::Number(0.5)),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let duplicate_block_a = KeyframeBlock::try_new(
+            KeyframeSelectorList::try_new([KeyframeOffset::from()]).unwrap(),
+            duplicate_declarations.clone(),
+        )
+        .unwrap();
+        let duplicate_block_b = KeyframeBlock::try_new(
+            KeyframeSelectorList::try_new([KeyframeOffset::from()]).unwrap(),
+            duplicate_declarations,
+        )
+        .unwrap();
+        assert!(
+            KeyframesRule::try_new(
+                KeyframesName::Ident(KeyframesIdent::try_new("fade-in").unwrap()),
+                [duplicate_block_a, duplicate_block_b],
+            )
+            .is_err()
+        );
     }
 
     #[test]
