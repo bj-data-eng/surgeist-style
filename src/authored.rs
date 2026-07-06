@@ -488,6 +488,29 @@ mod tests {
     }
 
     #[test]
+    fn list_style_css_wide_keyword_expands_to_marker_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::ListStyle),
+            CssWideKeyword::Unset,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::ListStyle), None);
+        for property in [
+            Property::ListStyleType,
+            Property::ListStylePosition,
+            Property::ListStyleImage,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+            );
+        }
+    }
+
+    #[test]
     fn new_layout_shorthands_expand_css_wide_keywords_to_canonical_longhands() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(

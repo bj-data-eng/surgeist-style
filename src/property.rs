@@ -1,10 +1,11 @@
 use super::{
     AlignContent, AlignItems, AnimationNameList, AspectRatio, Border, BorderLineStyle, BorderRadii,
     BorderStyles, BoxDecorationBreak, BoxSizing, CalcLength, CalcOperator, Clear, ClipPath, Color,
-    ContentVisibility, CornerRadius, Direction, Edges, Error, ErrorCode, Filter, Flex,
-    FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
-    Order, Outline, OutlineStyle, OutlineWidth, Overflow, OverflowWrap, PlaceContentAlignment,
+    Content, ContentVisibility, CornerRadius, CounterChanges, Direction, Edges, Error, ErrorCode,
+    Filter, Flex, FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList,
+    FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition,
+    Length, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType, Order,
+    Outline, OutlineStyle, OutlineWidth, Overflow, OverflowWrap, PlaceContentAlignment,
     PlaceItemsAlignment, Result, Rotate, Scale, ScrollbarWidth, StyleColor, StyleTextAlign,
     TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationStyle,
     TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
@@ -53,6 +54,14 @@ pub enum Property {
     OverflowY,
     ScrollbarWidth,
     ContentVisibility,
+    Content,
+    ListStyleType,
+    ListStylePosition,
+    ListStyleImage,
+    ListStyle,
+    CounterReset,
+    CounterIncrement,
+    CounterSet,
     ZIndex,
     Direction,
     WritingMode,
@@ -225,6 +234,14 @@ impl Property {
         Self::OverflowY,
         Self::ScrollbarWidth,
         Self::ContentVisibility,
+        Self::Content,
+        Self::ListStyleType,
+        Self::ListStylePosition,
+        Self::ListStyleImage,
+        Self::ListStyle,
+        Self::CounterReset,
+        Self::CounterIncrement,
+        Self::CounterSet,
         Self::ZIndex,
         Self::Direction,
         Self::WritingMode,
@@ -397,6 +414,7 @@ impl Property {
                 | Self::GridRow
                 | Self::GridColumn
                 | Self::GridArea
+                | Self::ListStyle
                 | Self::Mask
         )
     }
@@ -627,6 +645,33 @@ impl Property {
             Self::ContentVisibility => {
                 Metadata::new(Value::ContentVisibility(ContentVisibility::default()))
                     .impact(Impact::empty().layout().paint())
+            }
+            Self::Content => Metadata::new(Value::Content(Content::Normal))
+                .impact(Impact::empty().layout().text().paint()),
+            Self::ListStyleType => Metadata::new(Value::ListStyleType(ListStyleType::default()))
+                .inherited(true)
+                .impact(Impact::empty().layout().text().paint()),
+            Self::ListStylePosition => {
+                Metadata::new(Value::ListStylePosition(ListStylePosition::Outside))
+                    .inherited(true)
+                    .impact(Impact::empty().layout().paint())
+            }
+            Self::ListStyleImage => Metadata::new(Value::ListStyleImage(ListStyleImage::None))
+                .inherited(true)
+                .impact(Impact::empty().layout().paint()),
+            Self::ListStyle => Metadata::new(Value::ListStyle(
+                ListStyle::try_new(
+                    Some(ListStyleType::default()),
+                    Some(ListStylePosition::Outside),
+                    Some(ListStyleImage::None),
+                )
+                .unwrap(),
+            ))
+            .inherited(true)
+            .impact(Impact::empty().layout().text().paint()),
+            Self::CounterReset | Self::CounterIncrement | Self::CounterSet => {
+                Metadata::new(Value::CounterChanges(CounterChanges::None))
+                    .impact(Impact::empty().layout().text().paint())
             }
             Self::Order => {
                 Metadata::new(Value::Order(Order::default())).impact(Impact::empty().layout())
@@ -978,6 +1023,14 @@ impl Property {
             Self::ZIndex => matches!(value, Value::ZIndex(_)),
             Self::ScrollbarWidth => matches!(value, Value::ScrollbarWidth(_)),
             Self::ContentVisibility => matches!(value, Value::ContentVisibility(_)),
+            Self::Content => matches!(value, Value::Content(_)),
+            Self::ListStyleType => matches!(value, Value::ListStyleType(_)),
+            Self::ListStylePosition => matches!(value, Value::ListStylePosition(_)),
+            Self::ListStyleImage => matches!(value, Value::ListStyleImage(_)),
+            Self::ListStyle => matches!(value, Value::ListStyle(_)),
+            Self::CounterReset | Self::CounterIncrement | Self::CounterSet => {
+                matches!(value, Value::CounterChanges(_))
+            }
             Self::AspectRatio => matches!(value, Value::AspectRatio(_)),
             Self::Opacity | Self::TransitionDuration | Self::TransitionDelay => {
                 matches!(value, Value::Number(_))
@@ -1279,6 +1332,12 @@ fn value_kind(value: &Value) -> &'static str {
         Value::ZIndex(_) => "z-index",
         Value::ScrollbarWidth(_) => "scrollbar width",
         Value::ContentVisibility(_) => "content visibility",
+        Value::Content(_) => "content",
+        Value::ListStyleType(_) => "list style type",
+        Value::ListStylePosition(_) => "list style position",
+        Value::ListStyleImage(_) => "list style image",
+        Value::ListStyle(_) => "list style shorthand",
+        Value::CounterChanges(_) => "counter changes",
         Value::Order(_) => "order",
         Value::FlexFactor(_) => "flex factor",
         Value::Flex(_) => "flex shorthand",

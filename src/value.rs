@@ -1871,6 +1871,24 @@ pub enum Content {
     Items(ContentItemList),
 }
 
+impl Content {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::Normal | Self::None => Ok(()),
+            Self::Items(items) => {
+                if items.items().is_empty() {
+                    Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "content item list cannot be empty",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ListStyleType {
     None,
@@ -1939,6 +1957,17 @@ impl ListStyle {
     pub const fn image(&self) -> Option<&ListStyleImage> {
         self.image.as_ref()
     }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.style_type.is_none() && self.position.is_none() && self.image.is_none() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "list style shorthand requires at least one component",
+            ))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// A normalized counter mutation with an explicit integer value.
@@ -1997,6 +2026,24 @@ pub enum CounterChanges {
     #[default]
     None,
     Changes(CounterChangeList),
+}
+
+impl CounterChanges {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            Self::Changes(changes) => {
+                if changes.changes().is_empty() {
+                    Err(Error::new(
+                        ErrorCode::InvalidValue,
+                        "counter change list cannot be empty",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -2603,6 +2650,12 @@ pub enum Value {
     ZIndex(ZIndex),
     ScrollbarWidth(ScrollbarWidth),
     ContentVisibility(ContentVisibility),
+    Content(Content),
+    ListStyleType(ListStyleType),
+    ListStylePosition(ListStylePosition),
+    ListStyleImage(ListStyleImage),
+    ListStyle(ListStyle),
+    CounterChanges(CounterChanges),
     Order(Order),
     FlexFactor(FlexFactor),
     Flex(Flex),
@@ -2722,6 +2775,12 @@ impl Value {
             | Self::BackgroundBox(_)
             | Self::BackgroundAttachmentList(_)
             | Self::MaskLayerList(_)
+            | Self::Content(_)
+            | Self::ListStyleType(_)
+            | Self::ListStylePosition(_)
+            | Self::ListStyleImage(_)
+            | Self::ListStyle(_)
+            | Self::CounterChanges(_)
             | Self::BoxDecorationBreak(_)
             | Self::Filter(_)
             | Self::ClipPath(_) => Interpolation::Discrete,
@@ -2796,6 +2855,9 @@ impl Value {
             | Self::ZIndex(_)
             | Self::ScrollbarWidth(_)
             | Self::ContentVisibility(_)
+            | Self::ListStyleType(_)
+            | Self::ListStylePosition(_)
+            | Self::ListStyleImage(_)
             | Self::Order(_)
             | Self::Direction(_)
             | Self::Overflow(_)
@@ -2813,6 +2875,9 @@ impl Value {
             | Self::PlaceContentAlignment(_)
             | Self::PlaceItemsAlignment(_) => Ok(()),
             Self::Number(value) => validate_finite(*value, "number"),
+            Self::Content(value) => value.validate(),
+            Self::ListStyle(value) => value.validate(),
+            Self::CounterChanges(value) => value.validate(),
             Self::FlexFactor(value) => value.validate(),
             Self::Flex(value) => value.validate(),
             Self::AspectRatio(value) => value.validate(),

@@ -6,19 +6,21 @@ use std::{
 use super::{
     AlignContent, AspectRatio, BasicShape, Border, BorderLineStyle, BorderRadii, BorderSide,
     BorderStyles, BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color, ColorFunction,
-    ColorInterpolationSpace, ColorMix, ContentVisibility, CornerRadius, Cursor, DimensionLength,
+    ColorInterpolationSpace, ColorMix, Content, ContentItem, ContentVisibility, CornerRadius,
+    CounterChanges, CounterFunction, CounterStyle, CountersFunction, Cursor, DimensionLength,
     Display, DurationSeconds, Edges, Filter, FilterFunction, Flex, FlexFactor, Font,
     FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
     GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
     GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
-    MaxTrackSizing, MinTrackSizing, Opacity, Order, Outline, OutlineStyle, OutlineWidth,
-    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, Property,
-    RelativeColor, Result, Rotate, Scale, ScrollbarWidth, Shadow, Size, StyleColor,
-    SubgridLineNameComponent, SymbolicComponentExpression, TextAlignLast, TextDecoration,
-    TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
-    TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Translate,
-    UserSelect, Value, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
-    Visibility, WhiteSpace, WordBreak, ZIndex,
+    ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MaxTrackSizing, MinTrackSizing,
+    Opacity, Order, Outline, OutlineStyle, OutlineWidth, OverflowWrap, PlaceContentAlignment,
+    PlaceItemsAlignment, PointerEvents, Property, RelativeColor, Result, Rotate, Scale,
+    ScrollbarWidth, Shadow, Size, StyleColor, SubgridLineNameComponent,
+    SymbolicComponentExpression, TextAlignLast, TextDecoration, TextDecorationLine,
+    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Translate, UserSelect,
+    Value, VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility,
+    WhiteSpace, WordBreak, ZIndex,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
         BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -663,6 +665,41 @@ impl Declarations {
         self.set(Property::ContentVisibility, Value::ContentVisibility(value))
     }
 
+    pub fn content(self, value: Content) -> Result<Self> {
+        self.try_set(Property::Content, Value::Content(value))
+    }
+
+    #[must_use]
+    pub fn list_style_type(self, value: ListStyleType) -> Self {
+        self.set(Property::ListStyleType, Value::ListStyleType(value))
+    }
+
+    #[must_use]
+    pub fn list_style_position(self, value: ListStylePosition) -> Self {
+        self.set(Property::ListStylePosition, Value::ListStylePosition(value))
+    }
+
+    #[must_use]
+    pub fn list_style_image(self, value: ListStyleImage) -> Self {
+        self.set(Property::ListStyleImage, Value::ListStyleImage(value))
+    }
+
+    pub fn list_style(self, value: ListStyle) -> Result<Self> {
+        self.try_set(Property::ListStyle, Value::ListStyle(value))
+    }
+
+    pub fn counter_reset(self, value: CounterChanges) -> Result<Self> {
+        self.try_set(Property::CounterReset, Value::CounterChanges(value))
+    }
+
+    pub fn counter_increment(self, value: CounterChanges) -> Result<Self> {
+        self.try_set(Property::CounterIncrement, Value::CounterChanges(value))
+    }
+
+    pub fn counter_set(self, value: CounterChanges) -> Result<Self> {
+        self.try_set(Property::CounterSet, Value::CounterChanges(value))
+    }
+
     #[must_use]
     pub fn order(self, order: Order) -> Self {
         self.set(Property::Order, Value::Order(order))
@@ -1150,6 +1187,11 @@ pub(crate) fn canonical_properties(property: Property) -> Vec<Property> {
             Property::TextDecorationStyle,
             Property::TextDecorationThickness,
         ],
+        Property::ListStyle => vec![
+            Property::ListStyleType,
+            Property::ListStylePosition,
+            Property::ListStyleImage,
+        ],
         Property::Gap => vec![Property::RowGap, Property::ColumnGap],
         Property::GridTemplate => vec![
             Property::GridTemplateRows,
@@ -1411,6 +1453,11 @@ pub(crate) fn canonical_declarations(property: Property, value: Value) -> Vec<De
         (Property::TextDecoration, Value::TextDecoration(value)) => {
             text_decoration_declarations(value)
         }
+        (Property::ListStyle, Value::Keyword(keyword)) => same_value_declarations(
+            canonical_properties(Property::ListStyle),
+            Value::Keyword(keyword),
+        ),
+        (Property::ListStyle, Value::ListStyle(value)) => list_style_declarations(value),
         (Property::Gap, Value::Keyword(keyword)) => {
             same_value_declarations(canonical_properties(Property::Gap), Value::Keyword(keyword))
         }
@@ -1606,6 +1653,23 @@ fn text_decoration_declarations(value: TextDecoration) -> Vec<Declaration> {
         Declaration::new(
             Property::TextDecorationThickness,
             Value::TextDecorationThickness(value.thickness().cloned().unwrap_or_default()),
+        ),
+    ]
+}
+
+fn list_style_declarations(value: ListStyle) -> Vec<Declaration> {
+    vec![
+        Declaration::new(
+            Property::ListStyleType,
+            Value::ListStyleType(value.style_type().cloned().unwrap_or_default()),
+        ),
+        Declaration::new(
+            Property::ListStylePosition,
+            Value::ListStylePosition(value.position().unwrap_or_default()),
+        ),
+        Declaration::new(
+            Property::ListStyleImage,
+            Value::ListStyleImage(value.image().cloned().unwrap_or_default()),
         ),
     ]
 }
@@ -1856,6 +1920,30 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::ContentVisibility(value) => {
             46u8.hash(state);
             value.hash(state);
+        }
+        Value::Content(value) => {
+            93u8.hash(state);
+            hash_content(value, state);
+        }
+        Value::ListStyleType(value) => {
+            94u8.hash(state);
+            hash_list_style_type(value, state);
+        }
+        Value::ListStylePosition(value) => {
+            95u8.hash(state);
+            value.hash(state);
+        }
+        Value::ListStyleImage(value) => {
+            96u8.hash(state);
+            hash_list_style_image(value, state);
+        }
+        Value::ListStyle(value) => {
+            97u8.hash(state);
+            hash_list_style(value, state);
+        }
+        Value::CounterChanges(value) => {
+            98u8.hash(state);
+            hash_counter_changes(value, state);
         }
         Value::Order(value) => {
             42u8.hash(state);
@@ -2253,6 +2341,153 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::Visibility(value) => {
             15u8.hash(state);
             value.hash(state);
+        }
+    }
+}
+
+fn hash_content(value: &Content, state: &mut DefaultHasher) {
+    match value {
+        Content::Normal => 0u8.hash(state),
+        Content::None => 1u8.hash(state),
+        Content::Items(items) => {
+            2u8.hash(state);
+            items.items().len().hash(state);
+            for item in items.items() {
+                hash_content_item(item, state);
+            }
+        }
+    }
+}
+
+fn hash_content_item(value: &ContentItem, state: &mut DefaultHasher) {
+    match value {
+        ContentItem::String(value) => {
+            0u8.hash(state);
+            value.as_str().hash(state);
+        }
+        ContentItem::Url(value) => {
+            1u8.hash(state);
+            value.hash(state);
+        }
+        ContentItem::Counter(value) => {
+            2u8.hash(state);
+            hash_counter_function(value, state);
+        }
+        ContentItem::Counters(value) => {
+            3u8.hash(state);
+            hash_counters_function(value, state);
+        }
+        ContentItem::Attr(value) => {
+            4u8.hash(state);
+            value.as_str().hash(state);
+        }
+        ContentItem::OpenQuote => 5u8.hash(state),
+        ContentItem::CloseQuote => 6u8.hash(state),
+        ContentItem::NoOpenQuote => 7u8.hash(state),
+        ContentItem::NoCloseQuote => 8u8.hash(state),
+    }
+}
+
+fn hash_counter_function(value: &CounterFunction, state: &mut DefaultHasher) {
+    value.name().as_str().hash(state);
+    if let Some(style) = value.style() {
+        true.hash(state);
+        hash_counter_style(style, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_counters_function(value: &CountersFunction, state: &mut DefaultHasher) {
+    value.name().as_str().hash(state);
+    value.separator().as_str().hash(state);
+    if let Some(style) = value.style() {
+        true.hash(state);
+        hash_counter_style(style, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_counter_style(value: &CounterStyle, state: &mut DefaultHasher) {
+    match value {
+        CounterStyle::BuiltIn(value) => {
+            0u8.hash(state);
+            hash_builtin_counter_style(*value, state);
+        }
+        CounterStyle::Named(value) => {
+            1u8.hash(state);
+            value.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_builtin_counter_style(value: super::BuiltInCounterStyle, state: &mut DefaultHasher) {
+    match value {
+        super::BuiltInCounterStyle::Disc => 0u8.hash(state),
+        super::BuiltInCounterStyle::Circle => 1u8.hash(state),
+        super::BuiltInCounterStyle::Square => 2u8.hash(state),
+        super::BuiltInCounterStyle::Decimal => 3u8.hash(state),
+        super::BuiltInCounterStyle::DecimalLeadingZero => 4u8.hash(state),
+        super::BuiltInCounterStyle::LowerAlpha => 5u8.hash(state),
+        super::BuiltInCounterStyle::UpperAlpha => 6u8.hash(state),
+        super::BuiltInCounterStyle::LowerLatin => 7u8.hash(state),
+        super::BuiltInCounterStyle::UpperLatin => 8u8.hash(state),
+        super::BuiltInCounterStyle::LowerRoman => 9u8.hash(state),
+        super::BuiltInCounterStyle::UpperRoman => 10u8.hash(state),
+    }
+}
+
+fn hash_list_style_type(value: &ListStyleType, state: &mut DefaultHasher) {
+    match value {
+        ListStyleType::None => 0u8.hash(state),
+        ListStyleType::CounterStyle(value) => {
+            1u8.hash(state);
+            hash_counter_style(value, state);
+        }
+        ListStyleType::String(value) => {
+            2u8.hash(state);
+            value.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_list_style_image(value: &ListStyleImage, state: &mut DefaultHasher) {
+    match value {
+        ListStyleImage::None => 0u8.hash(state),
+        ListStyleImage::Url(value) => {
+            1u8.hash(state);
+            value.hash(state);
+        }
+    }
+}
+
+fn hash_list_style(value: &ListStyle, state: &mut DefaultHasher) {
+    if let Some(style_type) = value.style_type() {
+        true.hash(state);
+        hash_list_style_type(style_type, state);
+    } else {
+        false.hash(state);
+    }
+    value.position().hash(state);
+    if let Some(image) = value.image() {
+        true.hash(state);
+        hash_list_style_image(image, state);
+    } else {
+        false.hash(state);
+    }
+}
+
+fn hash_counter_changes(value: &CounterChanges, state: &mut DefaultHasher) {
+    match value {
+        CounterChanges::None => 0u8.hash(state),
+        CounterChanges::Changes(changes) => {
+            1u8.hash(state);
+            changes.changes().len().hash(state);
+            for change in changes.changes() {
+                change.name().as_str().hash(state);
+                change.value().hash(state);
+            }
         }
     }
 }
@@ -3119,17 +3354,20 @@ mod tests {
     use crate::authored::AuthoredCascadeValue;
     use crate::{
         AlignItems, Alpha, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty,
-        AuthoredTokens, BackgroundAttachment, BackgroundRepeatStyle, BoxSizing, CalcLength,
-        CalcLengthTerm, ColorComponent, ColorInterpolationMethod, ColorInterpolationSpace,
-        ColorMix, ColorMixComponent, CssWideKeyword, CustomPropertyName, ErrorCode,
+        AuthoredTokens, BackgroundAttachment, BackgroundRepeatStyle, BoxSizing,
+        BuiltInCounterStyle, CalcLength, CalcLengthTerm, ColorComponent, ColorInterpolationMethod,
+        ColorInterpolationSpace, ColorMix, ColorMixComponent, Content, ContentItem,
+        ContentItemList, ContentString, CounterChange, CounterChangeList, CounterChanges,
+        CounterFunction, CounterName, CounterStyle, CssWideKeyword, CustomPropertyName, ErrorCode,
         FilterFunctionList, Font, FontFeature, FontFeatureSettings, FontFeatureTag,
         FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
-        GridFlowTolerance, HorizontalPositionKeyword, LetterSpacing, MaskLayer, OutlineWidthLength,
-        OverflowWrap, StyleColor, StyleUrl, SymbolicComponentExpression, SymbolicFunctionValue,
-        SystemColor, TextAlignLast, TextDecoration, TextDecorationLine,
-        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
-        TextOverflow, TextTransform, TextWrap, UserSelect, VariableExpression, VariableFallback,
-        VariableReference, VerticalAlign, VerticalPositionKeyword, WhiteSpace, WordBreak,
+        GridFlowTolerance, HorizontalPositionKeyword, LetterSpacing, ListStyle, ListStyleImage,
+        ListStylePosition, ListStyleType, MaskLayer, OutlineWidthLength, OverflowWrap, StyleColor,
+        StyleUrl, SymbolicComponentExpression, SymbolicFunctionValue, SystemColor, TextAlignLast,
+        TextDecoration, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+        TextDecorationThickness, TextIndent, TextOverflow, TextTransform, TextWrap, UserSelect,
+        VariableExpression, VariableFallback, VariableReference, VerticalAlign,
+        VerticalPositionKeyword, WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -3328,6 +3566,89 @@ mod tests {
             declarations.get(Property::MaskRepeat),
             Some(Value::BackgroundRepeatList(_))
         ));
+    }
+
+    #[test]
+    fn list_style_shorthand_lowers_to_marker_longhands() {
+        let marker_type = ListStyleType::String(ContentString::try_new("->").unwrap());
+        let image = ListStyleImage::Url(StyleUrl::new("marker.svg").unwrap());
+        let declarations = Declarations::new()
+            .list_style(
+                ListStyle::try_new(
+                    Some(marker_type.clone()),
+                    Some(ListStylePosition::Inside),
+                    Some(image.clone()),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(declarations.get(Property::ListStyle), None);
+        assert_eq!(
+            declarations.get(Property::ListStyleType),
+            Some(&Value::ListStyleType(marker_type))
+        );
+        assert_eq!(
+            declarations.get(Property::ListStylePosition),
+            Some(&Value::ListStylePosition(ListStylePosition::Inside))
+        );
+        assert_eq!(
+            declarations.get(Property::ListStyleImage),
+            Some(&Value::ListStyleImage(image))
+        );
+    }
+
+    #[test]
+    fn list_style_shorthand_resets_omitted_components_to_defaults() {
+        let declarations = Declarations::new()
+            .list_style(ListStyle::try_new(Some(ListStyleType::None), None, None).unwrap())
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::ListStyleType),
+            Some(&Value::ListStyleType(ListStyleType::None))
+        );
+        assert_eq!(
+            declarations.get(Property::ListStylePosition),
+            Some(&Value::ListStylePosition(ListStylePosition::Outside))
+        );
+        assert_eq!(
+            declarations.get(Property::ListStyleImage),
+            Some(&Value::ListStyleImage(ListStyleImage::None))
+        );
+    }
+
+    #[test]
+    fn generated_content_and_counters_accept_typed_values() {
+        let counter_name = CounterName::try_new("section").unwrap();
+        let content = Content::Items(
+            ContentItemList::try_new([
+                ContentItem::String(ContentString::try_new("Section ").unwrap()),
+                ContentItem::Counter(CounterFunction::new(
+                    counter_name.clone(),
+                    Some(CounterStyle::BuiltIn(BuiltInCounterStyle::Decimal)),
+                )),
+            ])
+            .unwrap(),
+        );
+        let changes = CounterChanges::Changes(
+            CounterChangeList::try_new([CounterChange::new(counter_name, 1)]).unwrap(),
+        );
+
+        let declarations = Declarations::new()
+            .content(content.clone())
+            .unwrap()
+            .counter_increment(changes.clone())
+            .unwrap();
+
+        assert_eq!(
+            declarations.get(Property::Content),
+            Some(&Value::Content(content))
+        );
+        assert_eq!(
+            declarations.get(Property::CounterIncrement),
+            Some(&Value::CounterChanges(changes))
+        );
     }
 
     #[test]
