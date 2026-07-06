@@ -203,20 +203,20 @@ dependencies, adapters, or generated code.
 | `CssProperty::MaskSize` | `CssValue::MaskSize` | Paint and effects | `Existing style property` | `Property::MaskSize` + `Value::BackgroundSizeList` | Mask size layers reuse typed style-owned background-size layer data. | No property implementation |
 | `CssProperty::MaskPosition` | `CssValue::MaskPosition` | Paint and effects | `Existing style property` | `Property::MaskPosition` + `Value::PositionList` | Mask position layers have typed style-owned position data. | No property implementation |
 | `CssProperty::MaskRepeat` | `CssValue::MaskRepeat` | Paint and effects | `Existing style property` | `Property::MaskRepeat` + `Value::BackgroundRepeatList` | Mask repeat layers reuse typed style-owned background-repeat layer data. | No property implementation |
-| `CssProperty::TransitionProperty` | `CssValue::TransitionProperty` | Timing and animation | `Existing style property` | `Property::TransitionProperty` + `Value::PropertyList` | Style has property-list storage; CSS name coverage and `all` policy need timing-plan review. | Operation 12 timing/animation/keyframes |
-| `CssProperty::TransitionDuration` | `CssValue::TimeList` | Timing and animation | `Existing style property` | `Property::TransitionDuration` + `Value::Number` | Single numeric duration exists; CSS time lists need typed list expansion. | Operation 12 timing/animation/keyframes |
-| `CssProperty::TransitionDelay` | `CssValue::TimeList` | Timing and animation | `Existing style property` | `Property::TransitionDelay` + `Value::Number` | Single numeric delay exists; CSS time lists need typed list expansion. | Operation 12 timing/animation/keyframes |
-| `CssProperty::TransitionTimingFunction` | `CssValue::EasingList` | Timing and animation | `Symbolic style data needed` | Planned transition easing list model | Easing functions should be preserved symbolically until timing evaluation. | Operation 12 timing/animation/keyframes |
-| `CssProperty::Transition` | `CssValue::Transition` | Timing and animation | `New shorthand lowering needed` | Planned transition list model plus longhand lowering | Style has partial transition longhands; shorthand/list lowering is missing. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationName` | `CssValue::AnimationName` | Timing and animation | `Existing style property` | `Property::AnimationName` + `Value::AnimationNameList` | Animation names are preserved as symbolic keyframe references. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationDuration` | `CssValue::TimeList` | Timing and animation | `New style property needed` | Planned animation duration list model | Style lacks typed animation duration data. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationDelay` | `CssValue::TimeList` | Timing and animation | `New style property needed` | Planned animation delay list model | Style lacks typed animation delay data. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationTimingFunction` | `CssValue::EasingList` | Timing and animation | `Symbolic style data needed` | Planned animation easing list model | Easing functions should be preserved symbolically until timing evaluation. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationIterationCount` | `CssValue::AnimationIterationCount` | Timing and animation | `New style property needed` | Planned animation iteration-count list model | Style lacks typed animation iteration data. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationDirection` | `CssValue::AnimationDirection` | Timing and animation | `New style property needed` | Planned animation direction list model | Style lacks typed animation direction data. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationFillMode` | `CssValue::AnimationFillMode` | Timing and animation | `New style property needed` | Planned animation fill-mode list model | Style lacks typed animation fill-mode data. | Operation 12 timing/animation/keyframes |
-| `CssProperty::AnimationPlayState` | `CssValue::AnimationPlayState` | Timing and animation | `New style property needed` | Planned animation play-state list model | Style lacks typed animation play-state data. | Operation 12 timing/animation/keyframes |
-| `CssProperty::Animation` | `CssValue::Animation` | Timing and animation | `New shorthand lowering needed` | Planned animation list model plus longhand lowering | Style has `AnimationName` only; timing, direction, fill, play-state, and iteration counts are missing. | Operation 12 timing/animation/keyframes |
+| `CssProperty::TransitionProperty` | `CssValue::TransitionProperty` | Timing and animation | `Existing style property` | `Property::TransitionProperty` + `Value::TransitionPropertyList` | Transition property targets have typed list storage for `all`, `none`, known style properties, and custom property names. | No property implementation |
+| `CssProperty::TransitionDuration` | `CssValue::TimeList` | Timing and animation | `Existing style property` | `Property::TransitionDuration` + `Value::TimeList` | Transition durations use non-empty typed time-list storage. | No property implementation |
+| `CssProperty::TransitionDelay` | `CssValue::TimeList` | Timing and animation | `Existing style property` | `Property::TransitionDelay` + `Value::TimeList` | Transition delays use non-empty typed time-list storage. | No property implementation |
+| `CssProperty::TransitionTimingFunction` | `CssValue::EasingList` | Timing and animation | `Existing style property` | `Property::TransitionTimingFunction` + `Value::EasingList` | Easing functions are preserved as symbolic style data; easing evaluation remains outside style. | No property implementation |
+| `CssProperty::Transition` | `CssValue::Transition` | Timing and animation | `Existing style shorthand` | `Property::Transition` + `Value::TransitionList` | Transition shorthand lowers to property, duration, delay, and timing-function longhands. | No property implementation |
+| `CssProperty::AnimationName` | `CssValue::AnimationName` | Timing and animation | `Existing style property` | `Property::AnimationName` + `Value::AnimationNameList` | Animation names are preserved as symbolic keyframe references. | No property implementation |
+| `CssProperty::AnimationDuration` | `CssValue::TimeList` | Timing and animation | `Existing style property` | `Property::AnimationDuration` + `Value::TimeList` | Animation durations use non-empty typed time-list storage. | No property implementation |
+| `CssProperty::AnimationDelay` | `CssValue::TimeList` | Timing and animation | `Existing style property` | `Property::AnimationDelay` + `Value::TimeList` | Animation delays use non-empty typed time-list storage. | No property implementation |
+| `CssProperty::AnimationTimingFunction` | `CssValue::EasingList` | Timing and animation | `Existing style property` | `Property::AnimationTimingFunction` + `Value::EasingList` | Animation easing functions are preserved symbolically; easing evaluation remains outside style. | No property implementation |
+| `CssProperty::AnimationIterationCount` | `CssValue::AnimationIterationCount` | Timing and animation | `Existing style property` | `Property::AnimationIterationCount` + `Value::AnimationIterationCountList` | Animation iteration counts have typed list storage for finite and infinite counts. | No property implementation |
+| `CssProperty::AnimationDirection` | `CssValue::AnimationDirection` | Timing and animation | `Existing style property` | `Property::AnimationDirection` + `Value::AnimationDirectionList` | Animation directions have typed list storage. | No property implementation |
+| `CssProperty::AnimationFillMode` | `CssValue::AnimationFillMode` | Timing and animation | `Existing style property` | `Property::AnimationFillMode` + `Value::AnimationFillModeList` | Animation fill modes have typed list storage. | No property implementation |
+| `CssProperty::AnimationPlayState` | `CssValue::AnimationPlayState` | Timing and animation | `Existing style property` | `Property::AnimationPlayState` + `Value::AnimationPlayStateList` | Animation play states have typed list storage. | No property implementation |
+| `CssProperty::Animation` | `CssValue::Animation` | Timing and animation | `Existing style shorthand` | `Property::Animation` + `Value::AnimationList` | Animation shorthand lowers to animation name, duration, delay, timing-function, iteration-count, direction, fill-mode, and play-state longhands. | No property implementation |
 | `CssProperty::Custom(CssCustomPropertyName)` | `CssValue::CustomProperty` | Custom properties | `Existing authored cascade model` | `CustomPropertyName`, `CustomPropertyValue`, `VariableDependentValue` | Custom property storage and variable substitution models exist; later plans may expand typed value coverage. | No property implementation |
 
 ## Family Rollup
@@ -240,7 +240,7 @@ dependencies, adapters, or generated code.
 | Paint and effects | Shadow, opacity, box decoration break, filters, backdrop filters, clip paths, and mask shorthand/longhands have typed style targets. | Symbolic filter, clip, image, and mask payloads remain style-owned and unresolved until render capability/resource realization. | No property implementation |
 | Transforms | `Transform`, `TransformOrigin`, and individual `Translate`, `Rotate`, and `Scale` properties have typed style targets. | Render capability choices for transform realization remain outside style; no Operation 10 transform property gap remains in this ledger. | No property implementation |
 | Interaction | `Cursor`, `PointerEvents`, and `UserSelect` have typed style targets. | Platform cursor and selection behavior realization remains outside style; no Operation 10 interaction property gap remains in this ledger. | No property implementation |
-| Timing and animation | Transition property/duration/delay and animation names have partial typed targets. | Time lists, easing lists, transition shorthand, animation longhands, animation shorthand, and keyframe style data are missing. | Operation 12 timing/animation/keyframes |
+| Timing and animation | Transition property/duration/delay/timing-function/shorthand, animation name/duration/delay/timing-function/iteration/direction/fill-mode/play-state/shorthand, symbolic easing payloads, and keyframe style data have typed style targets. | Runtime scheduling, animation sampling, easing evaluation, compositor/render decisions, and final keyframe interpolation remain outside style. | No property implementation |
 | Custom properties | `CustomPropertyName`, `CustomPropertyValue`, `VariableDependentValue`, and authored custom declarations exist. | Typed value coverage may expand as future property families add supported receiving models. | No property implementation |
 
 ## Coverage Audit
@@ -263,19 +263,21 @@ render resources.
 
 ## Next Sequence Context
 
-The next implementation plan should cover Operation 12: timing, animation, and
-keyframe style data.
+The next implementation plan should cover Operation 13: media/container
+conditions, cascade layers, and scope integration.
 
 Use this ledger instead of re-inventorying the full CSS property surface. The
-timing/animation/keyframes plan should start with the `Transition*`,
-`Animation*`, and keyframe style data gaps that point to Operation 12.
+conditions/layers/scope plan should start from the current condition, layer, and
+scope gaps that point to Operation 13.
 
-The timing/animation/keyframes plan should implement style-owned models and
-lowering front doors for time lists, easing lists, transition shorthand/list
-lowering, animation longhands/shorthand, and keyframe style data. It should not
-add a style-to-render adapter or Operation 14 cache/invalidation generalization.
+The conditions/layers/scope plan should add style-owned inputs that root can
+lower media queries, container queries, cascade layers, and scoped rules into.
+It should not add Operation 14 resolver cache and invalidation integration yet;
+that cache work should follow after condition, layer, and scope facts have real
+style-owned models.
 
 Operation 8 layout-facing rows, Operation 9 text-facing rows, and Operation 10
 paint/color/effects rows, and Operation 11 generated content/counters/lists rows
-have been rebased after implementation, so Operation 12 can proceed from the
-current timing/animation/keyframes gaps.
+have been rebased after implementation. Operation 12 timing/animation/keyframes
+rows are now rebased as well, so Operation 13 can proceed from the current
+condition/layer/scope gaps.
