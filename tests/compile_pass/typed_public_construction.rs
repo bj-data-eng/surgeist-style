@@ -20,11 +20,12 @@ use surgeist_style::{
     FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight,
     ForcedColorsMode, GridTrackList, HoverCapability, HorizontalPositionKeyword, ImageLayer,
     ImageLayerList, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
-    KeyframesName, KeyframesRule, KeyframesString, LayerOrder, LayoutPosition, Length,
-    LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
-    ListStyleType, MaskLayer, MaskLayerList, MediaCondition, MediaConditionList,
-    MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, MediaQueryModifier,
-    MediaType, Node, NonNegativeInteger, NthPattern, NthSelector, Opacity, Order, Orientation,
+    KeyframesName, KeyframesRule, KeyframesString, LayerBlock, LayerOrder, LayerRegistry,
+    LayerStatement, LayoutPosition, Length, LetterSpacing, LetterSpacingLength, ListStyle,
+    ListStyleImage, ListStylePosition, ListStyleType, MaskLayer, MaskLayerList, MediaCondition,
+    MediaConditionList, MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList,
+    MediaQueryModifier, MediaType, Node, NonNegativeInteger, NthPattern, NthSelector, Opacity,
+    Order, Orientation,
     Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap, PointerCapability,
     PlaceContentAlignment, PlaceItemsAlignment, Position, PositionComponent, PositionList,
     Property, PseudoClassSelector, PseudoElement, QueryComparison, QueryLength, QueryLengthBasis,
@@ -33,9 +34,10 @@ use surgeist_style::{
     ResolutionUnit, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale, ScaleValues,
     ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass, TypedMediaQuery,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
-    StyleAttributeName, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole,
-    StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration,
-    TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
+    StyleAttributeName, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor,
+    StyleLayerName, StyleLayerNameList, StyleRole, StyleState, StyleTag, StyleUrl,
+    SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
+    TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
     TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
     TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
     TransitionPropertyTarget, Translate, TranslateValues, Traversal, Tree, TypedDeclaration,
@@ -211,6 +213,24 @@ fn main() -> surgeist_style::Result<()> {
     )?;
     let sheet = Sheet::new().keyframes_rule(keyframes);
     assert_eq!(sheet.keyframes_rule_count(), 1);
+
+    let base_layer = StyleLayerName::try_new(["base"])?;
+    let theme_layer = StyleLayerName::try_new(["theme", "buttons"])?;
+    let layers = StyleLayerNameList::try_new([base_layer.clone(), theme_layer.clone()])?;
+    let statement = LayerStatement::new(layers.clone());
+    let mut registry = LayerRegistry::new();
+    let registered = registry.declare(&statement);
+    assert_eq!(registered.len(), 2);
+    assert_eq!(registry.order(&base_layer), Some(LayerOrder::new(1)));
+    assert!(matches!(
+        LayerBlock::Named(theme_layer.clone()),
+        LayerBlock::Named(_)
+    ));
+    assert_eq!(LayerBlock::Anonymous, LayerBlock::Anonymous);
+    let mut sheet = Sheet::new();
+    sheet.declare_layers(layers);
+    sheet.push_layer_rule(base_layer, Selector::tag("button")?, Declarations::new())?;
+    assert!(sheet.layer_order(&theme_layer).is_some());
 
     let text_decoration_line = TextDecorationLine::try_new([
         TextDecorationLineComponent::Underline,

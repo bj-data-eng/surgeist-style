@@ -1,4 +1,6 @@
-use crate::selector::SelectorSpecificity;
+use std::collections::BTreeMap;
+
+use crate::{Error, ErrorCode, Result, selector::SelectorSpecificity};
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct LayerOrder(u32);
@@ -14,6 +16,154 @@ impl LayerOrder {
         self.0
     }
 }
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct StyleLayerName {
+    components: Vec<String>,
+}
+
+impl StyleLayerName {
+    pub fn try_new(components: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
+        let components = components.into_iter().map(Into::into).collect::<Vec<_>>();
+        if components.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "layer name cannot be empty",
+            ));
+        }
+        for component in &components {
+            validate_layer_component(component)?;
+        }
+        Ok(Self { components })
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[String] {
+        &self.components
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StyleLayerNameList {
+    names: Vec<StyleLayerName>,
+}
+
+impl StyleLayerNameList {
+    pub fn try_new(names: impl IntoIterator<Item = StyleLayerName>) -> Result<Self> {
+        let names = names.into_iter().collect::<Vec<_>>();
+        if names.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "layer name list cannot be empty",
+            ));
+        }
+        Ok(Self { names })
+    }
+
+    #[must_use]
+    pub fn names(&self) -> &[StyleLayerName] {
+        &self.names
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LayerStatement {
+    names: StyleLayerNameList,
+}
+
+impl LayerStatement {
+    #[must_use]
+    pub const fn new(names: StyleLayerNameList) -> Self {
+        Self { names }
+    }
+
+    #[must_use]
+    pub const fn names(&self) -> &StyleLayerNameList {
+        &self.names
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LayerBlock {
+    Named(StyleLayerName),
+    Anonymous,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LayerRegistry {
+    named: BTreeMap<StyleLayerName, LayerOrder>,
+    next_order: u32,
+}
+
+impl LayerRegistry {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn declare(&mut self, statement: &LayerStatement) -> Vec<(StyleLayerName, LayerOrder)> {
+        statement
+            .names()
+            .names()
+            .iter()
+            .cloned()
+            .map(|name| {
+                let order = self.register_named(name.clone());
+                (name, order)
+            })
+            .collect()
+    }
+
+    pub fn register_named(&mut self, name: StyleLayerName) -> LayerOrder {
+        if let Some(order) = self.named.get(&name) {
+            return *order;
+        }
+        let order = self.allocate_order();
+        self.named.insert(name, order);
+        order
+    }
+
+    pub fn register_anonymous(&mut self) -> LayerOrder {
+        self.allocate_order()
+    }
+
+    #[must_use]
+    pub fn order(&self, name: &StyleLayerName) -> Option<LayerOrder> {
+        self.named.get(name).copied()
+    }
+
+    fn allocate_order(&mut self) -> LayerOrder {
+        self.next_order += 1;
+        LayerOrder::new(self.next_order)
+    }
+}
+
+fn validate_layer_component(component: &str) -> Result<()> {
+    if component.is_empty() {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "layer name component cannot be empty",
+        ));
+    }
+    if component.contains('\0') {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "layer name component cannot contain U+0000",
+        ));
+    }
+    if CSS_WIDE_KEYWORDS
+        .iter()
+        .any(|keyword| component.eq_ignore_ascii_case(keyword))
+    {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "layer name component cannot be a CSS-wide keyword",
+        ));
+    }
+    Ok(())
+}
+
+const CSS_WIDE_KEYWORDS: [&str; 5] = ["inherit", "initial", "unset", "revert", "revert-layer"];
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SourceOrder(u32);
@@ -121,5 +271,49 @@ mod tests {
 
         assert!(high_specificity_early > low_specificity_late);
         assert!(higher_layer > high_specificity_early);
+    }
+
+    #[test]
+    fn style_layer_names_validate_components_without_normalizing() {
+        assert!(StyleLayerName::try_new([""]).is_err());
+        assert!(StyleLayerName::try_new(["theme\0"]).is_err());
+        assert!(StyleLayerName::try_new(["revert-layer"]).is_err());
+        assert!(StyleLayerName::try_new(["Inherit"]).is_err());
+        assert!(StyleLayerName::try_new(["INITIAL"]).is_err());
+        assert!(StyleLayerName::try_new(["Revert-Layer"]).is_err());
+        assert!(StyleLayerName::try_new([" inherit "]).is_ok());
+        let layer = StyleLayerName::try_new(["Theme", "buttons"]).unwrap();
+        assert_eq!(
+            layer.components(),
+            &["Theme".to_string(), "buttons".to_string()]
+        );
+    }
+
+    #[test]
+    fn style_layer_name_lists_require_at_least_one_name() {
+        assert!(StyleLayerNameList::try_new([]).is_err());
+        assert!(StyleLayerNameList::try_new([StyleLayerName::try_new(["base"]).unwrap()]).is_ok());
+    }
+
+    #[test]
+    fn layer_registry_preserves_named_order_and_allocates_anonymous_fresh() {
+        let base = StyleLayerName::try_new(["base"]).unwrap();
+        let theme = StyleLayerName::try_new(["theme"]).unwrap();
+        let statement = LayerStatement::new(
+            StyleLayerNameList::try_new([base.clone(), theme.clone()]).unwrap(),
+        );
+        let mut registry = LayerRegistry::new();
+
+        assert_eq!(
+            registry.declare(&statement),
+            vec![
+                (base.clone(), LayerOrder::new(1)),
+                (theme.clone(), LayerOrder::new(2))
+            ]
+        );
+        assert_eq!(registry.register_named(base.clone()), LayerOrder::new(1));
+        assert_eq!(registry.register_anonymous(), LayerOrder::new(3));
+        assert_eq!(registry.register_anonymous(), LayerOrder::new(4));
+        assert_eq!(registry.order(&theme), Some(LayerOrder::new(2)));
     }
 }

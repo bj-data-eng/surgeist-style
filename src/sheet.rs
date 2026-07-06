@@ -9,7 +9,8 @@ use super::{
     selector::{PrimaryKey, SelectorSpecificity},
 };
 use crate::{
-    CustomPropertyName, StyleClass, StyleKey, StyleTag,
+    CustomPropertyName, Error, ErrorCode, LayerOrder, LayerRegistry, LayerStatement, StyleClass,
+    StyleKey, StyleLayerName, StyleLayerNameList, StyleTag,
     authored::{
         AuthoredCanonicalDeclarations, AuthoredCascadeValue, AuthoredDeclarationItem,
         CustomPropertyCascadeValue,
@@ -100,14 +101,39 @@ impl Rule {
         declarations: Declarations,
         order: u32,
     ) -> Self {
+        Self::with_target_precedence(
+            target,
+            declarations,
+            RulePrecedence::default().with_source_order(SourceOrder::new(order)),
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn with_layer_order(
+        layer_order: LayerOrder,
+        selector: Selector,
+        declarations: Declarations,
+        source_order: SourceOrder,
+    ) -> Self {
+        Self::with_target_precedence(
+            RuleTarget::element(selector),
+            declarations,
+            RulePrecedence::new(layer_order, source_order),
+        )
+    }
+
+    #[must_use]
+    fn with_target_precedence(
+        target: RuleTarget,
+        declarations: Declarations,
+        precedence: RulePrecedence,
+    ) -> Self {
         let specificity = target.specificity();
         Self {
             target,
             declarations: RuleDeclarations::Legacy(declarations),
             conditions: Vec::new(),
-            precedence: RulePrecedence::default()
-                .with_specificity(specificity)
-                .with_source_order(SourceOrder::new(order)),
+            precedence: precedence.with_specificity(specificity),
             source_order_policy: RuleSourceOrderPolicy::RebaseOnExtend,
         }
     }
@@ -353,6 +379,7 @@ enum RuleSourceOrderPolicy {
 pub struct Sheet {
     rules: Vec<Rule>,
     keyframes: Vec<KeyframesRule>,
+    layers: LayerRegistry,
     index: RuleIndex,
     version: Version,
 }
@@ -362,6 +389,7 @@ impl Default for Sheet {
         Self {
             rules: Vec::new(),
             keyframes: Vec::new(),
+            layers: LayerRegistry::new(),
             index: RuleIndex::default(),
             version: Version::next(),
         }
@@ -370,7 +398,9 @@ impl Default for Sheet {
 
 impl PartialEq for Sheet {
     fn eq(&self, other: &Self) -> bool {
-        self.rules == other.rules && self.keyframes == other.keyframes
+        self.rules == other.rules
+            && self.keyframes == other.keyframes
+            && self.layers == other.layers
     }
 }
 
@@ -455,6 +485,79 @@ impl Sheet {
     ) -> Result<&mut Self> {
         let declarations = declarations.to_rule_declarations()?;
         self.push(Rule::with_authored_target(target, declarations, precedence));
+        Ok(self)
+    }
+
+    pub fn declare_layers(&mut self, names: StyleLayerNameList) -> &mut Self {
+        self.layers.declare(&LayerStatement::new(names));
+        self.version = Version::next();
+        self
+    }
+
+    #[must_use]
+    pub fn layer_order(&self, name: &StyleLayerName) -> Option<LayerOrder> {
+        self.layers.order(name)
+    }
+
+    pub fn register_anonymous_layer(&mut self) -> LayerOrder {
+        let order = self.layers.register_anonymous();
+        self.version = Version::next();
+        order
+    }
+
+    pub fn push_layer_order_rule(
+        &mut self,
+        layer_order: LayerOrder,
+        selector: Selector,
+        declarations: Declarations,
+    ) -> Result<&mut Self> {
+        self.ensure_layered_order(layer_order)?;
+        let source_order = SourceOrder::new(self.rules.len() as u32);
+        self.push(Rule::with_layer_order(
+            layer_order,
+            selector,
+            declarations,
+            source_order,
+        ));
+        Ok(self)
+    }
+
+    pub fn push_layer_rule(
+        &mut self,
+        layer: StyleLayerName,
+        selector: Selector,
+        declarations: Declarations,
+    ) -> Result<&mut Self> {
+        let layer_order = self.layers.register_named(layer);
+        self.push_layer_order_rule(layer_order, selector, declarations)
+    }
+
+    pub fn push_authored_layer_rule(
+        &mut self,
+        layer: StyleLayerName,
+        selector: Selector,
+        declarations: AuthoredDeclarations,
+        source_order: SourceOrder,
+    ) -> Result<&mut Self> {
+        let layer_order = self.layers.register_named(layer);
+        self.push_authored_layer_order_rule(layer_order, selector, declarations, source_order)
+    }
+
+    pub fn push_authored_layer_order_rule(
+        &mut self,
+        layer_order: LayerOrder,
+        selector: Selector,
+        declarations: AuthoredDeclarations,
+        source_order: SourceOrder,
+    ) -> Result<&mut Self> {
+        self.ensure_layered_order(layer_order)?;
+        let specificity = selector.specificity();
+        let declarations = declarations.to_rule_declarations()?;
+        self.push(Rule::with_authored(
+            selector,
+            declarations,
+            RulePrecedence::new(layer_order, source_order).with_specificity(specificity),
+        ));
         Ok(self)
     }
 
@@ -624,6 +727,16 @@ impl Sheet {
         }
         Ok(candidates.into_iter().collect())
     }
+
+    fn ensure_layered_order(&self, layer_order: LayerOrder) -> Result<()> {
+        if layer_order == LayerOrder::default() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "layered rules require a non-default layer order",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -650,11 +763,12 @@ mod precedence_tests {
     use super::*;
     use crate::{
         AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredValue, Color,
-        ContainerCondition, ContainerFeatureQuery, CssWideKeyword, KeyframeBlock, KeyframeOffset,
-        KeyframeSelectorList, KeyframesIdent, KeyframesName, KeyframesRule, LayerOrder,
-        MediaCondition, MediaFeatureQuery, MediaQuery, MediaQueryList, Property, QueryComparison,
-        QueryLength, QueryLengthUnit, RangeFeature, RulePrecedence, Selector, SelectorSpecificity,
-        SourceOrder, StyleColor, Value,
+        ContainerCondition, ContainerFeatureQuery, Context, CssWideKeyword, Error, ErrorCode,
+        KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent, KeyframesName,
+        KeyframesRule, LayerOrder, MediaCondition, MediaFeatureQuery, MediaQuery, MediaQueryList,
+        Node, Property, QueryComparison, QueryLength, QueryLengthUnit, RangeFeature, Resolver,
+        RulePrecedence, Selector, SelectorSpecificity, SourceOrder, StyleColor, StyleLayerName,
+        StyleLayerNameList, StyleRole, StyleState, Traversal, Value,
     };
 
     fn authored_color(color: Color) -> AuthoredDeclarations {
@@ -1015,5 +1129,167 @@ mod precedence_tests {
             LayerOrder::default()
         );
         assert_eq!(sheet.rules()[2].precedence(), authored_precedence);
+    }
+
+    #[test]
+    fn layer_statements_register_named_layers_in_order() {
+        let mut sheet = Sheet::new();
+        let reset = StyleLayerName::try_new(["reset"]).unwrap();
+        let theme = StyleLayerName::try_new(["theme"]).unwrap();
+        sheet.declare_layers(StyleLayerNameList::try_new([reset.clone(), theme.clone()]).unwrap());
+
+        assert_eq!(sheet.layer_order(&reset), Some(LayerOrder::new(1)));
+        assert_eq!(sheet.layer_order(&theme), Some(LayerOrder::new(2)));
+    }
+
+    #[test]
+    fn named_layer_rules_use_registered_layer_order() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let base = StyleLayerName::try_new(["base"]).unwrap();
+        let theme = StyleLayerName::try_new(["theme"]).unwrap();
+        let mut sheet = Sheet::new();
+        sheet.declare_layers(StyleLayerNameList::try_new([base.clone(), theme.clone()]).unwrap());
+        sheet
+            .push_layer_rule(
+                base,
+                Selector::tag("button").unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                    .unwrap(),
+            )
+            .unwrap();
+        sheet
+            .push_layer_rule(
+                theme,
+                Selector::tag("button").unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::raw_rgba(0.0, 0.0, 1.0, 1.0))
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let mut resolver = Resolver::new(sheet);
+        let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
+
+        assert_eq!(
+            resolved.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.0, 0.0, 1.0, 1.0))
+        );
+    }
+
+    #[test]
+    fn anonymous_layer_blocks_get_fresh_order() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut sheet = Sheet::new();
+        let first = sheet.register_anonymous_layer();
+        let second = sheet.register_anonymous_layer();
+        sheet
+            .push_layer_order_rule(
+                first,
+                Selector::tag("button").unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                    .unwrap(),
+            )
+            .unwrap();
+        sheet
+            .push_layer_order_rule(
+                second,
+                Selector::tag("button").unwrap(),
+                Declarations::new()
+                    .try_concrete_text_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+                    .unwrap(),
+            )
+            .unwrap();
+
+        assert!(second > first);
+        let mut resolver = Resolver::new(sheet);
+        let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
+        assert_eq!(
+            resolved.text_color(),
+            &StyleColor::rgba(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+        );
+    }
+
+    #[derive(Clone, Debug)]
+    struct TestNode {
+        id: usize,
+        tag: StyleTag,
+        classes: Vec<StyleClass>,
+        children: Vec<usize>,
+    }
+
+    impl TestNode {
+        fn new(id: usize, tag: &str) -> Self {
+            Self {
+                id,
+                tag: StyleTag::new(tag).unwrap(),
+                classes: Vec::new(),
+                children: Vec::new(),
+            }
+        }
+    }
+
+    struct TestTree {
+        nodes: Vec<TestNode>,
+    }
+
+    impl TestTree {
+        fn new(nodes: Vec<TestNode>) -> Self {
+            Self { nodes }
+        }
+    }
+
+    impl Tree for TestTree {
+        type Id = usize;
+
+        fn version_hint(&self) -> Option<u64> {
+            Some(1)
+        }
+
+        fn node(&self, id: Self::Id) -> Result<Node<Self::Id>> {
+            let node = self
+                .nodes
+                .get(id)
+                .ok_or_else(|| Error::new(ErrorCode::MissingNode, "missing test node"))?;
+            Ok(Node {
+                id: node.id,
+                tag: Some(node.tag.clone()),
+                key: None,
+                classes: node.classes.clone(),
+                attributes: Vec::new(),
+                role: StyleRole::default(),
+                state: StyleState::default(),
+                text: false,
+            })
+        }
+
+        fn parent(&self, id: Self::Id, _traversal: Traversal) -> Result<Option<Self::Id>> {
+            Ok(self
+                .nodes
+                .iter()
+                .find(|node| node.children.contains(&id))
+                .map(|node| node.id))
+        }
+
+        fn children(
+            &self,
+            id: Self::Id,
+            _traversal: Traversal,
+        ) -> Result<impl Iterator<Item = Self::Id> + '_> {
+            Ok(self.nodes[id].children.iter().copied())
+        }
+
+        fn previous_sibling(&self, id: Self::Id, traversal: Traversal) -> Result<Option<Self::Id>> {
+            let Some(parent) = self.parent(id, traversal)? else {
+                return Ok(None);
+            };
+            let siblings = &self.nodes[parent].children;
+            Ok(siblings
+                .iter()
+                .position(|sibling| *sibling == id)
+                .and_then(|index| index.checked_sub(1))
+                .map(|index| siblings[index]))
+        }
     }
 }

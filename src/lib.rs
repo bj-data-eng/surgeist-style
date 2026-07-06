@@ -48,7 +48,10 @@ pub use identity::{
     StyleRole, StyleState, StyleTag,
 };
 pub use invalidation::{Change, Invalidation, Scope, SelectorFactChange};
-pub use precedence::{LayerOrder, RulePrecedence, SourceOrder};
+pub use precedence::{
+    LayerBlock, LayerOrder, LayerRegistry, LayerStatement, RulePrecedence, SourceOrder,
+    StyleLayerName, StyleLayerNameList,
+};
 pub use property::{Impact, Interpolation, Metadata, Property};
 pub use resolver::{Context, Resolved, Resolver};
 pub use selector::{
