@@ -4,11 +4,13 @@ use surgeist_style::{
     AuthoredProperty, AuthoredTokens, AuthoredValue, BackgroundAttachment,
     BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
-    BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak, Change,
-    ClipPath, Color, ColorComponent, Combinator, ContentVisibility, Context, CornerRadius, CssPx,
-    CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue,
-    Declarations, DimensionLength, DurationSeconds, Filter, FilterFunction, FilterFunctionList,
-    Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
+    BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
+    BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, Combinator, Content, ContentItem,
+    ContentItemList, ContentString, ContentVisibility, Context, CornerRadius, CounterFunction,
+    CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx, CssWideKeyword,
+    CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
+    DimensionLength, DurationSeconds, Filter, FilterFunction, FilterFunctionList, Flex,
+    FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
     FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
     HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
     LetterSpacing, LetterSpacingLength, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector,
@@ -18,13 +20,13 @@ use surgeist_style::{
     RelativeSelectorList, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale,
     ScaleValues, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
     SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
-    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole, StyleState,
-    StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
-    TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
+    StyleAttributeName, StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole,
+    StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration,
+    TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
     TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
     Translate, TranslateValues, Traversal, Tree, TypedDeclaration, UserSelect, Value,
-    VariableDependentValue, VariableExpression, VariableFallback, VariableReference,
-    VerticalAlign, VerticalAlignLength, VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
+    VariableDependentValue, VariableExpression, VariableFallback, VariableReference, VerticalAlign,
+    VerticalAlignLength, VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
 };
 
 fn main() -> surgeist_style::Result<()> {
@@ -134,6 +136,83 @@ fn main() -> surgeist_style::Result<()> {
         .text_decoration_style(TextDecorationStyle::Wavy)
         .try_text_decoration_thickness(text_decoration_thickness)?;
     assert_eq!(declarations.len(), 4);
+
+    let content_string = ContentString::try_new("Section ")?;
+    assert_eq!(content_string.as_str(), "Section ");
+    let counter_name = CounterName::try_new("section")?;
+    let counter_style_name = CounterStyleName::try_new("legal")?;
+    assert_eq!(counter_name.as_str(), "section");
+    assert_eq!(counter_style_name.as_str(), "legal");
+    let counter_style = CounterStyle::Named(counter_style_name);
+    let counter = CounterFunction::new(counter_name.clone(), Some(counter_style.clone()));
+    assert_eq!(counter.name().as_str(), "section");
+    assert_eq!(counter.style(), Some(&counter_style));
+    let counters = CountersFunction::new(
+        counter_name,
+        ContentString::try_new(".")?,
+        Some(CounterStyle::BuiltIn(BuiltInCounterStyle::LowerRoman)),
+    );
+    assert_eq!(counters.separator().as_str(), ".");
+    assert_eq!(
+        counters.style(),
+        Some(&CounterStyle::BuiltIn(BuiltInCounterStyle::LowerRoman))
+    );
+    let content_items = ContentItemList::try_new([
+        ContentItem::String(content_string),
+        ContentItem::Url(StyleUrl::new("section.svg")?),
+        ContentItem::Counter(counter),
+        ContentItem::Counters(counters),
+        ContentItem::Attr(StyleAttributeName::new("data-title")?),
+        ContentItem::OpenQuote,
+        ContentItem::CloseQuote,
+        ContentItem::NoOpenQuote,
+        ContentItem::NoCloseQuote,
+    ])?;
+    assert_eq!(content_items.items().len(), 9);
+    let content = Content::Items(content_items);
+    assert!(matches!(content, Content::Items(_)));
+    assert!(matches!(Content::Normal, Content::Normal));
+    assert!(matches!(Content::None, Content::None));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Disc),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Disc)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Circle),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Circle)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Square),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Square)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Decimal),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::Decimal)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::DecimalLeadingZero),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::DecimalLeadingZero)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::LowerAlpha),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::LowerAlpha)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::UpperAlpha),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::UpperAlpha)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::LowerLatin),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::LowerLatin)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::UpperLatin),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::UpperLatin)
+    ));
+    assert!(matches!(
+        CounterStyle::BuiltIn(BuiltInCounterStyle::UpperRoman),
+        CounterStyle::BuiltIn(BuiltInCounterStyle::UpperRoman)
+    ));
 
     let filter_functions =
         FilterFunctionList::try_new([FilterFunction::Blur(SymbolicFunctionValue::new("4px")?)])?;

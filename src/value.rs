@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::{AuthoredTokens, CustomPropertyName, VariableReference};
+use crate::{AuthoredTokens, CustomPropertyName, StyleAttributeName, VariableReference};
 
 use super::{
     CalcLength, CalcOperator, Error, ErrorCode, Interpolation, Property, Result,
@@ -1683,6 +1683,192 @@ impl StyleUrl {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ContentString {
+    value: String,
+}
+
+impl ContentString {
+    pub fn try_new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        if value.contains('\0') {
+            Err(Error::new(
+                ErrorCode::InvalidString,
+                "content string cannot contain U+0000",
+            ))
+        } else {
+            Ok(Self { value })
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct CounterName {
+    value: String,
+}
+
+impl CounterName {
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self> {
+        Ok(Self {
+            value: validate_counter_identifier(value.as_ref(), "counter name")?,
+        })
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct CounterStyleName {
+    value: String,
+}
+
+impl CounterStyleName {
+    pub fn try_new(value: impl AsRef<str>) -> Result<Self> {
+        Ok(Self {
+            value: validate_counter_identifier(value.as_ref(), "counter style name")?,
+        })
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BuiltInCounterStyle {
+    Disc,
+    Circle,
+    Square,
+    Decimal,
+    DecimalLeadingZero,
+    LowerAlpha,
+    UpperAlpha,
+    LowerLatin,
+    UpperLatin,
+    LowerRoman,
+    UpperRoman,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum CounterStyle {
+    BuiltIn(BuiltInCounterStyle),
+    Named(CounterStyleName),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CounterFunction {
+    name: CounterName,
+    style: Option<CounterStyle>,
+}
+
+impl CounterFunction {
+    #[must_use]
+    pub const fn new(name: CounterName, style: Option<CounterStyle>) -> Self {
+        Self { name, style }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CounterName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<&CounterStyle> {
+        self.style.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CountersFunction {
+    name: CounterName,
+    separator: ContentString,
+    style: Option<CounterStyle>,
+}
+
+impl CountersFunction {
+    #[must_use]
+    pub const fn new(
+        name: CounterName,
+        separator: ContentString,
+        style: Option<CounterStyle>,
+    ) -> Self {
+        Self {
+            name,
+            separator,
+            style,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CounterName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn separator(&self) -> &ContentString {
+        &self.separator
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<&CounterStyle> {
+        self.style.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ContentItem {
+    String(ContentString),
+    Url(StyleUrl),
+    Counter(CounterFunction),
+    Counters(CountersFunction),
+    Attr(StyleAttributeName),
+    OpenQuote,
+    CloseQuote,
+    NoOpenQuote,
+    NoCloseQuote,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ContentItemList {
+    items: Vec<ContentItem>,
+}
+
+impl ContentItemList {
+    pub fn try_new(items: impl IntoIterator<Item = ContentItem>) -> Result<Self> {
+        let items = items.into_iter().collect::<Vec<_>>();
+        if items.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "content item list cannot be empty",
+            ))
+        } else {
+            Ok(Self { items })
+        }
+    }
+
+    #[must_use]
+    pub fn items(&self) -> &[ContentItem] {
+        &self.items
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub enum Content {
+    #[default]
+    Normal,
+    None,
+    Items(ContentItemList),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -5025,6 +5211,48 @@ fn validate_style_string(value: &str, field: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_counter_identifier(value: &str, field: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{field} cannot be empty"),
+        ));
+    }
+    if trimmed == "-" {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{field} cannot be a lone hyphen"),
+        ));
+    }
+    if matches!(
+        trimmed.to_ascii_lowercase().as_str(),
+        "inherit" | "initial" | "unset" | "revert" | "revert-layer" | "none"
+    ) {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{field} cannot use reserved identifier `{trimmed}`"),
+        ));
+    }
+
+    let mut chars = trimmed.chars();
+    let first = chars.next().expect("trimmed is not empty");
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{field} must start with `_` or an ASCII letter"),
+        ));
+    }
+    if chars.any(|ch| !(ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')) {
+        return Err(Error::new(
+            ErrorCode::InvalidString,
+            format!("{field} must contain only ASCII letters, digits, `_`, or `-`"),
+        ));
+    }
+
+    Ok(trimmed.to_string())
+}
+
 fn validate_grid_line_name(name: &str) -> Result<()> {
     validate_style_string(name, "grid line name")?;
     if matches!(name, "auto" | "span") {
@@ -5088,10 +5316,13 @@ fn validate_decoration_brush(brush: Color) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationNameList, Color, CssPx, Decoration, DimensionLength, ErrorCode, FontFamilyList,
-        Length, OverflowWrap, StyleTextAlign, TextSlant, TextValue, TextWeight, TextWrap, Value,
+        AnimationNameList, BuiltInCounterStyle, Color, Content, ContentItem, ContentItemList,
+        ContentString, CounterFunction, CounterName, CounterStyle, CounterStyleName,
+        CountersFunction, CssPx, Decoration, DimensionLength, ErrorCode, FontFamilyList, Length,
+        OverflowWrap, StyleTextAlign, StyleUrl, TextSlant, TextValue, TextWeight, TextWrap, Value,
         WhiteSpace, WordBreak,
     };
+    use crate::StyleAttributeName;
 
     #[test]
     fn dimension_length_px_rejects_negative_css_px() {
@@ -5122,6 +5353,90 @@ mod tests {
 
         assert_eq!(font_error.code(), ErrorCode::InvalidString);
         assert_eq!(animation_error.code(), ErrorCode::InvalidString);
+    }
+
+    #[test]
+    fn generated_content_values_preserve_symbolic_payloads() {
+        let string = ContentString::try_new("Chapter ").unwrap();
+        let url = StyleUrl::new("chapter.svg").unwrap();
+        let counter_name = CounterName::try_new("section").unwrap();
+        let named_style = CounterStyle::Named(CounterStyleName::try_new("legal").unwrap());
+        let counter = CounterFunction::new(counter_name.clone(), Some(named_style.clone()));
+        let counters = CountersFunction::new(
+            counter_name.clone(),
+            ContentString::try_new(".").unwrap(),
+            Some(CounterStyle::BuiltIn(
+                BuiltInCounterStyle::DecimalLeadingZero,
+            )),
+        );
+        let attr_name = StyleAttributeName::new("data-label").unwrap();
+
+        assert_eq!(string.as_str(), "Chapter ");
+        assert_eq!(counter.name().as_str(), "section");
+        assert_eq!(counter.style(), Some(&named_style));
+        assert_eq!(counters.name().as_str(), "section");
+        assert_eq!(counters.separator().as_str(), ".");
+        assert_eq!(
+            counters.style(),
+            Some(&CounterStyle::BuiltIn(
+                BuiltInCounterStyle::DecimalLeadingZero
+            ))
+        );
+
+        let items = ContentItemList::try_new([
+            ContentItem::String(string),
+            ContentItem::Url(url),
+            ContentItem::Counter(counter),
+            ContentItem::Counters(counters),
+            ContentItem::Attr(attr_name),
+            ContentItem::OpenQuote,
+            ContentItem::CloseQuote,
+            ContentItem::NoOpenQuote,
+            ContentItem::NoCloseQuote,
+        ])
+        .unwrap();
+        assert_eq!(items.items().len(), 9);
+        assert!(matches!(Content::default(), Content::Normal));
+        assert!(matches!(Content::Items(items), Content::Items(_)));
+        assert!(matches!(Content::None, Content::None));
+    }
+
+    #[test]
+    fn generated_content_names_and_lists_validate_invariants() {
+        let trimmed = CounterName::try_new("  section-1  ").unwrap();
+        let style = CounterStyleName::try_new("_legal").unwrap();
+
+        assert_eq!(trimmed.as_str(), "section-1");
+        assert_eq!(style.as_str(), "_legal");
+
+        for invalid in [
+            "",
+            " ",
+            "-",
+            "two words",
+            "inherit",
+            "initial",
+            "unset",
+            "revert",
+            "revert-layer",
+            "none",
+            "1bad",
+        ] {
+            assert!(
+                CounterName::try_new(invalid).is_err(),
+                "counter name should reject {invalid:?}"
+            );
+            assert!(
+                CounterStyleName::try_new(invalid).is_err(),
+                "counter style name should reject {invalid:?}"
+            );
+        }
+
+        let content_string_error = ContentString::try_new("bad\0string").unwrap_err();
+        let empty_list_error = ContentItemList::try_new([]).unwrap_err();
+
+        assert_eq!(content_string_error.code(), ErrorCode::InvalidString);
+        assert_eq!(empty_list_error.code(), ErrorCode::InvalidValue);
     }
 
     #[test]
