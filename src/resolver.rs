@@ -7,17 +7,17 @@ use super::{
     AlignContent, AspectRatio, BorderLineStyle, BorderRadii, BoxDecorationBreak, ClipPath,
     Condition, Container, ContentVisibility, CornerRadius, Corners, CssWideKeyword, Cursor,
     Declarations, Display, Edges, Filter, FlexFactor, FontFamilyList, FontFeatureSettings,
-    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
-    OutlineStyle, OutlineWidth, OverflowWrap, PointerEvents, Property, Result, Rotate,
-    RulePrecedence, Scale, ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket,
-    StyleColor, TextAlignLast, TextDecorationLine, TextDecorationStyle, TextDecorationThickness,
-    TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap, Transform, Translate, Traversal,
-    Tree, UserSelect, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak,
-    ZIndex,
+    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, ListStyleImage,
+    ListStylePosition, ListStyleType, Order, OutlineStyle, OutlineWidth, OverflowWrap,
+    PointerEvents, Property, Result, Rotate, RulePrecedence, Scale, ScrollbarWidth,
+    SelectorMatchContext, Sheet, Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine,
+    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+    TextTransform, TextWrap, Transform, Translate, Traversal, Tree, UserSelect, Value, Version,
+    VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak, ZIndex,
     declaration::hash_value,
     value::{
-        BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList,
-        ImageLayerList, PositionList,
+        BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList, Content,
+        CounterChanges, ImageLayerList, PositionList,
     },
 };
 use crate::{
@@ -700,6 +700,53 @@ impl Resolved {
     }
 
     #[must_use]
+    pub fn content(&self) -> &Content {
+        match self.get(Property::Content) {
+            Value::Content(value) => value,
+            _ => unreachable!("resolved content stores generated content"),
+        }
+    }
+
+    #[must_use]
+    pub fn list_style_type(&self) -> &ListStyleType {
+        match self.get(Property::ListStyleType) {
+            Value::ListStyleType(value) => value,
+            _ => unreachable!("resolved list-style-type stores marker type"),
+        }
+    }
+
+    #[must_use]
+    pub fn list_style_position(&self) -> ListStylePosition {
+        match self.get(Property::ListStylePosition) {
+            Value::ListStylePosition(value) => *value,
+            _ => ListStylePosition::Outside,
+        }
+    }
+
+    #[must_use]
+    pub fn list_style_image(&self) -> &ListStyleImage {
+        match self.get(Property::ListStyleImage) {
+            Value::ListStyleImage(value) => value,
+            _ => unreachable!("resolved list-style-image stores marker image"),
+        }
+    }
+
+    #[must_use]
+    pub fn counter_reset(&self) -> &CounterChanges {
+        self.counter_changes(Property::CounterReset)
+    }
+
+    #[must_use]
+    pub fn counter_increment(&self) -> &CounterChanges {
+        self.counter_changes(Property::CounterIncrement)
+    }
+
+    #[must_use]
+    pub fn counter_set(&self) -> &CounterChanges {
+        self.counter_changes(Property::CounterSet)
+    }
+
+    #[must_use]
     pub fn order(&self) -> Order {
         match self.get(Property::Order) {
             Value::Order(value) => *value,
@@ -772,6 +819,13 @@ impl Resolved {
         match self.get(property) {
             Value::CornerRadius(value) => value,
             _ => unreachable!("resolved corner radius property stores a corner radius"),
+        }
+    }
+
+    fn counter_changes(&self, property: Property) -> &CounterChanges {
+        match self.get(property) {
+            Value::CounterChanges(value) => value,
+            _ => unreachable!("resolved counter property stores counter changes"),
         }
     }
 
@@ -1693,18 +1747,20 @@ mod tests {
     use super::*;
     use crate::{
         AspectRatio, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty, AuthoredTokens,
-        AuthoredValue, Color, Combinator, ComplexSelectorPart, ContentVisibility, CssWideKeyword,
+        AuthoredValue, BuiltInCounterStyle, Color, Combinator, ComplexSelectorPart, Content,
+        ContentItem, ContentItemList, ContentString, ContentVisibility, CounterChange,
+        CounterChangeList, CounterChanges, CounterName, CounterStyle, CssWideKeyword,
         CustomPropertyName, CustomPropertyValue, Declarations, Error, ErrorCode, FilterFunction,
         FilterFunctionList, Flex, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
         FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber, ImageLayer,
-        LayerOrder, LayoutPosition, LetterSpacing, Node, Order, OverflowWrap,
-        PlaceContentAlignment, RulePrecedence, RuleTarget, ScrollbarWidth, Selector,
-        SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleColor, StyleRole,
-        StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor, TextAlignLast,
-        TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
-        TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-        UserSelect, VariableDependentValue, VariableExpression, VariableFallback,
-        VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
+        LayerOrder, LayoutPosition, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition,
+        ListStyleType, Node, Order, OverflowWrap, PlaceContentAlignment, RulePrecedence,
+        RuleTarget, ScrollbarWidth, Selector, SelectorSpecificity, SourceOrder, StyleBucket,
+        StyleClass, StyleColor, StyleRole, StyleState, StyleTag, StyleUrl, SymbolicFunctionValue,
+        SystemColor, TextAlignLast, TextDecorationLine, TextDecorationLineComponent,
+        TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
+        TextTransform, TextWrap, UserSelect, VariableDependentValue, VariableExpression,
+        VariableFallback, VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
     };
 
     fn precedence(layer: u32, source: u32) -> RulePrecedence {
@@ -1964,6 +2020,69 @@ mod tests {
         assert_eq!(style.flex_grow(), FlexFactor::one());
         assert_eq!(style.flex_shrink(), FlexFactor::one());
         assert_eq!(style.align_tracks(), AlignContent::SpaceEvenly);
+    }
+
+    #[test]
+    fn generated_content_values_resolve_on_pseudo_buckets_without_tree_materialization() {
+        let tree = TestTree::new(vec![TestNode::new(0, "root")]);
+        let content = Content::Items(
+            ContentItemList::try_new([ContentItem::String(ContentString::try_new("New").unwrap())])
+                .unwrap(),
+        );
+        let sheet = Sheet::new().targeted_rule(
+            RuleTarget::new(Selector::tag("root").unwrap(), StyleBucket::Before),
+            Declarations::new().content(content.clone()).unwrap(),
+        );
+
+        let style = Resolver::new(sheet.clone())
+            .resolve(Context::new(&tree, 0).style_bucket(StyleBucket::Before))
+            .unwrap();
+        let element_style = Resolver::new(sheet)
+            .resolve(Context::new(&tree, 0))
+            .unwrap();
+
+        assert_eq!(style.content(), &content);
+        assert_eq!(element_style.content(), &Content::Normal);
+        assert_eq!(tree.nodes.len(), 1);
+    }
+
+    #[test]
+    fn list_marker_and_counter_values_resolve_together() {
+        let tree = TestTree::new(vec![TestNode::new(0, "item")]);
+        let counter_name = CounterName::try_new("item").unwrap();
+        let changes = CounterChanges::Changes(
+            CounterChangeList::try_new([CounterChange::new(counter_name, 1)]).unwrap(),
+        );
+        let marker_image = ListStyleImage::Url(StyleUrl::new("marker.svg").unwrap());
+        let sheet = Sheet::new().targeted_rule(
+            RuleTarget::element(Selector::tag("item").unwrap()),
+            Declarations::new()
+                .list_style(
+                    ListStyle::try_new(
+                        Some(ListStyleType::CounterStyle(CounterStyle::BuiltIn(
+                            BuiltInCounterStyle::Decimal,
+                        ))),
+                        Some(ListStylePosition::Inside),
+                        Some(marker_image.clone()),
+                    )
+                    .unwrap(),
+                )
+                .unwrap()
+                .counter_increment(changes.clone())
+                .unwrap(),
+        );
+
+        let style = Resolver::new(sheet)
+            .resolve(Context::new(&tree, 0))
+            .unwrap();
+
+        assert!(matches!(
+            style.list_style_type(),
+            ListStyleType::CounterStyle(CounterStyle::BuiltIn(BuiltInCounterStyle::Decimal))
+        ));
+        assert_eq!(style.list_style_position(), ListStylePosition::Inside);
+        assert_eq!(style.list_style_image(), &marker_image);
+        assert_eq!(style.counter_increment(), &changes);
     }
 
     #[test]

@@ -244,6 +244,28 @@ fn main() -> surgeist_style::Result<()> {
         CounterChanges::Changes(_)
     ));
     assert!(matches!(CounterChanges::default(), CounterChanges::None));
+    let generated_content = Content::Items(ContentItemList::try_new([
+        ContentItem::String(ContentString::try_new("Item ")?),
+        ContentItem::Counter(CounterFunction::new(
+            CounterName::try_new("item")?,
+            Some(CounterStyle::BuiltIn(BuiltInCounterStyle::Decimal)),
+        )),
+    ])?);
+    let declarations = Declarations::new()
+        .content(generated_content)?
+        .list_style(ListStyle::try_new(
+            Some(ListStyleType::CounterStyle(CounterStyle::BuiltIn(
+                BuiltInCounterStyle::Disc,
+            ))),
+            Some(ListStylePosition::Outside),
+            Some(ListStyleImage::None),
+        )?)?
+        .counter_reset(CounterChanges::None)?
+        .counter_increment(CounterChanges::Changes(CounterChangeList::try_new([
+            CounterChange::new(CounterName::try_new("item")?, 1),
+        ])?))?
+        .counter_set(CounterChanges::None)?;
+    let _ = declarations;
 
     let filter_functions =
         FilterFunctionList::try_new([FilterFunction::Blur(SymbolicFunctionValue::new("4px")?)])?;
