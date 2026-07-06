@@ -60,15 +60,15 @@ dependencies, adapters, or generated code.
 | `CssProperty::PlaceItems` | `CssValue::PlaceAlignment` | Alignment | `Existing style shorthand` | `Property::PlaceItems` + `Value::PlaceItemsAlignment` | Style shorthand canonicalization lowers to `AlignItems` and `JustifyItems`. | Operation 8 layout-facing properties |
 | `CssProperty::PlaceSelf` | `CssValue::PlaceAlignment` | Alignment | `Existing style shorthand` | `Property::PlaceSelf` + `Value::PlaceItemsAlignment` | Style shorthand canonicalization lowers to `AlignSelf` and `JustifySelf`. | Operation 8 layout-facing properties |
 | `CssProperty::Visibility` | `CssValue::Visibility` | Overflow and visibility | `Existing style property` | `Property::Visibility` + `Value::Visibility` | Visible and hidden are modeled; CSS collapse needs layout-pass treatment. | Operation 8 layout-facing properties |
-| `CssProperty::Content` | `CssValue::Content` | Generated content and lists | `New style property needed` | Planned generated content model scoped to `StyleBucket` | Style should own generated content policy/data; retained/tree materialization remains outside style. | Operation 11 generated content/counters/lists |
+| `CssProperty::Content` | `CssValue::Content` | Generated content and lists | `Existing style property` | `Property::Content` + `Value::Content` | Style owns generated content policy/data; retained/tree materialization remains outside style. | No property implementation |
 | `CssProperty::ContentVisibility` | `CssValue::ContentVisibility` | Overflow and visibility | `Existing style property` | `Property::ContentVisibility` + `Value::ContentVisibility` | Content visibility has typed layout/paint style data. | Operation 8 layout-facing properties |
-| `CssProperty::ListStyleType` | `CssValue::ListStyleType` | Generated content and lists | `New style property needed` | Planned list marker type model | Style needs typed marker style data; marker text materialization remains outside style. | Operation 11 generated content/counters/lists |
-| `CssProperty::ListStylePosition` | `CssValue::ListStylePosition` | Generated content and lists | `New style property needed` | Planned list marker position model | Style lacks marker position data for list layout policy. | Operation 11 generated content/counters/lists |
-| `CssProperty::ListStyleImage` | `CssValue::ListStyleImage` | Generated content and lists | `Symbolic style data needed` | Planned symbolic list marker image model | URLs and image resources should be preserved symbolically; loading and render resources stay outside style. | Operation 11 generated content/counters/lists |
-| `CssProperty::ListStyle` | `CssValue::ListStyle` | Generated content and lists | `New shorthand lowering needed` | Planned lowering to list-style type, position, and image models | Style needs explicit list shorthand lowering without storing an untyped list bag. | Operation 11 generated content/counters/lists |
-| `CssProperty::CounterReset` | `CssValue::CounterChanges` | Generated content and lists | `New style property needed` | Planned counter reset model | Style lacks counter mutation data for generated content. | Operation 11 generated content/counters/lists |
-| `CssProperty::CounterIncrement` | `CssValue::CounterChanges` | Generated content and lists | `New style property needed` | Planned counter increment model | Style lacks counter mutation data for generated content. | Operation 11 generated content/counters/lists |
-| `CssProperty::CounterSet` | `CssValue::CounterChanges` | Generated content and lists | `New style property needed` | Planned counter set model | Style lacks counter mutation data for generated content. | Operation 11 generated content/counters/lists |
+| `CssProperty::ListStyleType` | `CssValue::ListStyleType` | Generated content and lists | `Existing style property` | `Property::ListStyleType` + `Value::ListStyleType` | List marker type has typed style data; marker text materialization remains outside style. | No property implementation |
+| `CssProperty::ListStylePosition` | `CssValue::ListStylePosition` | Generated content and lists | `Existing style property` | `Property::ListStylePosition` + `Value::ListStylePosition` | Marker position has typed style data for list layout policy. | No property implementation |
+| `CssProperty::ListStyleImage` | `CssValue::ListStyleImage` | Generated content and lists | `Existing style property` | `Property::ListStyleImage` + `Value::ListStyleImage` | URLs remain symbolic; image resource loading remains outside style. | No property implementation |
+| `CssProperty::ListStyle` | `CssValue::ListStyle` | Generated content and lists | `Existing style shorthand` | `Property::ListStyle` + `Value::ListStyle` | Style shorthand canonicalization lowers to list-style type, position, and image longhands. | No property implementation |
+| `CssProperty::CounterReset` | `CssValue::CounterChanges` | Generated content and lists | `Existing style property` | `Property::CounterReset` + `Value::CounterChanges` | Counter reset has typed counter mutation style data. | No property implementation |
+| `CssProperty::CounterIncrement` | `CssValue::CounterChanges` | Generated content and lists | `Existing style property` | `Property::CounterIncrement` + `Value::CounterChanges` | Counter increment has typed counter mutation style data. | No property implementation |
+| `CssProperty::CounterSet` | `CssValue::CounterChanges` | Generated content and lists | `Existing style property` | `Property::CounterSet` + `Value::CounterChanges` | Counter set has typed counter mutation style data. | No property implementation |
 | `CssProperty::Width` | `CssValue::Length` | Sizing and spacing | `Existing style property` | `Property::Width` + `Value::Length` | Width has typed length data, including symbolic calc lengths. | Operation 8 layout-facing properties |
 | `CssProperty::Height` | `CssValue::Length` | Sizing and spacing | `Existing style property` | `Property::Height` + `Value::Length` | Height has typed length data, including symbolic calc lengths. | Operation 8 layout-facing properties |
 | `CssProperty::MinWidth` | `CssValue::Length` | Sizing and spacing | `Existing style property` | `Property::MinWidth` + `Value::Length` | Minimum width has typed length data. | Operation 8 layout-facing properties |
@@ -233,7 +233,7 @@ dependencies, adapters, or generated code.
 | Alignment | Align/justify content/items/self targets, place shorthands, and track alignment properties exist. | No Operation 8 alignment property gap remains in this ledger. | No property implementation |
 | Writing mode | `Direction` and `WritingMode` are inherited typed style properties. | CSS parity review for additional writing-mode values remains future parser-lowering work. | No property implementation |
 | Text and font | Font family, font size, line height, text alignment, font shorthand and longhands, font feature settings, spacing, wrapping, text overflow, text decoration line/color/style/thickness, and text transform have typed style targets. | No Operation 9 text or font property gap remains in this ledger. | No property implementation |
-| Generated content and lists | Pseudo-element style buckets and authored declarations can target style buckets. | `content`, list style, marker images, and counters need generated-content style data. | Operation 11 generated content/counters/lists |
+| Generated content and lists | Generated content and lists now have typed style targets for `content`, list marker type/position/image/shorthand, counter reset/increment/set, counter/counters content functions, quote payloads, attr payloads, and pseudo-element style buckets. | Counter formatting, quote depth evaluation, attr lookup, marker materialization, retained projection, image loading, and render resources remain outside style. | No property implementation |
 | Color | `Color`, `TextDecorationColor`, border colors, outline color, and background color use `Value::StyleColor` for concrete and symbolic style-owned color data. | Final currentColor, system-color, and color-space resolution remains outside style; no Operation 10 color property gap remains in this ledger. | No property implementation |
 | Background | Background color and background image, position, size, repeat, origin, clip, and attachment longhands have typed style targets. | Full CSS `background` shorthand layering is not claimed; the current CSS `Background` row remains color-only. | No property implementation |
 | Border and outline | Border width/style/color side longhands, border side shorthands, border radius corner longhands, radius shorthand, and CSS outline shorthand/longhands have typed style targets. | Focus outline remains a distinct style property; no Operation 10 border or outline property gap remains in this ledger. | No property implementation |
@@ -263,19 +263,19 @@ render resources.
 
 ## Next Sequence Context
 
-The next implementation plan should cover Operation 11: generated
-content/counters/lists.
+The next implementation plan should cover Operation 12: timing, animation, and
+keyframe style data.
 
 Use this ledger instead of re-inventorying the full CSS property surface. The
-generated content/counters/lists plan should start with the `Content`,
-`ListStyle*`, and `Counter*` ledger rows that point to Operation 11.
+timing/animation/keyframes plan should start with the `Transition*`,
+`Animation*`, and keyframe style data gaps that point to Operation 12.
 
-The generated content/counters/lists plan should implement style-owned models
-and lowering front doors only where the ledger marks `New style property needed`,
-`New shorthand lowering needed`, or `Symbolic style data needed`. It should not
-add a style-to-layout adapter, timing/keyframe models, or Operation 14
-cache/invalidation generalization.
+The timing/animation/keyframes plan should implement style-owned models and
+lowering front doors for time lists, easing lists, transition shorthand/list
+lowering, animation longhands/shorthand, and keyframe style data. It should not
+add a style-to-render adapter or Operation 14 cache/invalidation generalization.
 
 Operation 8 layout-facing rows, Operation 9 text-facing rows, and Operation 10
-paint/color/effects rows have been rebased after implementation, so Operation 11
-can proceed from the current generated content/counters/lists gaps.
+paint/color/effects rows, and Operation 11 generated content/counters/lists rows
+have been rebased after implementation, so Operation 12 can proceed from the
+current timing/animation/keyframes gaps.
