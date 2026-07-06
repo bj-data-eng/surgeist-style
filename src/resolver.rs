@@ -4,15 +4,15 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, BorderLineStyle, BorderRadii, Condition, Container,
-    ContentVisibility, CornerRadius, Corners, CssWideKeyword, Cursor, Declarations, Display, Edges,
-    FlexFactor, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
-    LayoutPosition, Length, LetterSpacing, Order, OutlineStyle, OutlineWidth, OverflowWrap,
-    PointerEvents, Property, Result, RulePrecedence, ScrollbarWidth, SelectorMatchContext, Sheet,
-    Size, StyleBucket, StyleColor, TextAlignLast, TextDecorationLine, TextDecorationStyle,
-    TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
-    Transform, Traversal, Tree, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace,
-    WordBreak, ZIndex,
+    AlignContent, AspectRatio, BorderLineStyle, BorderRadii, BoxDecorationBreak, ClipPath,
+    Condition, Container, ContentVisibility, CornerRadius, Corners, CssWideKeyword, Cursor,
+    Declarations, Display, Edges, Filter, FlexFactor, FontFamilyList, FontFeatureSettings,
+    FontStretch, FontVariant, FontWeight, LayoutPosition, Length, LetterSpacing, Order,
+    OutlineStyle, OutlineWidth, OverflowWrap, PointerEvents, Property, Result, Rotate,
+    RulePrecedence, Scale, ScrollbarWidth, SelectorMatchContext, Sheet, Size, StyleBucket,
+    StyleColor, TextAlignLast, TextDecorationLine, TextDecorationStyle, TextDecorationThickness,
+    TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap, Transform, Translate, Traversal,
+    Tree, Value, Version, VerticalAlign, Viewport, Visibility, WhiteSpace, WordBreak, ZIndex,
     declaration::hash_value,
     value::{
         BackgroundAttachmentList, BackgroundBox, BackgroundRepeatList, BackgroundSizeList,
@@ -567,6 +567,62 @@ impl Resolved {
         match self.get(Property::TransformOrigin) {
             Value::Size(origin) => origin.clone(),
             _ => Size::new(Length::Percent(50.0), Length::Percent(50.0)),
+        }
+    }
+
+    #[must_use]
+    pub fn box_decoration_break(&self) -> BoxDecorationBreak {
+        match self.get(Property::BoxDecorationBreak) {
+            Value::BoxDecorationBreak(value) => *value,
+            _ => BoxDecorationBreak::Slice,
+        }
+    }
+
+    #[must_use]
+    pub fn filter(&self) -> &Filter {
+        match self.get(Property::Filter) {
+            Value::Filter(filter) => filter,
+            _ => unreachable!("resolved filter stores a filter value"),
+        }
+    }
+
+    #[must_use]
+    pub fn backdrop_filter(&self) -> &Filter {
+        match self.get(Property::BackdropFilter) {
+            Value::Filter(filter) => filter,
+            _ => unreachable!("resolved backdrop-filter stores a filter value"),
+        }
+    }
+
+    #[must_use]
+    pub fn clip_path(&self) -> &ClipPath {
+        match self.get(Property::ClipPath) {
+            Value::ClipPath(clip_path) => clip_path,
+            _ => unreachable!("resolved clip-path stores a clip path value"),
+        }
+    }
+
+    #[must_use]
+    pub fn translate(&self) -> &Translate {
+        match self.get(Property::Translate) {
+            Value::Translate(translate) => translate,
+            _ => unreachable!("resolved translate stores a translate value"),
+        }
+    }
+
+    #[must_use]
+    pub fn rotate(&self) -> &Rotate {
+        match self.get(Property::Rotate) {
+            Value::Rotate(rotate) => rotate,
+            _ => unreachable!("resolved rotate stores a rotate value"),
+        }
+    }
+
+    #[must_use]
+    pub fn scale(&self) -> &Scale {
+        match self.get(Property::Scale) {
+            Value::Scale(scale) => scale,
+            _ => unreachable!("resolved scale stores a scale value"),
         }
     }
 

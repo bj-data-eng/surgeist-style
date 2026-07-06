@@ -4,18 +4,19 @@ use std::{
 };
 
 use super::{
-    AlignContent, AspectRatio, Border, BorderLineStyle, BorderRadii, BorderSide, BorderStyles,
-    CalcLength, CalcLengthTerm, Color, ColorFunction, ColorInterpolationSpace, ColorMix,
-    ContentVisibility, CornerRadius, Cursor, DimensionLength, Display, DurationSeconds, Edges,
-    Flex, FlexFactor, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant,
-    FontWeight, GridAreaPlacement, GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine,
-    GridPlacement, GridTemplate, GridTemplateAreas, GridTrackComponent, GridTrackList,
-    LayoutPosition, Length, LetterSpacing, MaxTrackSizing, MinTrackSizing, Opacity, Order, Outline,
-    OutlineStyle, OutlineWidth, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment,
-    PointerEvents, Property, RelativeColor, Result, ScrollbarWidth, Shadow, Size, StyleColor,
+    AlignContent, AspectRatio, BasicShape, Border, BorderLineStyle, BorderRadii, BorderSide,
+    BorderStyles, BoxDecorationBreak, CalcLength, CalcLengthTerm, ClipPath, Color, ColorFunction,
+    ColorInterpolationSpace, ColorMix, ContentVisibility, CornerRadius, Cursor, DimensionLength,
+    Display, DurationSeconds, Edges, Filter, FilterFunction, Flex, FlexFactor, Font,
+    FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight, GridAreaPlacement,
+    GridAutoFlow, GridDefinition, GridFlowTolerance, GridLine, GridPlacement, GridTemplate,
+    GridTemplateAreas, GridTrackComponent, GridTrackList, LayoutPosition, Length, LetterSpacing,
+    MaxTrackSizing, MinTrackSizing, Opacity, Order, Outline, OutlineStyle, OutlineWidth,
+    OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, PointerEvents, Property,
+    RelativeColor, Result, Rotate, Scale, ScrollbarWidth, Shadow, Size, StyleColor,
     SubgridLineNameComponent, SymbolicComponentExpression, TextAlignLast, TextDecoration,
     TextDecorationLine, TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow,
-    TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Value,
+    TextSlant, TextTransform, TextWrap, TrackRepeatCount, TrackSizing, Transform, Translate, Value,
     VariableExpression, VariableFallback, VariableReference, VerticalAlign, Visibility, WhiteSpace,
     WordBreak, ZIndex,
     value::{
@@ -686,6 +687,44 @@ impl Declarations {
         self.try_set(Property::TransformOrigin, Value::Size(origin))
     }
 
+    #[must_use]
+    pub fn box_decoration_break(self, value: BoxDecorationBreak) -> Self {
+        self.set(
+            Property::BoxDecorationBreak,
+            Value::BoxDecorationBreak(value),
+        )
+    }
+
+    #[must_use]
+    pub fn filter(self, value: Filter) -> Self {
+        self.set(Property::Filter, Value::Filter(value))
+    }
+
+    #[must_use]
+    pub fn backdrop_filter(self, value: Filter) -> Self {
+        self.set(Property::BackdropFilter, Value::Filter(value))
+    }
+
+    #[must_use]
+    pub fn clip_path(self, value: ClipPath) -> Self {
+        self.set(Property::ClipPath, Value::ClipPath(value))
+    }
+
+    #[must_use]
+    pub fn translate(self, value: Translate) -> Self {
+        self.set(Property::Translate, Value::Translate(value))
+    }
+
+    #[must_use]
+    pub fn rotate(self, value: Rotate) -> Self {
+        self.set(Property::Rotate, Value::Rotate(value))
+    }
+
+    #[must_use]
+    pub fn scale(self, value: Scale) -> Self {
+        self.set(Property::Scale, Value::Scale(value))
+    }
+
     pub fn try_transition_properties(self, properties: Vec<Property>) -> Result<Self> {
         self.try_set(
             Property::TransitionProperty,
@@ -910,6 +949,62 @@ impl Declarations {
     pub fn transform_origin_size(&self) -> Option<Size> {
         match self.get(Property::TransformOrigin) {
             Some(Value::Size(origin)) => Some(origin.clone()),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn box_decoration_break_value(&self) -> Option<BoxDecorationBreak> {
+        match self.get(Property::BoxDecorationBreak) {
+            Some(Value::BoxDecorationBreak(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn filter_value(&self) -> Option<&Filter> {
+        match self.get(Property::Filter) {
+            Some(Value::Filter(filter)) => Some(filter),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn backdrop_filter_value(&self) -> Option<&Filter> {
+        match self.get(Property::BackdropFilter) {
+            Some(Value::Filter(filter)) => Some(filter),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn clip_path_value(&self) -> Option<&ClipPath> {
+        match self.get(Property::ClipPath) {
+            Some(Value::ClipPath(clip_path)) => Some(clip_path),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn translate_value(&self) -> Option<&Translate> {
+        match self.get(Property::Translate) {
+            Some(Value::Translate(translate)) => Some(translate),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn rotate_value(&self) -> Option<&Rotate> {
+        match self.get(Property::Rotate) {
+            Some(Value::Rotate(rotate)) => Some(rotate),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn scale_value(&self) -> Option<&Scale> {
+        match self.get(Property::Scale) {
+            Some(Value::Scale(scale)) => Some(scale),
             _ => None,
         }
     }
@@ -1927,6 +2022,18 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
             85u8.hash(state);
             hash_mask_layer_list(value, state);
         }
+        Value::BoxDecorationBreak(value) => {
+            86u8.hash(state);
+            value.hash(state);
+        }
+        Value::Filter(value) => {
+            87u8.hash(state);
+            hash_filter(value, state);
+        }
+        Value::ClipPath(value) => {
+            88u8.hash(state);
+            hash_clip_path(value, state);
+        }
         Value::WritingMode(value) => {
             33u8.hash(state);
             value.hash(state);
@@ -2114,6 +2221,18 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
                 hash_transform_op(operation, state);
             }
         }
+        Value::Translate(value) => {
+            89u8.hash(state);
+            hash_translate(value, state);
+        }
+        Value::Rotate(value) => {
+            90u8.hash(state);
+            hash_rotate(value, state);
+        }
+        Value::Scale(value) => {
+            91u8.hash(state);
+            hash_scale(value, state);
+        }
         Value::Cursor(value) => {
             13u8.hash(state);
             value.hash(state);
@@ -2125,6 +2244,139 @@ pub(crate) fn hash_value(value: &Value, state: &mut DefaultHasher) {
         Value::Visibility(value) => {
             15u8.hash(state);
             value.hash(state);
+        }
+    }
+}
+
+fn hash_filter(value: &Filter, state: &mut DefaultHasher) {
+    match value {
+        Filter::None => 0u8.hash(state),
+        Filter::Functions(functions) => {
+            1u8.hash(state);
+            functions.functions().len().hash(state);
+            for function in functions.functions() {
+                hash_filter_function(function, state);
+            }
+        }
+    }
+}
+
+fn hash_filter_function(value: &FilterFunction, state: &mut DefaultHasher) {
+    match value {
+        FilterFunction::Blur(value) => {
+            0u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Brightness(value) => {
+            1u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Contrast(value) => {
+            2u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::DropShadow(value) => {
+            3u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Grayscale(value) => {
+            4u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::HueRotate(value) => {
+            5u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Invert(value) => {
+            6u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Opacity(value) => {
+            7u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Saturate(value) => {
+            8u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Sepia(value) => {
+            9u8.hash(state);
+            value.as_str().hash(state);
+        }
+        FilterFunction::Url(value) => {
+            10u8.hash(state);
+            value.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_clip_path(value: &ClipPath, state: &mut DefaultHasher) {
+    match value {
+        ClipPath::None => 0u8.hash(state),
+        ClipPath::Url(value) => {
+            1u8.hash(state);
+            value.as_str().hash(state);
+        }
+        ClipPath::BasicShape(value) => {
+            2u8.hash(state);
+            hash_basic_shape(value, state);
+        }
+    }
+}
+
+fn hash_basic_shape(value: &BasicShape, state: &mut DefaultHasher) {
+    match value {
+        BasicShape::Inset(value) => {
+            0u8.hash(state);
+            value.as_str().hash(state);
+        }
+        BasicShape::Circle(value) => {
+            1u8.hash(state);
+            value.as_str().hash(state);
+        }
+        BasicShape::Ellipse(value) => {
+            2u8.hash(state);
+            value.as_str().hash(state);
+        }
+        BasicShape::Polygon(value) => {
+            3u8.hash(state);
+            value.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_translate(value: &Translate, state: &mut DefaultHasher) {
+    match value {
+        Translate::None => 0u8.hash(state),
+        Translate::Values(values) => {
+            1u8.hash(state);
+            values.values().len().hash(state);
+            for value in values.values() {
+                hash_length(value, state);
+            }
+        }
+    }
+}
+
+fn hash_rotate(value: &Rotate, state: &mut DefaultHasher) {
+    match value {
+        Rotate::None => 0u8.hash(state),
+        Rotate::Value(value) => {
+            1u8.hash(state);
+            value.as_str().hash(state);
+        }
+    }
+}
+
+fn hash_scale(value: &Scale, state: &mut DefaultHasher) {
+    match value {
+        Scale::None => 0u8.hash(state),
+        Scale::Values(values) => {
+            1u8.hash(state);
+            values.values().len().hash(state);
+            for value in values.values() {
+                hash_f32(*value, state);
+            }
         }
     }
 }
@@ -2860,15 +3112,15 @@ mod tests {
         AlignItems, Alpha, AuthoredDeclaration, AuthoredDeclarations, AuthoredProperty,
         AuthoredTokens, BackgroundAttachment, BackgroundRepeatStyle, BoxSizing, CalcLength,
         CalcLengthTerm, ColorComponent, ColorInterpolationMethod, ColorInterpolationSpace,
-        ColorMix, ColorMixComponent, CssWideKeyword, CustomPropertyName, ErrorCode, Font,
-        FontFeature, FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch,
-        FontVariant, FontWeight, FontWeightNumber, GridFlowTolerance, HorizontalPositionKeyword,
-        LetterSpacing, MaskLayer, OutlineWidthLength, OverflowWrap, StyleColor, StyleUrl,
-        SymbolicComponentExpression, SystemColor, TextAlignLast, TextDecoration,
-        TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
-        TextDecorationThickness, TextIndent, TextOverflow, TextTransform, TextWrap,
-        VariableExpression, VariableFallback, VariableReference, VerticalAlign,
-        VerticalPositionKeyword, WhiteSpace, WordBreak,
+        ColorMix, ColorMixComponent, CssWideKeyword, CustomPropertyName, ErrorCode,
+        FilterFunctionList, Font, FontFeature, FontFeatureSettings, FontFeatureTag,
+        FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
+        GridFlowTolerance, HorizontalPositionKeyword, LetterSpacing, MaskLayer, OutlineWidthLength,
+        OverflowWrap, StyleColor, StyleUrl, SymbolicComponentExpression, SymbolicFunctionValue,
+        SystemColor, TextAlignLast, TextDecoration, TextDecorationLine,
+        TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness, TextIndent,
+        TextOverflow, TextTransform, TextWrap, VariableExpression, VariableFallback,
+        VariableReference, VerticalAlign, VerticalPositionKeyword, WhiteSpace, WordBreak,
     };
 
     fn value_hash(value: &Value) -> u64 {
@@ -2940,6 +3192,67 @@ mod tests {
         assert_eq!(
             declarations.get(Property::BackgroundSize),
             Some(&Value::BackgroundSizeList(sizes))
+        );
+    }
+
+    #[test]
+    fn effect_properties_accept_symbolic_values() {
+        let filter = Filter::Functions(
+            FilterFunctionList::try_new([FilterFunction::Blur(
+                SymbolicFunctionValue::new("4px").unwrap(),
+            )])
+            .unwrap(),
+        );
+        let clip = ClipPath::BasicShape(BasicShape::Circle(
+            SymbolicFunctionValue::new("50%").unwrap(),
+        ));
+
+        let declarations = Declarations::new()
+            .box_decoration_break(BoxDecorationBreak::Clone)
+            .filter(filter.clone())
+            .backdrop_filter(Filter::None)
+            .clip_path(clip.clone());
+
+        assert_eq!(
+            declarations.get(Property::BoxDecorationBreak),
+            Some(&Value::BoxDecorationBreak(BoxDecorationBreak::Clone))
+        );
+        assert_eq!(
+            declarations.get(Property::Filter),
+            Some(&Value::Filter(filter))
+        );
+        assert_eq!(
+            declarations.get(Property::BackdropFilter),
+            Some(&Value::Filter(Filter::None))
+        );
+        assert_eq!(
+            declarations.get(Property::ClipPath),
+            Some(&Value::ClipPath(clip))
+        );
+    }
+
+    #[test]
+    fn individual_transform_properties_accept_symbolic_values() {
+        let translate = Translate::try_values([Length::Px(10.0), Length::Percent(5.0)]).unwrap();
+        let scale = Scale::try_values([1.0, 2.0]).unwrap();
+        let rotate = Rotate::Value(SymbolicFunctionValue::new("45deg").unwrap());
+
+        let declarations = Declarations::new()
+            .translate(translate.clone())
+            .rotate(rotate.clone())
+            .scale(scale.clone());
+
+        assert_eq!(
+            declarations.get(Property::Translate),
+            Some(&Value::Translate(translate))
+        );
+        assert_eq!(
+            declarations.get(Property::Rotate),
+            Some(&Value::Rotate(rotate))
+        );
+        assert_eq!(
+            declarations.get(Property::Scale),
+            Some(&Value::Scale(scale))
         );
     }
 

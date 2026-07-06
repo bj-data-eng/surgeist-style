@@ -1686,6 +1686,174 @@ impl StyleUrl {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct SymbolicFunctionValue(String);
+
+impl SymbolicFunctionValue {
+    pub fn new(value: impl Into<String>) -> Result<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "symbolic function value cannot be empty",
+            ))
+        } else {
+            Ok(Self(value))
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BoxDecorationBreak {
+    Slice,
+    Clone,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum FilterFunction {
+    Blur(SymbolicFunctionValue),
+    Brightness(SymbolicFunctionValue),
+    Contrast(SymbolicFunctionValue),
+    DropShadow(SymbolicFunctionValue),
+    Grayscale(SymbolicFunctionValue),
+    HueRotate(SymbolicFunctionValue),
+    Invert(SymbolicFunctionValue),
+    Opacity(SymbolicFunctionValue),
+    Saturate(SymbolicFunctionValue),
+    Sepia(SymbolicFunctionValue),
+    Url(StyleUrl),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct FilterFunctionList {
+    functions: Vec<FilterFunction>,
+}
+
+impl FilterFunctionList {
+    pub fn try_new(functions: impl IntoIterator<Item = FilterFunction>) -> Result<Self> {
+        let functions = functions.into_iter().collect::<Vec<_>>();
+        if functions.is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "filter function list cannot be empty",
+            ))
+        } else {
+            Ok(Self { functions })
+        }
+    }
+
+    #[must_use]
+    pub fn functions(&self) -> &[FilterFunction] {
+        &self.functions
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Filter {
+    None,
+    Functions(FilterFunctionList),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum BasicShape {
+    Inset(SymbolicFunctionValue),
+    Circle(SymbolicFunctionValue),
+    Ellipse(SymbolicFunctionValue),
+    Polygon(SymbolicFunctionValue),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ClipPath {
+    None,
+    Url(StyleUrl),
+    BasicShape(BasicShape),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Translate {
+    None,
+    Values(TranslateValues),
+}
+
+impl Translate {
+    pub fn try_values(values: impl IntoIterator<Item = Length>) -> Result<Self> {
+        Ok(Self::Values(TranslateValues::try_new(values)?))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TranslateValues {
+    values: Vec<Length>,
+}
+
+impl TranslateValues {
+    pub fn try_new(values: impl IntoIterator<Item = Length>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() || values.len() > 3 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "translate requires one to three values",
+            ));
+        }
+        for value in &values {
+            value.validate()?;
+        }
+        Ok(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[Length] {
+        &self.values
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Rotate {
+    None,
+    Value(SymbolicFunctionValue),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Scale {
+    None,
+    Values(ScaleValues),
+}
+
+impl Scale {
+    pub fn try_values(values: impl IntoIterator<Item = f32>) -> Result<Self> {
+        Ok(Self::Values(ScaleValues::try_new(values)?))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScaleValues {
+    values: Vec<f32>,
+}
+
+impl ScaleValues {
+    pub fn try_new(values: impl IntoIterator<Item = f32>) -> Result<Self> {
+        let values = values.into_iter().collect::<Vec<_>>();
+        if values.is_empty() || values.len() > 3 || values.iter().any(|value| !value.is_finite()) {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "scale requires one to three finite values",
+            ))
+        } else {
+            Ok(Self { values })
+        }
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[f32] {
+        &self.values
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ImageLayer {
     None,
     Url(StyleUrl),
@@ -2191,11 +2359,17 @@ pub enum Value {
     BackgroundBox(BackgroundBox),
     BackgroundAttachmentList(BackgroundAttachmentList),
     MaskLayerList(MaskLayerList),
+    BoxDecorationBreak(BoxDecorationBreak),
+    Filter(Filter),
+    ClipPath(ClipPath),
     PropertyList(Vec<Property>),
     ShadowList(Vec<Shadow>),
     Stroke(Stroke),
     Text(TextValue),
     Transform(Transform),
+    Translate(Translate),
+    Rotate(Rotate),
+    Scale(Scale),
     Cursor(Cursor),
     PointerEvents(PointerEvents),
     Visibility(Visibility),
@@ -2218,6 +2392,7 @@ impl Value {
             Self::ShadowList(_) => Interpolation::ShadowList,
             Self::Stroke(_) => Interpolation::Stroke,
             Self::Transform(_) => Interpolation::Transform,
+            Self::Translate(_) | Self::Rotate(_) | Self::Scale(_) => Interpolation::Transform,
             Self::FlexFactor(_) | Self::AspectRatio(_) | Self::FontWeight(_) => {
                 Interpolation::Number
             }
@@ -2231,7 +2406,10 @@ impl Value {
             | Self::BackgroundRepeatList(_)
             | Self::BackgroundBox(_)
             | Self::BackgroundAttachmentList(_)
-            | Self::MaskLayerList(_) => Interpolation::Discrete,
+            | Self::MaskLayerList(_)
+            | Self::BoxDecorationBreak(_)
+            | Self::Filter(_)
+            | Self::ClipPath(_) => Interpolation::Discrete,
             Self::Keyword(_)
             | Self::Display(_)
             | Self::BoxSizing(_)
@@ -2426,8 +2604,142 @@ impl Value {
             Self::Stroke(stroke) => stroke.validate(),
             Self::Text(text) => text.validate(),
             Self::Transform(transform) => transform.validate(),
+            Self::BoxDecorationBreak(_) => Ok(()),
+            Self::Filter(filter) => filter.validate(),
+            Self::ClipPath(clip_path) => clip_path.validate(),
+            Self::Translate(translate) => translate.validate(),
+            Self::Rotate(rotate) => rotate.validate(),
+            Self::Scale(scale) => scale.validate(),
             Self::Cursor(_) | Self::PointerEvents(_) => Ok(()),
             Self::Visibility(_) => Ok(()),
+        }
+    }
+}
+
+impl SymbolicFunctionValue {
+    fn validate(&self) -> Result<()> {
+        if self.0.trim().is_empty() {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "symbolic function value cannot be empty",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl FilterFunction {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::Blur(value)
+            | Self::Brightness(value)
+            | Self::Contrast(value)
+            | Self::DropShadow(value)
+            | Self::Grayscale(value)
+            | Self::HueRotate(value)
+            | Self::Invert(value)
+            | Self::Opacity(value)
+            | Self::Saturate(value)
+            | Self::Sepia(value) => value.validate(),
+            Self::Url(url) => StyleUrl::new(url.as_str()).map(|_| ()),
+        }
+    }
+}
+
+impl FilterFunctionList {
+    fn validate(&self) -> Result<()> {
+        if self.functions.is_empty() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "filter function list cannot be empty",
+            ));
+        }
+        self.functions.iter().try_for_each(FilterFunction::validate)
+    }
+}
+
+impl Filter {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            Self::Functions(functions) => functions.validate(),
+        }
+    }
+}
+
+impl BasicShape {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::Inset(value)
+            | Self::Circle(value)
+            | Self::Ellipse(value)
+            | Self::Polygon(value) => value.validate(),
+        }
+    }
+}
+
+impl ClipPath {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            Self::Url(url) => StyleUrl::new(url.as_str()).map(|_| ()),
+            Self::BasicShape(shape) => shape.validate(),
+        }
+    }
+}
+
+impl Translate {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            Self::Values(values) => values.validate(),
+        }
+    }
+}
+
+impl TranslateValues {
+    fn validate(&self) -> Result<()> {
+        if self.values.is_empty() || self.values.len() > 3 {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "translate requires one to three values",
+            ));
+        }
+        self.values.iter().try_for_each(Length::validate)
+    }
+}
+
+impl Rotate {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            Self::Value(value) => value.validate(),
+        }
+    }
+}
+
+impl Scale {
+    fn validate(&self) -> Result<()> {
+        match self {
+            Self::None => Ok(()),
+            Self::Values(values) => values.validate(),
+        }
+    }
+}
+
+impl ScaleValues {
+    fn validate(&self) -> Result<()> {
+        if self.values.is_empty()
+            || self.values.len() > 3
+            || self.values.iter().any(|value| !value.is_finite())
+        {
+            Err(Error::new(
+                ErrorCode::InvalidValue,
+                "scale requires one to three finite values",
+            ))
+        } else {
+            Ok(())
         }
     }
 }

@@ -3,24 +3,26 @@ use surgeist_style::{
     AttributeMatcher, AttributeSelector, AuthoredDeclaration, AuthoredDeclarations,
     AuthoredProperty, AuthoredTokens, AuthoredValue, BackgroundAttachment,
     BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
-    BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList, Border,
-    BorderLineStyle, BorderRadii, BorderStyles, Change, Color, ColorComponent, Combinator,
-    ContentVisibility, Context, CornerRadius, CssPx, CssWideKeyword, CustomPropertyName,
-    CustomPropertyTypedValue, CustomPropertyValue, Declarations, DimensionLength,
-    DurationSeconds, Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings,
-    FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
+    BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
+    BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak, Change,
+    ClipPath, Color, ColorComponent, Combinator, ContentVisibility, Context, CornerRadius, CssPx,
+    CssWideKeyword, CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue,
+    Declarations, DimensionLength, DurationSeconds, Filter, FilterFunction, FilterFunctionList,
+    Flex, FlexFactor, Font, FontFamilyList, FontFeature, FontFeatureSettings, FontFeatureTag,
+    FontFeatureValue, FontStretch, FontVariant, FontWeight, GridTrackList,
     HorizontalPositionKeyword, ImageLayer, ImageLayerList, LayerOrder, LayoutPosition, Length,
     LetterSpacing, LetterSpacingLength, MaskLayer, MaskLayerList, Node, NthPattern, NthSelector,
     Opacity, Order, Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap,
     PlaceContentAlignment, PlaceItemsAlignment, Position, PositionComponent, PositionList,
     Property, PseudoClassSelector, PseudoElement, RangeState, RelativeSelector,
-    RelativeSelectorList, RulePrecedence, RuleTarget, RuntimePseudoClass, ScrollbarWidth, Selector,
-    SelectorList, SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet,
-    SourceOrder, StateFlag, StructuralSelector, StyleAttributeValue, StyleBucket,
-    StyleBucketPolicy, StyleColor, StyleRole, StyleState, StyleTag, StyleUrl, TextAlignLast,
-    TextDecoration, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
-    TextDecorationThickness, TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
+    RelativeSelectorList, Rotate, RulePrecedence, RuleTarget, RuntimePseudoClass, Scale,
+    ScaleValues, ScrollbarWidth, Selector, SelectorList, SelectorListPseudoClass,
+    SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder, StateFlag, StructuralSelector,
+    StyleAttributeValue, StyleBucket, StyleBucketPolicy, StyleColor, StyleRole, StyleState,
+    StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
+    TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
+    TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+    Translate, TranslateValues, Traversal, Tree, TypedDeclaration, Value, VariableDependentValue,
     VariableExpression, VariableFallback, VariableReference, VerticalAlign, VerticalAlignLength,
     VerticalPositionKeyword, WhiteSpace, WordBreak, ZIndex,
 };
@@ -132,6 +134,26 @@ fn main() -> surgeist_style::Result<()> {
         .text_decoration_style(TextDecorationStyle::Wavy)
         .try_text_decoration_thickness(text_decoration_thickness)?;
     assert_eq!(declarations.len(), 4);
+
+    let filter_functions =
+        FilterFunctionList::try_new([FilterFunction::Blur(SymbolicFunctionValue::new("4px")?)])?;
+    assert_eq!(filter_functions.functions().len(), 1);
+    let clip_path = ClipPath::BasicShape(BasicShape::Circle(SymbolicFunctionValue::new("50%")?));
+    let translate_values = TranslateValues::try_new([Length::Px(10.0), Length::Percent(5.0)])?;
+    assert_eq!(translate_values.values().len(), 2);
+    let scale_values = ScaleValues::try_new([1.0, 2.0])?;
+    assert_eq!(scale_values.values().len(), 2);
+    let declarations = Declarations::new()
+        .box_decoration_break(BoxDecorationBreak::Clone)
+        .filter(Filter::Functions(filter_functions))
+        .backdrop_filter(Filter::None)
+        .clip_path(clip_path)
+        .translate(Translate::try_values([Length::Px(10.0)])?)
+        .translate(Translate::Values(translate_values))
+        .rotate(Rotate::Value(SymbolicFunctionValue::new("45deg")?))
+        .scale(Scale::try_values([1.0, 2.0])?)
+        .scale(Scale::Values(scale_values));
+    assert_eq!(declarations.len(), 7);
 
     let alpha = Alpha::new(0.5)?;
     let color = StyleColor::Hsl {

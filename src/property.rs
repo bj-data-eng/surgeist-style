@@ -1,14 +1,14 @@
 use super::{
     AlignContent, AlignItems, AnimationNameList, AspectRatio, Border, BorderLineStyle, BorderRadii,
-    BorderStyles, BoxSizing, CalcLength, CalcOperator, Clear, Color, ContentVisibility,
-    CornerRadius, Direction, Edges, Error, ErrorCode, Flex, FlexDirection, FlexFactor, FlexWrap,
-    Float, Font, FontFamilyList, FontFeatureSettings, FontStretch, FontVariant, FontWeight,
-    GridFlowTolerance, LayoutPosition, Length, LetterSpacing, Order, Outline, OutlineStyle,
-    OutlineWidth, Overflow, OverflowWrap, PlaceContentAlignment, PlaceItemsAlignment, Result,
-    ScrollbarWidth, StyleColor, StyleTextAlign, TextAlignLast, TextDecoration, TextDecorationLine,
-    TextDecorationStyle, TextDecorationThickness, TextIndent, TextOverflow, TextSlant,
-    TextTransform, TextWrap, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode,
-    ZIndex,
+    BorderStyles, BoxDecorationBreak, BoxSizing, CalcLength, CalcOperator, Clear, ClipPath, Color,
+    ContentVisibility, CornerRadius, Direction, Edges, Error, ErrorCode, Filter, Flex,
+    FlexDirection, FlexFactor, FlexWrap, Float, Font, FontFamilyList, FontFeatureSettings,
+    FontStretch, FontVariant, FontWeight, GridFlowTolerance, LayoutPosition, Length, LetterSpacing,
+    Order, Outline, OutlineStyle, OutlineWidth, Overflow, OverflowWrap, PlaceContentAlignment,
+    PlaceItemsAlignment, Result, Rotate, Scale, ScrollbarWidth, StyleColor, StyleTextAlign,
+    TextAlignLast, TextDecoration, TextDecorationLine, TextDecorationStyle,
+    TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
+    Translate, Value, VerticalAlign, Visibility, WhiteSpace, WordBreak, WritingMode, ZIndex,
     value::{
         BackgroundAttachment, BackgroundAttachmentList, BackgroundBox, BackgroundRepeat,
         BackgroundRepeatList, BackgroundSize, BackgroundSizeList, ImageLayer, ImageLayerList,
@@ -168,9 +168,15 @@ pub enum Property {
     PointerEvents,
     FocusOutline,
     SelectionPaint,
+    BoxDecorationBreak,
     Transform,
     TransformOrigin,
     Filter,
+    BackdropFilter,
+    ClipPath,
+    Translate,
+    Rotate,
+    Scale,
     TransitionProperty,
     TransitionDuration,
     TransitionDelay,
@@ -333,9 +339,15 @@ impl Property {
         Self::PointerEvents,
         Self::FocusOutline,
         Self::SelectionPaint,
+        Self::BoxDecorationBreak,
         Self::Transform,
         Self::TransformOrigin,
         Self::Filter,
+        Self::BackdropFilter,
+        Self::ClipPath,
+        Self::Translate,
+        Self::Rotate,
+        Self::Scale,
         Self::TransitionProperty,
         Self::TransitionDuration,
         Self::TransitionDelay,
@@ -702,6 +714,18 @@ impl Property {
             )))
             .impact(Impact::empty().paint())
             .interpolation(Interpolation::Length),
+            Self::Translate => Metadata::new(Value::Translate(Translate::None))
+                .impact(Impact::empty().paint())
+                .interpolation(Interpolation::Transform)
+                .animatable(true),
+            Self::Rotate => Metadata::new(Value::Rotate(Rotate::None))
+                .impact(Impact::empty().paint())
+                .interpolation(Interpolation::Transform)
+                .animatable(true),
+            Self::Scale => Metadata::new(Value::Scale(Scale::None))
+                .impact(Impact::empty().paint())
+                .interpolation(Interpolation::Transform)
+                .animatable(true),
             Self::Cursor => {
                 Metadata::new(Value::Cursor(super::Cursor::Default)).impact(Impact::empty().paint())
             }
@@ -820,8 +844,16 @@ impl Property {
             }
             Self::ZIndex => Metadata::new(Value::ZIndex(ZIndex::default()))
                 .impact(Impact::empty().layout().paint()),
-            Self::Filter => Metadata::new(Value::Keyword(super::value::Keyword::Initial))
-                .impact(Impact::empty().layout().paint()),
+            Self::BoxDecorationBreak => {
+                Metadata::new(Value::BoxDecorationBreak(BoxDecorationBreak::Slice))
+                    .impact(Impact::empty().paint())
+            }
+            Self::Filter | Self::BackdropFilter => {
+                Metadata::new(Value::Filter(Filter::None)).impact(Impact::empty().paint())
+            }
+            Self::ClipPath => {
+                Metadata::new(Value::ClipPath(ClipPath::None)).impact(Impact::empty().paint())
+            }
         }
     }
 
@@ -841,7 +873,7 @@ impl Property {
             return true;
         }
         match self {
-            Self::Filter | Self::TransitionTiming => false,
+            Self::TransitionTiming => false,
             Self::Display => matches!(value, Value::Display(_)),
             Self::BoxSizing => matches!(value, Value::BoxSizing(_)),
             Self::Position => matches!(value, Value::Position(_)),
@@ -989,6 +1021,12 @@ impl Property {
             Self::FocusOutline | Self::SelectionPaint => matches!(value, Value::Stroke(_)),
             Self::Transform => matches!(value, Value::Transform(_)),
             Self::TransformOrigin => matches!(value, Value::Size(_)),
+            Self::BoxDecorationBreak => matches!(value, Value::BoxDecorationBreak(_)),
+            Self::Filter | Self::BackdropFilter => matches!(value, Value::Filter(_)),
+            Self::ClipPath => matches!(value, Value::ClipPath(_)),
+            Self::Translate => matches!(value, Value::Translate(_)),
+            Self::Rotate => matches!(value, Value::Rotate(_)),
+            Self::Scale => matches!(value, Value::Scale(_)),
             Self::TransitionProperty => matches!(value, Value::PropertyList(_)),
             Self::GridAutoFlow => matches!(value, Value::GridAutoFlow(_)),
             Self::GridFlowTolerance => matches!(value, Value::GridFlowTolerance(_)),
@@ -1310,6 +1348,12 @@ fn value_kind(value: &Value) -> &'static str {
         Value::Stroke(_) => "stroke",
         Value::Text(_) => "text value",
         Value::Transform(_) => "transform",
+        Value::Translate(_) => "translate",
+        Value::Rotate(_) => "rotate",
+        Value::Scale(_) => "scale",
+        Value::BoxDecorationBreak(_) => "box decoration break",
+        Value::Filter(_) => "filter",
+        Value::ClipPath(_) => "clip path",
         Value::Cursor(_) => "cursor",
         Value::PointerEvents(_) => "pointer events",
         Value::Visibility(_) => "visibility",
