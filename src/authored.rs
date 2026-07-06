@@ -606,6 +606,94 @@ mod tests {
     }
 
     #[test]
+    fn paint_shorthands_expand_css_wide_keywords_to_canonical_longhands() {
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Border),
+            CssWideKeyword::Unset,
+        ));
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Radius),
+            CssWideKeyword::Inherit,
+        ));
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Outline),
+            CssWideKeyword::Initial,
+        ));
+        declarations.push(AuthoredDeclaration::css_wide(
+            AuthoredProperty::Property(Property::Mask),
+            CssWideKeyword::RevertLayer,
+        ));
+
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.get(Property::Border), None);
+        for property in [
+            Property::BorderTopWidth,
+            Property::BorderRightWidth,
+            Property::BorderBottomWidth,
+            Property::BorderLeftWidth,
+            Property::BorderTopStyle,
+            Property::BorderRightStyle,
+            Property::BorderBottomStyle,
+            Property::BorderLeftStyle,
+            Property::BorderTopColor,
+            Property::BorderRightColor,
+            Property::BorderBottomColor,
+            Property::BorderLeftColor,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(CssWideKeyword::Unset))
+            );
+        }
+
+        assert_eq!(canonical.get(Property::Radius), None);
+        for property in [
+            Property::BorderTopLeftRadius,
+            Property::BorderTopRightRadius,
+            Property::BorderBottomRightRadius,
+            Property::BorderBottomLeftRadius,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Inherit
+                ))
+            );
+        }
+
+        assert_eq!(canonical.get(Property::Outline), None);
+        for property in [
+            Property::OutlineWidth,
+            Property::OutlineStyle,
+            Property::OutlineColor,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::Initial
+                ))
+            );
+        }
+
+        assert_eq!(canonical.get(Property::Mask), None);
+        for property in [
+            Property::MaskImage,
+            Property::MaskPosition,
+            Property::MaskSize,
+            Property::MaskRepeat,
+        ] {
+            assert_eq!(
+                canonical.get(property),
+                Some(&AuthoredCascadeValue::CssWideKeyword(
+                    CssWideKeyword::RevertLayer
+                ))
+            );
+        }
+    }
+
+    #[test]
     fn revert_layer_expands_without_entering_legacy_value_model() {
         let mut declarations = AuthoredDeclarations::new();
         declarations.push(AuthoredDeclaration::css_wide(
