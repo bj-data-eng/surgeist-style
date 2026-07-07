@@ -766,6 +766,12 @@ fn main() -> surgeist_style::Result<()> {
 
     let style_source = StyleSourceId::try_new(12)?;
     assert_eq!(style_source.get(), 12);
+    let sourced_declaration = AuthoredDeclaration::try_new(
+        AuthoredProperty::Property(Property::Color),
+        AuthoredValue::Value(Value::StyleColor(StyleColor::current_color())),
+    )?
+    .with_source(StyleSourceId::try_new(100)?);
+    assert_eq!(sourced_declaration.source().unwrap().get(), 100);
     let diagnostic = StyleDiagnostic::invalid_at_computed_value(
         StyleDiagnosticSubject::Property(Property::Color),
         Some(style_source),

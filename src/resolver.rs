@@ -25,7 +25,7 @@ use super::{
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
-    VariableDependentValue, VariableExpression,
+    StyleSourceId, VariableDependentValue, VariableExpression,
     authored::{AuthoredCascadeValue, CustomPropertyCascadeValue},
     sheet::{RuleDeclarationOrigin, RuleDeclarationValue},
 };
@@ -1152,6 +1152,7 @@ impl Resolver {
                         rule.precedence(),
                         declaration.origin(),
                         declaration.value(),
+                        declaration.source(),
                     )?;
                     rule_candidates
                         .entry(candidate.property)
@@ -1163,6 +1164,7 @@ impl Resolver {
                         rule.precedence(),
                         declaration.origin(),
                         declaration.value(),
+                        declaration.source(),
                     );
                     custom_candidates
                         .entry(declaration.name().clone())
@@ -1353,6 +1355,8 @@ struct RuleCandidate {
     precedence: RulePrecedence,
     origin: RuleDeclarationOrigin,
     value: RuleCandidateValue,
+    #[allow(dead_code)]
+    source: Option<StyleSourceId>,
 }
 
 impl RuleCandidate {
@@ -1361,6 +1365,7 @@ impl RuleCandidate {
         precedence: RulePrecedence,
         origin: RuleDeclarationOrigin,
         value: RuleDeclarationValue<'_>,
+        source: Option<StyleSourceId>,
     ) -> Result<Self> {
         let value = match value {
             RuleDeclarationValue::Value(value) => {
@@ -1386,6 +1391,7 @@ impl RuleCandidate {
             precedence,
             origin,
             value,
+            source,
         })
     }
 }
@@ -1402,6 +1408,8 @@ struct CustomPropertyCandidate {
     precedence: RulePrecedence,
     origin: RuleDeclarationOrigin,
     value: CustomPropertyCandidateValue,
+    #[allow(dead_code)]
+    source: Option<StyleSourceId>,
 }
 
 impl CustomPropertyCandidate {
@@ -1409,6 +1417,7 @@ impl CustomPropertyCandidate {
         precedence: RulePrecedence,
         origin: RuleDeclarationOrigin,
         value: &CustomPropertyCascadeValue,
+        source: Option<StyleSourceId>,
     ) -> Self {
         let value = match value {
             CustomPropertyCascadeValue::Value(value) => {
@@ -1422,6 +1431,7 @@ impl CustomPropertyCandidate {
             precedence,
             origin,
             value,
+            source,
         }
     }
 }

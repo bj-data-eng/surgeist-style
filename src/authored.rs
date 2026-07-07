@@ -1,6 +1,6 @@
 use crate::{
     CustomPropertyName, CustomPropertyValue, Declaration, Error, ErrorCode, Property, Result,
-    Value, VariableDependentValue,
+    StyleSourceId, Value, VariableDependentValue,
     declaration::{canonical_declarations, canonical_properties},
 };
 
@@ -31,6 +31,7 @@ pub enum AuthoredValue {
 pub struct AuthoredDeclaration {
     property: AuthoredProperty,
     value: AuthoredValue,
+    source: Option<StyleSourceId>,
 }
 
 impl AuthoredDeclaration {
@@ -79,7 +80,11 @@ impl AuthoredDeclaration {
             }
         }
 
-        Ok(Self { property, value })
+        Ok(Self {
+            property,
+            value,
+            source: None,
+        })
     }
 
     #[must_use]
@@ -87,7 +92,14 @@ impl AuthoredDeclaration {
         Self {
             property,
             value: AuthoredValue::CssWideKeyword(keyword),
+            source: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_source(mut self, source: StyleSourceId) -> Self {
+        self.source = Some(source);
+        self
     }
 
     #[must_use]
@@ -98,6 +110,11 @@ impl AuthoredDeclaration {
     #[must_use]
     pub fn value(&self) -> AuthoredValue {
         self.value.clone()
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> Option<StyleSourceId> {
+        self.source
     }
 }
 
@@ -126,6 +143,14 @@ impl AuthoredDeclarations {
     }
 
     #[must_use]
+    pub fn with_source(mut self, source: StyleSourceId) -> Self {
+        for declaration in &mut self.values {
+            declaration.source = Some(source);
+        }
+        self
+    }
+
+    #[must_use]
     pub fn len(&self) -> usize {
         self.values.len()
     }
@@ -144,7 +169,11 @@ impl AuthoredDeclarations {
                     for Declaration { property, value } in
                         canonical_declarations(*property, value.clone())
                     {
-                        canonical.insert_property(property, AuthoredCascadeValue::Value(value));
+                        canonical.insert_property(
+                            property,
+                            AuthoredCascadeValue::Value(value),
+                            declaration.source,
+                        );
                     }
                 }
                 (AuthoredProperty::Property(property), AuthoredValue::CssWideKeyword(keyword)) => {
@@ -152,6 +181,7 @@ impl AuthoredDeclarations {
                         canonical.insert_property(
                             property,
                             AuthoredCascadeValue::CssWideKeyword(*keyword),
+                            declaration.source,
                         );
                     }
                 }
@@ -159,6 +189,7 @@ impl AuthoredDeclarations {
                     canonical.insert_property(
                         *property,
                         AuthoredCascadeValue::VariableDependent(value.clone()),
+                        declaration.source,
                     );
                 }
                 (AuthoredProperty::Property(_), AuthoredValue::CustomProperty(_)) => {
@@ -170,12 +201,14 @@ impl AuthoredDeclarations {
                     canonical.insert_custom(
                         name.clone(),
                         CustomPropertyCascadeValue::Value(value.clone()),
+                        declaration.source,
                     );
                 }
                 (AuthoredProperty::Custom(name), AuthoredValue::CssWideKeyword(keyword)) => {
                     canonical.insert_custom(
                         name.clone(),
                         CustomPropertyCascadeValue::CssWideKeyword(*keyword),
+                        declaration.source,
                     );
                 }
                 (AuthoredProperty::Custom(_), AuthoredValue::Value(_))
@@ -189,6 +222,7 @@ impl AuthoredDeclarations {
                         canonical.insert_property(
                             property,
                             AuthoredCascadeValue::CssWideKeyword(*keyword),
+                            declaration.source,
                         );
                     }
                 }
@@ -221,8 +255,12 @@ pub(crate) enum CustomPropertyCascadeValue {
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum AuthoredDeclarationItem {
-    Property(Property, AuthoredCascadeValue),
-    Custom(CustomPropertyName, CustomPropertyCascadeValue),
+    Property(Property, AuthoredCascadeValue, Option<StyleSourceId>),
+    Custom(
+        CustomPropertyName,
+        CustomPropertyCascadeValue,
+        Option<StyleSourceId>,
+    ),
 }
 
 #[allow(dead_code)]
@@ -238,45 +276,71 @@ impl AuthoredCanonicalDeclarations {
         Self::default()
     }
 
-    fn insert_property(&mut self, property: Property, value: AuthoredCascadeValue) {
-        if let Some(AuthoredDeclarationItem::Property(_, existing)) =
+    fn insert_property(
+        &mut self,
+        property: Property,
+        value: AuthoredCascadeValue,
+        source: Option<StyleSourceId>,
+    ) {
+        if let Some(AuthoredDeclarationItem::Property(_, existing, existing_source)) =
             self.values.iter_mut().find(|item| match item {
-                AuthoredDeclarationItem::Property(existing_property, _) => {
+                AuthoredDeclarationItem::Property(existing_property, _, _) => {
                     *existing_property == property
                 }
-                AuthoredDeclarationItem::Custom(_, _) => false,
+                AuthoredDeclarationItem::Custom(_, _, _) => false,
             })
         {
             *existing = value;
+            *existing_source = source;
         } else {
             self.values
-                .push(AuthoredDeclarationItem::Property(property, value));
+                .push(AuthoredDeclarationItem::Property(property, value, source));
         }
     }
 
-    fn insert_custom(&mut self, name: CustomPropertyName, value: CustomPropertyCascadeValue) {
-        if let Some(AuthoredDeclarationItem::Custom(_, existing)) =
+    fn insert_custom(
+        &mut self,
+        name: CustomPropertyName,
+        value: CustomPropertyCascadeValue,
+        source: Option<StyleSourceId>,
+    ) {
+        if let Some(AuthoredDeclarationItem::Custom(_, existing, existing_source)) =
             self.values.iter_mut().find(|item| match item {
-                AuthoredDeclarationItem::Property(_, _) => false,
-                AuthoredDeclarationItem::Custom(existing_name, _) => *existing_name == name,
+                AuthoredDeclarationItem::Property(_, _, _) => false,
+                AuthoredDeclarationItem::Custom(existing_name, _, _) => *existing_name == name,
             })
         {
             *existing = value;
+            *existing_source = source;
         } else {
             self.values
-                .push(AuthoredDeclarationItem::Custom(name, value));
+                .push(AuthoredDeclarationItem::Custom(name, value, source));
         }
     }
 
     #[must_use]
     pub(crate) fn get(&self, property: Property) -> Option<&AuthoredCascadeValue> {
         self.values.iter().find_map(|item| match item {
-            AuthoredDeclarationItem::Property(existing_property, value)
+            AuthoredDeclarationItem::Property(existing_property, value, _)
                 if *existing_property == property =>
             {
                 Some(value)
             }
-            AuthoredDeclarationItem::Property(_, _) | AuthoredDeclarationItem::Custom(_, _) => None,
+            AuthoredDeclarationItem::Property(_, _, _)
+            | AuthoredDeclarationItem::Custom(_, _, _) => None,
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn source(&self, property: Property) -> Option<StyleSourceId> {
+        self.values.iter().find_map(|item| match item {
+            AuthoredDeclarationItem::Property(existing_property, _, source)
+                if *existing_property == property =>
+            {
+                *source
+            }
+            AuthoredDeclarationItem::Property(_, _, _)
+            | AuthoredDeclarationItem::Custom(_, _, _) => None,
         })
     }
 
@@ -286,10 +350,22 @@ impl AuthoredCanonicalDeclarations {
         name: &CustomPropertyName,
     ) -> Option<&CustomPropertyCascadeValue> {
         self.values.iter().find_map(|item| match item {
-            AuthoredDeclarationItem::Custom(existing_name, value) if existing_name == name => {
+            AuthoredDeclarationItem::Custom(existing_name, value, _) if existing_name == name => {
                 Some(value)
             }
-            AuthoredDeclarationItem::Property(_, _) | AuthoredDeclarationItem::Custom(_, _) => None,
+            AuthoredDeclarationItem::Property(_, _, _)
+            | AuthoredDeclarationItem::Custom(_, _, _) => None,
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn custom_source(&self, name: &CustomPropertyName) -> Option<StyleSourceId> {
+        self.values.iter().find_map(|item| match item {
+            AuthoredDeclarationItem::Custom(existing_name, _, source) if existing_name == name => {
+                *source
+            }
+            AuthoredDeclarationItem::Property(_, _, _)
+            | AuthoredDeclarationItem::Custom(_, _, _) => None,
         })
     }
 
@@ -306,7 +382,7 @@ impl AuthoredCanonicalDeclarations {
     pub(crate) fn property_len(&self) -> usize {
         self.values
             .iter()
-            .filter(|item| matches!(item, AuthoredDeclarationItem::Property(_, _)))
+            .filter(|item| matches!(item, AuthoredDeclarationItem::Property(_, _, _)))
             .count()
     }
 
@@ -314,7 +390,7 @@ impl AuthoredCanonicalDeclarations {
     pub(crate) fn custom_len(&self) -> usize {
         self.values
             .iter()
-            .filter(|item| matches!(item, AuthoredDeclarationItem::Custom(_, _)))
+            .filter(|item| matches!(item, AuthoredDeclarationItem::Custom(_, _, _)))
             .count()
     }
 
@@ -341,8 +417,8 @@ mod tests {
     use super::*;
     use crate::{
         AuthoredTokens, Color, CustomPropertyName, CustomPropertyValue, Display, ErrorCode,
-        Keyword, Length, Property, StyleColor, Value, VariableDependentValue, VariableExpression,
-        VariableFallback, VariableReference,
+        Keyword, Length, Property, StyleColor, StyleSourceId, Value, VariableDependentValue,
+        VariableExpression, VariableFallback, VariableReference,
     };
 
     #[test]
@@ -413,6 +489,58 @@ mod tests {
             declaration.value(),
             AuthoredValue::CssWideKeyword(CssWideKeyword::Initial)
         );
+    }
+
+    #[test]
+    fn authored_declarations_preserve_source_ids() {
+        let source = StyleSourceId::try_new(5).unwrap();
+        let declaration = AuthoredDeclaration::try_new(
+            AuthoredProperty::Property(Property::Color),
+            AuthoredValue::Value(Value::StyleColor(StyleColor::current_color())),
+        )
+        .unwrap()
+        .with_source(source);
+
+        assert_eq!(declaration.source(), Some(source));
+
+        let mut declarations = AuthoredDeclarations::new();
+        declarations.push(declaration);
+        let declarations = declarations.with_source(source);
+
+        assert!(
+            declarations
+                .iter()
+                .all(|item| item.source() == Some(source))
+        );
+    }
+
+    #[test]
+    fn authored_canonical_declarations_preserve_replacement_source_ids() {
+        let first = StyleSourceId::try_new(5).unwrap();
+        let second = StyleSourceId::try_new(6).unwrap();
+        let mut declarations = AuthoredDeclarations::new();
+        declarations
+            .try_push(
+                AuthoredDeclaration::try_new(
+                    AuthoredProperty::Property(Property::Color),
+                    AuthoredValue::Value(Value::StyleColor(StyleColor::current_color())),
+                )
+                .unwrap()
+                .with_source(first),
+            )
+            .unwrap();
+        declarations
+            .try_push(
+                AuthoredDeclaration::css_wide(
+                    AuthoredProperty::Property(Property::Color),
+                    CssWideKeyword::Unset,
+                )
+                .with_source(second),
+            )
+            .unwrap();
+        let canonical = declarations.to_rule_declarations().unwrap();
+
+        assert_eq!(canonical.source(Property::Color), Some(second));
     }
 
     #[test]

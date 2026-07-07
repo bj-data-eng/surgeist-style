@@ -10,7 +10,7 @@ use super::{
 };
 use crate::{
     CustomPropertyName, Error, ErrorCode, LayerOrder, LayerRegistry, LayerStatement, RuleScope,
-    StyleClass, StyleKey, StyleLayerName, StyleLayerNameList, StyleTag,
+    StyleClass, StyleKey, StyleLayerName, StyleLayerNameList, StyleSourceId, StyleTag,
     authored::{
         AuthoredCanonicalDeclarations, AuthoredCascadeValue, AuthoredDeclarationItem,
         CustomPropertyCascadeValue,
@@ -213,19 +213,21 @@ impl Rule {
                         declaration.property(),
                         RuleDeclarationOrigin::Legacy,
                         RuleDeclarationValue::Value(declaration.value()),
+                        None,
                     )
                 })
                 .collect(),
             RuleDeclarations::Authored(declarations) => declarations
                 .iter()
                 .filter_map(|item| {
-                    let AuthoredDeclarationItem::Property(property, value) = item else {
+                    let AuthoredDeclarationItem::Property(property, value, source) = item else {
                         return None;
                     };
                     Some(RuleDeclarationItem::new(
                         *property,
                         RuleDeclarationOrigin::Authored,
                         RuleDeclarationValue::Authored(value),
+                        *source,
                     ))
                 })
                 .collect(),
@@ -240,13 +242,14 @@ impl Rule {
             RuleDeclarations::Authored(declarations) => declarations
                 .iter()
                 .filter_map(|item| {
-                    let AuthoredDeclarationItem::Custom(name, value) = item else {
+                    let AuthoredDeclarationItem::Custom(name, value, source) = item else {
                         return None;
                     };
                     Some(RuleCustomDeclarationItem::new(
                         name,
                         RuleDeclarationOrigin::Authored,
                         value,
+                        *source,
                     ))
                 })
                 .collect(),
@@ -306,6 +309,7 @@ pub(crate) struct RuleDeclarationItem<'a> {
     property: Property,
     origin: RuleDeclarationOrigin,
     value: RuleDeclarationValue<'a>,
+    source: Option<StyleSourceId>,
 }
 
 impl<'a> RuleDeclarationItem<'a> {
@@ -314,11 +318,13 @@ impl<'a> RuleDeclarationItem<'a> {
         property: Property,
         origin: RuleDeclarationOrigin,
         value: RuleDeclarationValue<'a>,
+        source: Option<StyleSourceId>,
     ) -> Self {
         Self {
             property,
             origin,
             value,
+            source,
         }
     }
 
@@ -336,6 +342,11 @@ impl<'a> RuleDeclarationItem<'a> {
     pub(crate) const fn value(self) -> RuleDeclarationValue<'a> {
         self.value
     }
+
+    #[must_use]
+    pub(crate) const fn source(self) -> Option<StyleSourceId> {
+        self.source
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -350,6 +361,7 @@ pub(crate) struct RuleCustomDeclarationItem<'a> {
     name: &'a CustomPropertyName,
     origin: RuleDeclarationOrigin,
     value: &'a CustomPropertyCascadeValue,
+    source: Option<StyleSourceId>,
 }
 
 #[allow(dead_code)]
@@ -359,11 +371,13 @@ impl<'a> RuleCustomDeclarationItem<'a> {
         name: &'a CustomPropertyName,
         origin: RuleDeclarationOrigin,
         value: &'a CustomPropertyCascadeValue,
+        source: Option<StyleSourceId>,
     ) -> Self {
         Self {
             name,
             origin,
             value,
+            source,
         }
     }
 
@@ -380,6 +394,11 @@ impl<'a> RuleCustomDeclarationItem<'a> {
     #[must_use]
     pub(crate) const fn value(self) -> &'a CustomPropertyCascadeValue {
         self.value
+    }
+
+    #[must_use]
+    pub(crate) const fn source(self) -> Option<StyleSourceId> {
+        self.source
     }
 }
 
@@ -733,7 +752,7 @@ impl Sheet {
                 }
                 RuleDeclarations::Authored(declarations) => {
                     for item in declarations.iter() {
-                        if let AuthoredDeclarationItem::Property(property, _) = item {
+                        if let AuthoredDeclarationItem::Property(property, _, _) = item {
                             change.invalidation.include_property(*property);
                         }
                     }
