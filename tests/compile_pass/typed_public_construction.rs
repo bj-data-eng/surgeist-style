@@ -8,12 +8,13 @@ use surgeist_style::{
     BackgroundAttachmentList, BackgroundBox, BackgroundRepeat, BackgroundRepeatList,
     BackgroundRepeatStyle, BackgroundSize, BackgroundSizeComponent, BackgroundSizeList,
     BasicShape, Border, BorderLineStyle, BorderRadii, BorderStyles, BoxDecorationBreak,
-    BuiltInCounterStyle, Change, ClipPath, Color, ColorComponent, ColorSchemePreference,
-    Combinator, Condition, ConditionFacts, ContainerCondition, ContainerConditionList, ContainerFacts,
-    ContainerFeatureQuery, ContainerName, ContainerStyleQuery, Content, ContentItem, ContentItemList, ContentString,
-    ContentVisibility, Context, ContrastPreference, CornerRadius, CounterChange, CounterChangeList, CounterChanges,
-    CounterFunction, CounterName, CounterStyle, CounterStyleName, CountersFunction, CssPx,
-    CssWideKeyword, DisplayMode,
+    BuiltInCounterStyle, CascadeChange, Change, ClipPath, Color, ColorComponent,
+    ColorSchemePreference, Combinator, Condition, ConditionFacts, ConditionFactChange,
+    ContainerCondition, ContainerConditionList, ContainerFacts, ContainerFeatureQuery,
+    ContainerName, ContainerStyleQuery, Content, ContentItem, ContentItemList, ContentString,
+    ContentVisibility, Context, ContrastPreference, CornerRadius, CounterChange,
+    CounterChangeList, CounterChanges, CounterFunction, CounterName, CounterStyle,
+    CounterStyleName, CountersFunction, CssPx, CssWideKeyword, DisplayMode,
     CustomPropertyName, CustomPropertyTypedValue, CustomPropertyValue, Declarations,
     DimensionLength, DurationSeconds, EasingArguments, EasingFunction, EasingList, Filter,
     FilterFunction, FilterFunctionList, Flex, FlexFactor, Font, FontFamilyList, FontFeature,
@@ -651,6 +652,12 @@ fn main() -> surgeist_style::Result<()> {
     let selector_change = Change::from_selector_fact_change(SelectorFactChange::Class);
     assert!(selector_change.rematch);
     assert!(selector_change.scope.whole_tree);
+    let condition_change = Change::from_condition_fact_change(ConditionFactChange::Media);
+    assert!(condition_change.rematch);
+    let cascade_change = Change::from_cascade_change(CascadeChange::LayerOrder);
+    assert!(cascade_change.scope.whole_tree);
+    let bucket_change = Change::from_style_bucket_change(StyleBucket::Before);
+    assert!(bucket_change.rematch);
 
     let rem = QueryLength::try_new(1.0, QueryLengthUnit::Rem)?;
     let media_basis = QueryLengthBasis::new()

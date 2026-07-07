@@ -53,7 +53,9 @@ pub use identity::{
     RangeState, StyleAttribute, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey,
     StyleRole, StyleState, StyleTag,
 };
-pub use invalidation::{Change, Invalidation, Scope, SelectorFactChange};
+pub use invalidation::{
+    CascadeChange, Change, ConditionFactChange, Invalidation, Scope, SelectorFactChange,
+};
 pub use precedence::{
     LayerBlock, LayerOrder, LayerRegistry, LayerStatement, RulePrecedence, SourceOrder,
     StyleLayerName, StyleLayerNameList,

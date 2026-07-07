@@ -988,6 +988,14 @@ mod precedence_tests {
     }
 
     #[test]
+    fn condition_change_helpers_remain_sheet_local() {
+        let sheet = Sheet::new();
+
+        assert_eq!(sheet.media_condition_change(), Change::empty());
+        assert_eq!(sheet.container_condition_change(), Change::empty());
+    }
+
+    #[test]
     fn authored_rule_preserves_supplied_precedence() {
         let precedence = RulePrecedence::new(LayerOrder::new(7), SourceOrder::new(3));
         let mut sheet = Sheet::new();

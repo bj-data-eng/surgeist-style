@@ -1,4 +1,4 @@
-error[E0451]: fields `roots` and `limits` of struct `RuleScope` are private
+error[E0451]: fields `roots` and `limits` of struct `surgeist_style::RuleScope` are private
  --> tests/compile_fail/invalid_rule_scope_literal.rs:5:9
   |
 4 |     let _scope = RuleScope {

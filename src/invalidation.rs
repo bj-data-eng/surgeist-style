@@ -1,4 +1,4 @@
-use super::{CustomPropertyDependencies, CustomPropertyName, Property, Resolved};
+use super::{CustomPropertyDependencies, CustomPropertyName, Property, Resolved, StyleBucket};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Invalidation {
@@ -103,6 +103,19 @@ pub enum SelectorFactChange {
     Scope,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ConditionFactChange {
+    Media,
+    Container,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CascadeChange {
+    LayerOrder,
+    RuleScope,
+    SourceOrder,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Change {
     pub rematch: bool,
@@ -151,6 +164,30 @@ impl Change {
 
     #[must_use]
     pub fn from_selector_fact_change(_fact: SelectorFactChange) -> Self {
+        let mut change = Self::empty();
+        change.rematch = true;
+        change.scope.include_whole_tree();
+        change
+    }
+
+    #[must_use]
+    pub fn from_condition_fact_change(_fact: ConditionFactChange) -> Self {
+        let mut change = Self::empty();
+        change.rematch = true;
+        change.scope.include_whole_tree();
+        change
+    }
+
+    #[must_use]
+    pub fn from_cascade_change(_change: CascadeChange) -> Self {
+        let mut change = Self::empty();
+        change.rematch = true;
+        change.scope.include_whole_tree();
+        change
+    }
+
+    #[must_use]
+    pub fn from_style_bucket_change(_bucket: StyleBucket) -> Self {
         let mut change = Self::empty();
         change.rematch = true;
         change.scope.include_whole_tree();
@@ -229,6 +266,31 @@ mod tests {
         ] {
             let change = Change::from_selector_fact_change(fact);
 
+            assert!(change.rematch);
+            assert!(change.scope.whole_tree);
+            assert_eq!(change.invalidation, Invalidation::empty());
+        }
+    }
+
+    #[test]
+    fn condition_fact_changes_rematch_condition_dependent_rules() {
+        let media = Change::from_condition_fact_change(ConditionFactChange::Media);
+        let container = Change::from_condition_fact_change(ConditionFactChange::Container);
+
+        assert!(media.rematch);
+        assert!(media.scope.whole_tree);
+        assert_eq!(media.invalidation, Invalidation::empty());
+        assert!(container.rematch);
+        assert!(container.scope.whole_tree);
+    }
+
+    #[test]
+    fn cascade_structure_changes_rematch_without_claiming_property_output() {
+        for change in [
+            Change::from_cascade_change(CascadeChange::LayerOrder),
+            Change::from_cascade_change(CascadeChange::RuleScope),
+            Change::from_style_bucket_change(crate::StyleBucket::Before),
+        ] {
             assert!(change.rematch);
             assert!(change.scope.whole_tree);
             assert_eq!(change.invalidation, Invalidation::empty());
