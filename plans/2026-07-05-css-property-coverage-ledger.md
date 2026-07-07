@@ -263,21 +263,15 @@ render resources.
 
 ## Next Sequence Context
 
-The next implementation plan should cover Operation 13: media/container
-conditions, cascade layers, and scope integration.
+After Operation 13 lands, the next implementation plan should cover Operation
+14: resolver cache keys, invalidation, and diagnostic reporting integration over
+the now-real authored/property/selector/condition/layer/scope models.
 
-Use this ledger instead of re-inventorying the full CSS property surface. The
-conditions/layers/scope plan should start from the current condition, layer, and
-scope gaps that point to Operation 13.
+Use this ledger instead of re-inventorying the full CSS property surface.
 
-The conditions/layers/scope plan should add style-owned inputs that root can
-lower media queries, container queries, cascade layers, and scoped rules into.
-It should not add Operation 14 resolver cache and invalidation integration yet;
-that cache work should follow after condition, layer, and scope facts have real
-style-owned models.
-
-Operation 8 layout-facing rows, Operation 9 text-facing rows, and Operation 10
-paint/color/effects rows, and Operation 11 generated content/counters/lists rows
-have been rebased after implementation. Operation 12 timing/animation/keyframes
-rows are now rebased as well, so Operation 13 can proceed from the current
-condition/layer/scope gaps.
+Operation 8 layout-facing rows, Operation 9 text-facing rows, Operation 10
+paint/color/effects rows, Operation 11 generated content/counters/lists rows,
+and Operation 12 timing/animation/keyframes rows have been rebased after
+implementation. Operation 13 condition/layer/scope rows are now rebased in the
+surface ledger as well, so Operation 14 can proceed from the current cache,
+invalidation, and diagnostic integration gaps.
