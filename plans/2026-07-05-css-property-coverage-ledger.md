@@ -263,9 +263,9 @@ render resources.
 
 ## Next Sequence Context
 
-After Operation 13 lands, the next implementation plan should cover Operation
-14: resolver cache keys, invalidation, and diagnostic reporting integration over
-the now-real authored/property/selector/condition/layer/scope models.
+After Operation 14 lands, the next implementation plan should cover Operation
+15: API artifacts, compile-fail coverage, and root handoff notes over the
+completed CSS-facing style surface sequence.
 
 Use this ledger instead of re-inventorying the full CSS property surface.
 
@@ -273,5 +273,6 @@ Operation 8 layout-facing rows, Operation 9 text-facing rows, Operation 10
 paint/color/effects rows, Operation 11 generated content/counters/lists rows,
 and Operation 12 timing/animation/keyframes rows have been rebased after
 implementation. Operation 13 condition/layer/scope rows are now rebased in the
-surface ledger as well, so Operation 14 can proceed from the current cache,
-invalidation, and diagnostic integration gaps.
+surface ledger as well, and Operation 14 cache, invalidation, and diagnostic
+contracts are now rebased there. Operation 15 should proceed from the current
+API artifact, compile-fail coverage, and root handoff-note gaps.
