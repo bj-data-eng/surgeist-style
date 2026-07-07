@@ -19,13 +19,13 @@ use surgeist_style::{
     FilterFunction, FilterFunctionList, Flex, FlexFactor, Font, FontFamilyList, FontFeature,
     FontFeatureSettings, FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight,
     ForcedColorsMode, GridTrackList, HoverCapability, HorizontalPositionKeyword, ImageLayer,
-    ImageLayerList, KeyframeBlock, KeyframeOffset, KeyframeSelectorList, KeyframesIdent,
-    KeyframesName, KeyframesRule, KeyframesString, LayerBlock, LayerOrder, LayerRegistry,
-    LayerStatement, LayoutPosition, Length, LetterSpacing, LetterSpacingLength, ListStyle,
-    ListStyleImage, ListStylePosition, ListStyleType, MaskLayer, MaskLayerList, MediaCondition,
-    MediaConditionList, MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList,
-    MediaQueryModifier, MediaType, Node, NonNegativeInteger, NthPattern, NthSelector, Opacity,
-    Order, Orientation,
+    ImageLayerList, InvalidAtComputedValueReason, KeyframeBlock, KeyframeOffset,
+    KeyframeSelectorList, KeyframesIdent, KeyframesName, KeyframesRule, KeyframesString,
+    LayerBlock, LayerOrder, LayerRegistry, LayerStatement, LayoutPosition, Length,
+    LetterSpacing, LetterSpacingLength, ListStyle, ListStyleImage, ListStylePosition,
+    ListStyleType, MaskLayer, MaskLayerList, MediaCondition, MediaConditionList,
+    MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, MediaQueryModifier,
+    MediaType, Node, NonNegativeInteger, NthPattern, NthSelector, Opacity, Order, Orientation,
     Outline, OutlineStyle, OutlineWidth, OutlineWidthLength, OverflowWrap, PointerCapability,
     PlaceContentAlignment, PlaceItemsAlignment, Position, PositionComponent, PositionList,
     Property, PseudoClassSelector, PseudoElement, QueryComparison, QueryLength, QueryLengthBasis,
@@ -35,9 +35,9 @@ use surgeist_style::{
     ScaleValues, ScopeSelectorList, ScrollbarWidth, Selector, SelectorList,
     SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder,
     StateFlag, StructuralSelector, StyleAttributeName, StyleAttributeValue, StyleBucket,
-    StyleBucketPolicy, StyleColor, StyleLayerName, StyleLayerNameList, StyleRole, StyleState,
-    StyleTag, StyleUrl, SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine,
-    TypedMediaQuery,
+    StyleBucketPolicy, StyleColor, StyleDiagnostic, StyleDiagnosticKind, StyleDiagnosticSubject,
+    StyleLayerName, StyleLayerNameList, StyleRole, StyleSourceId, StyleState, StyleTag, StyleUrl,
+    SymbolicFunctionValue, TextAlignLast, TextDecoration, TextDecorationLine, TypedMediaQuery,
     TextDecorationLineComponent, TextDecorationStyle, TextDecorationThickness,
     TextDecorationThicknessLength, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
     TimeList, TransitionItem, TransitionList, TransitionPropertyList, TransitionPropertyName,
@@ -763,6 +763,29 @@ fn main() -> surgeist_style::Result<()> {
     let authored_tokens = AuthoredTokens::new("var(--brand, #000)");
     assert_eq!(custom_name.as_str(), "--brand");
     assert_eq!(authored_tokens.as_css(), "var(--brand, #000)");
+
+    let style_source = StyleSourceId::try_new(12)?;
+    assert_eq!(style_source.get(), 12);
+    let diagnostic = StyleDiagnostic::invalid_at_computed_value(
+        StyleDiagnosticSubject::Property(Property::Color),
+        Some(style_source),
+        InvalidAtComputedValueReason::MissingCustomProperty(custom_name.clone()),
+    );
+    assert_eq!(diagnostic.kind(), StyleDiagnosticKind::InvalidAtComputedValue);
+    assert_eq!(diagnostic.source(), Some(style_source));
+    assert_eq!(
+        diagnostic.subject(),
+        &StyleDiagnosticSubject::Property(Property::Color)
+    );
+    assert_eq!(
+        diagnostic.reason(),
+        &InvalidAtComputedValueReason::MissingCustomProperty(custom_name.clone())
+    );
+    let custom_property_subject = StyleDiagnosticSubject::CustomProperty(custom_name.clone());
+    assert!(matches!(
+        custom_property_subject,
+        StyleDiagnosticSubject::CustomProperty(_)
+    ));
 
     let space_name = CustomPropertyName::try_new("--space")?;
     let variable_gap = VariableDependentValue::try_new(

@@ -10,6 +10,7 @@ mod calc;
 mod condition;
 mod custom;
 mod declaration;
+mod diagnostic;
 mod error;
 mod identity;
 mod invalidation;
@@ -43,6 +44,10 @@ pub use custom::{
     VariableFallback, VariableReference,
 };
 pub use declaration::{Declaration, Declarations, Fingerprint, TypedDeclaration};
+pub use diagnostic::{
+    InvalidAtComputedValueReason, StyleDiagnostic, StyleDiagnosticKind, StyleDiagnosticSubject,
+    StyleSourceId,
+};
 pub use error::{Error, ErrorCode, Result};
 pub use identity::{
     RangeState, StyleAttribute, StyleAttributeName, StyleAttributeValue, StyleClass, StyleKey,
