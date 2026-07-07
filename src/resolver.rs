@@ -25,7 +25,8 @@ use super::{
 };
 use crate::{
     CustomPropertyDependencies, CustomPropertyName, CustomPropertyResolution, CustomPropertyValue,
-    StyleSourceId, VariableDependentValue, VariableExpression,
+    InvalidAtComputedValueReason, StyleDiagnostic, StyleDiagnosticSubject, StyleSourceId,
+    VariableDependentValue, VariableExpression,
     authored::{AuthoredCascadeValue, CustomPropertyCascadeValue},
     sheet::{RuleDeclarationOrigin, RuleDeclarationValue},
 };
@@ -950,6 +951,37 @@ impl Default for Resolved {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResolvedWithDiagnostics {
+    resolved: Resolved,
+    diagnostics: Vec<StyleDiagnostic>,
+}
+
+impl ResolvedWithDiagnostics {
+    #[must_use]
+    pub(crate) fn new(resolved: Resolved, diagnostics: Vec<StyleDiagnostic>) -> Self {
+        Self {
+            resolved,
+            diagnostics,
+        }
+    }
+
+    #[must_use]
+    pub const fn resolved(&self) -> &Resolved {
+        &self.resolved
+    }
+
+    #[must_use]
+    pub fn into_resolved(self) -> Resolved {
+        self.resolved
+    }
+
+    #[must_use]
+    pub fn diagnostics(&self) -> &[StyleDiagnostic] {
+        &self.diagnostics
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Context<'a, T: Tree> {
     pub tree: &'a T,
@@ -1099,12 +1131,32 @@ impl Resolver {
     }
 
     pub fn resolve<T: Tree>(&mut self, context: Context<'_, T>) -> Result<Resolved> {
+        self.resolve_inner(context, false)
+            .map(ResolvedWithDiagnostics::into_resolved)
+    }
+
+    pub fn resolve_with_diagnostics<T: Tree>(
+        &mut self,
+        context: Context<'_, T>,
+    ) -> Result<ResolvedWithDiagnostics> {
+        self.resolve_inner(context, true)
+    }
+
+    fn resolve_inner<T: Tree>(
+        &mut self,
+        context: Context<'_, T>,
+        collect_diagnostics: bool,
+    ) -> Result<ResolvedWithDiagnostics> {
         let cache_key = self.cache_key(&context)?;
-        if let Some(key) = cache_key
+        if !collect_diagnostics
+            && let Some(key) = cache_key
             && let Some(entry) = self.cache.get(&key.value)
         {
             self.cache_hits += 1;
-            return Ok(entry.resolved.clone());
+            return Ok(ResolvedWithDiagnostics::new(
+                entry.resolved.clone(),
+                Vec::new(),
+            ));
         }
 
         let mut resolved = Resolved::new();
@@ -1178,6 +1230,7 @@ impl Resolver {
             &mut custom_candidates,
             context.parent,
         );
+        let mut diagnostics = DiagnosticCollector::new(collect_diagnostics);
         for (property, candidates) in &mut rule_candidates {
             candidates.sort_by_key(|candidate| candidate.precedence);
             let value = resolve_rule_candidates(
@@ -1186,6 +1239,7 @@ impl Resolver {
                 context.parent,
                 &resolved.custom_properties,
                 &mut resolved.custom_property_dependencies,
+                &mut diagnostics,
             );
             resolved.values.insert(*property, value);
         }
@@ -1209,7 +1263,10 @@ impl Resolver {
                 },
             );
         }
-        Ok(resolved)
+        Ok(ResolvedWithDiagnostics::new(
+            resolved,
+            diagnostics.into_diagnostics(),
+        ))
     }
 
     fn cache_key<T: Tree>(&self, context: &Context<'_, T>) -> Result<Option<CacheKey>> {
@@ -1355,7 +1412,6 @@ struct RuleCandidate {
     precedence: RulePrecedence,
     origin: RuleDeclarationOrigin,
     value: RuleCandidateValue,
-    #[allow(dead_code)]
     source: Option<StyleSourceId>,
 }
 
@@ -1649,11 +1705,18 @@ fn resolve_rule_candidates(
     parent: Option<&Resolved>,
     custom_properties: &BTreeMap<CustomPropertyName, CustomPropertyResolution>,
     dependencies: &mut CustomPropertyDependencies,
+    diagnostics: &mut DiagnosticCollector,
 ) -> Value {
     let Some(index) = candidates.len().checked_sub(1) else {
         return property.metadata().default().clone();
     };
-    let mut evaluator = RuleEvaluator::new(parent, candidates, custom_properties, dependencies);
+    let mut evaluator = RuleEvaluator::new(
+        parent,
+        candidates,
+        custom_properties,
+        dependencies,
+        diagnostics,
+    );
     evaluator.resolve_candidate_at(property, index)
 }
 
@@ -1675,6 +1738,7 @@ struct RuleEvaluator<'a, 'dependencies> {
     candidates: &'a [RuleCandidate],
     custom_properties: &'a BTreeMap<CustomPropertyName, CustomPropertyResolution>,
     dependencies: &'dependencies mut CustomPropertyDependencies,
+    diagnostics: &'dependencies mut DiagnosticCollector,
     visited_candidates: BTreeSet<usize>,
 }
 
@@ -1684,12 +1748,14 @@ impl<'a, 'dependencies> RuleEvaluator<'a, 'dependencies> {
         candidates: &'a [RuleCandidate],
         custom_properties: &'a BTreeMap<CustomPropertyName, CustomPropertyResolution>,
         dependencies: &'dependencies mut CustomPropertyDependencies,
+        diagnostics: &'dependencies mut DiagnosticCollector,
     ) -> Self {
         Self {
             parent,
             candidates,
             custom_properties,
             dependencies,
+            diagnostics,
             visited_candidates: BTreeSet::new(),
         }
     }
@@ -1710,13 +1776,18 @@ impl<'a, 'dependencies> RuleEvaluator<'a, 'dependencies> {
             }
             RuleCandidateValue::VariableDependent(value) => {
                 let mut variable_stack = Vec::new();
-                self.evaluate_variable_expression(
+                match self.evaluate_variable_expression(
                     property,
                     value.expression(),
                     index,
                     &mut variable_stack,
-                )
-                .unwrap_or_else(|| resolve_unset(property, self.parent))
+                ) {
+                    Ok(value) => value,
+                    Err(failure) => {
+                        self.push_variable_failures(property, index, failure);
+                        resolve_unset(property, self.parent)
+                    }
+                }
             }
         };
         self.visited_candidates.remove(&index);
@@ -1759,56 +1830,88 @@ impl<'a, 'dependencies> RuleEvaluator<'a, 'dependencies> {
         expression: &VariableExpression,
         candidate_index: usize,
         variable_stack: &mut Vec<CustomPropertyName>,
-    ) -> Option<Value> {
+    ) -> std::result::Result<Value, VariableResolutionFailure> {
         match expression {
             VariableExpression::Value(value) => property
                 .validate_value(value)
                 .ok()
-                .map(|()| resolve_legacy_value(property, value, self.parent)),
+                .map(|()| resolve_legacy_value(property, value, self.parent))
+                .ok_or_else(VariableResolutionFailure::new),
             VariableExpression::CssWideKeyword(keyword) => {
-                Some(self.resolve_css_wide_keyword(property, *keyword, Some(candidate_index)))
+                Ok(self.resolve_css_wide_keyword(property, *keyword, Some(candidate_index)))
             }
             VariableExpression::Reference(reference) => {
                 self.dependencies.insert(property, reference.name().clone());
                 if variable_stack.iter().any(|name| name == reference.name()) {
-                    return self.evaluate_variable_fallback(
+                    let failure = VariableResolutionFailure::from_reason(
+                        InvalidAtComputedValueReason::CyclicCustomProperty(
+                            reference.name().clone(),
+                        ),
+                    );
+                    return self.evaluate_variable_fallback_or_failure(
                         property,
                         reference.fallback(),
                         candidate_index,
                         variable_stack,
+                        failure,
                     );
                 }
 
                 let Some(resolution) = self.custom_properties.get(reference.name()) else {
-                    return self.evaluate_variable_fallback(
+                    let failure = VariableResolutionFailure::from_reason(
+                        InvalidAtComputedValueReason::MissingCustomProperty(
+                            reference.name().clone(),
+                        ),
+                    );
+                    return self.evaluate_variable_fallback_or_failure(
                         property,
                         reference.fallback(),
                         candidate_index,
                         variable_stack,
+                        failure,
                     );
                 };
                 if resolution.is_invalid() {
-                    return self.evaluate_variable_fallback(
+                    let failure = VariableResolutionFailure::from_reason(
+                        InvalidAtComputedValueReason::CyclicCustomProperty(
+                            reference.name().clone(),
+                        ),
+                    );
+                    return self.evaluate_variable_fallback_or_failure(
                         property,
                         reference.fallback(),
                         candidate_index,
                         variable_stack,
+                        failure,
                     );
                 }
                 let Some(value) = resolution.value() else {
-                    return self.evaluate_variable_fallback(
+                    let failure = VariableResolutionFailure::from_reason(
+                        InvalidAtComputedValueReason::MissingCustomProperty(
+                            reference.name().clone(),
+                        ),
+                    );
+                    return self.evaluate_variable_fallback_or_failure(
                         property,
                         reference.fallback(),
                         candidate_index,
                         variable_stack,
+                        failure,
                     );
                 };
                 let Some(typed_value) = value.typed_value(property) else {
-                    return self.evaluate_variable_fallback(
+                    let failure = VariableResolutionFailure::from_reason(
+                        InvalidAtComputedValueReason::MissingTypedCustomPropertyValue(
+                            reference.name().clone(),
+                            property,
+                        ),
+                    );
+                    return self.evaluate_variable_fallback_or_failure(
                         property,
                         reference.fallback(),
                         candidate_index,
                         variable_stack,
+                        failure,
                     );
                 };
 
@@ -1820,12 +1923,13 @@ impl<'a, 'dependencies> RuleEvaluator<'a, 'dependencies> {
                     variable_stack,
                 );
                 variable_stack.pop();
-                result.or_else(|| {
-                    self.evaluate_variable_fallback(
+                result.or_else(|failure| {
+                    self.evaluate_variable_fallback_or_failure(
                         property,
                         reference.fallback(),
                         candidate_index,
                         variable_stack,
+                        failure,
                     )
                 })
             }
@@ -1838,15 +1942,105 @@ impl<'a, 'dependencies> RuleEvaluator<'a, 'dependencies> {
         fallback: Option<&crate::VariableFallback>,
         candidate_index: usize,
         variable_stack: &mut Vec<CustomPropertyName>,
-    ) -> Option<Value> {
-        fallback.and_then(|fallback| {
-            self.evaluate_variable_expression(
-                property,
-                fallback.expression(),
-                candidate_index,
-                variable_stack,
-            )
-        })
+    ) -> std::result::Result<Value, VariableResolutionFailure> {
+        fallback.map_or_else(
+            || Err(VariableResolutionFailure::new()),
+            |fallback| {
+                self.evaluate_variable_expression(
+                    property,
+                    fallback.expression(),
+                    candidate_index,
+                    variable_stack,
+                )
+            },
+        )
+    }
+
+    fn evaluate_variable_fallback_or_failure(
+        &mut self,
+        property: Property,
+        fallback: Option<&crate::VariableFallback>,
+        candidate_index: usize,
+        variable_stack: &mut Vec<CustomPropertyName>,
+        failure: VariableResolutionFailure,
+    ) -> std::result::Result<Value, VariableResolutionFailure> {
+        self.evaluate_variable_fallback(property, fallback, candidate_index, variable_stack)
+            .map_err(|fallback_failure| failure.with_appended(fallback_failure))
+    }
+
+    fn push_variable_failures(
+        &mut self,
+        property: Property,
+        candidate_index: usize,
+        failure: VariableResolutionFailure,
+    ) {
+        let source = self.candidates[candidate_index].source;
+        for reason in failure.into_reasons() {
+            self.diagnostics.push_invalid_at_computed_value(
+                StyleDiagnosticSubject::Property(property),
+                source,
+                reason,
+            );
+        }
+    }
+}
+
+struct DiagnosticCollector {
+    enabled: bool,
+    diagnostics: Vec<StyleDiagnostic>,
+}
+
+impl DiagnosticCollector {
+    fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn push_invalid_at_computed_value(
+        &mut self,
+        subject: StyleDiagnosticSubject,
+        source: Option<StyleSourceId>,
+        reason: InvalidAtComputedValueReason,
+    ) {
+        if self.enabled {
+            self.diagnostics
+                .push(StyleDiagnostic::invalid_at_computed_value(
+                    subject, source, reason,
+                ));
+        }
+    }
+
+    fn into_diagnostics(self) -> Vec<StyleDiagnostic> {
+        self.diagnostics
+    }
+}
+
+struct VariableResolutionFailure {
+    reasons: Vec<InvalidAtComputedValueReason>,
+}
+
+impl VariableResolutionFailure {
+    fn new() -> Self {
+        Self {
+            reasons: Vec::new(),
+        }
+    }
+
+    fn from_reason(reason: InvalidAtComputedValueReason) -> Self {
+        Self {
+            reasons: vec![reason],
+        }
+    }
+
+    fn with_appended(mut self, mut fallback: Self) -> Self {
+        self.reasons.append(&mut fallback.reasons);
+        self
+    }
+
+    fn into_reasons(self) -> Vec<InvalidAtComputedValueReason> {
+        self.reasons
     }
 }
 
@@ -2062,14 +2256,14 @@ mod tests {
         Declarations, DurationSeconds, EasingFunction, EasingList, Error, ErrorCode,
         FilterFunction, FilterFunctionList, Flex, FontFamilyList, FontFeature, FontFeatureSettings,
         FontFeatureTag, FontFeatureValue, FontStretch, FontVariant, FontWeight, FontWeightNumber,
-        ImageLayer, KeyframesIdent, KeyframesName, LayerOrder, LayoutPosition, LetterSpacing,
-        ListStyle, ListStyleImage, ListStylePosition, ListStyleType, MediaCondition,
-        MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, Node, Order, OverflowWrap,
-        PlaceContentAlignment, QueryComparison, QueryLength, QueryLengthUnit, RangeFeature,
-        RulePrecedence, RuleScope, RuleTarget, ScopeSelectorList, ScrollbarWidth, Selector,
-        SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleColor, StyleRole,
-        StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor, TextAlignLast,
-        TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
+        ImageLayer, InvalidAtComputedValueReason, KeyframesIdent, KeyframesName, LayerOrder,
+        LayoutPosition, LetterSpacing, ListStyle, ListStyleImage, ListStylePosition, ListStyleType,
+        MediaCondition, MediaEnvironment, MediaFeatureQuery, MediaQuery, MediaQueryList, Node,
+        Order, OverflowWrap, PlaceContentAlignment, QueryComparison, QueryLength, QueryLengthUnit,
+        RangeFeature, RulePrecedence, RuleScope, RuleTarget, ScopeSelectorList, ScrollbarWidth,
+        Selector, SelectorSpecificity, SourceOrder, StyleBucket, StyleClass, StyleColor, StyleRole,
+        StyleSourceId, StyleState, StyleTag, StyleUrl, SymbolicFunctionValue, SystemColor,
+        TextAlignLast, TextDecorationLine, TextDecorationLineComponent, TextDecorationStyle,
         TextDecorationThickness, TextIndent, TextOverflow, TextSlant, TextTransform, TextWrap,
         TimeList, UserSelect, VariableDependentValue, VariableExpression, VariableFallback,
         VariableReference, VerticalAlign, WhiteSpace, WordBreak, ZIndex,
@@ -3272,6 +3466,148 @@ mod tests {
         );
 
         let resolved = resolve_child(sheet, None);
+
+        assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
+    }
+
+    #[test]
+    fn resolve_with_diagnostics_reports_missing_custom_property() {
+        let source = StyleSourceId::try_new(11).unwrap();
+        let missing = CustomPropertyName::try_new("--missing").unwrap();
+        let declarations = variable_color_declarations(missing.clone(), None).with_source(source);
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut sheet = Sheet::new();
+        sheet
+            .push_authored_rule(
+                Selector::tag("button").unwrap(),
+                declarations,
+                precedence(0, 0),
+            )
+            .unwrap();
+        let mut resolver = Resolver::new(sheet);
+
+        let output = resolver
+            .resolve_with_diagnostics(Context::new(&tree, 0))
+            .unwrap();
+
+        assert_eq!(
+            output.resolved().text_color(),
+            &StyleColor::rgba(Color::BLACK)
+        );
+        assert_eq!(output.diagnostics().len(), 1);
+        assert_eq!(
+            output.diagnostics()[0].reason(),
+            &InvalidAtComputedValueReason::MissingCustomProperty(missing)
+        );
+        assert_eq!(output.diagnostics()[0].source(), Some(source));
+    }
+
+    #[test]
+    fn resolve_with_diagnostics_reports_missing_typed_custom_property_value() {
+        let source = StyleSourceId::try_new(12).unwrap();
+        let name = custom_name("--brand");
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            custom_value_declarations(
+                name.clone(),
+                CustomPropertyValue::new(AuthoredTokens::new("not typed"), []),
+            ),
+            precedence(1, 0),
+        );
+        push_authored(
+            &mut sheet,
+            variable_color_declarations(name.clone(), None).with_source(source),
+            precedence(1, 1),
+        );
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut resolver = Resolver::new(sheet);
+
+        let output = resolver
+            .resolve_with_diagnostics(Context::new(&tree, 0))
+            .unwrap();
+
+        assert_eq!(
+            output.resolved().text_color(),
+            &StyleColor::rgba(Color::BLACK)
+        );
+        assert_eq!(output.diagnostics().len(), 1);
+        assert_eq!(
+            output.diagnostics()[0].reason(),
+            &InvalidAtComputedValueReason::MissingTypedCustomPropertyValue(name, Property::Color)
+        );
+        assert_eq!(output.diagnostics()[0].source(), Some(source));
+    }
+
+    #[test]
+    fn resolve_with_diagnostics_suppresses_missing_custom_property_when_fallback_is_valid() {
+        let source = StyleSourceId::try_new(13).unwrap();
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut sheet = Sheet::new();
+        push_authored(
+            &mut sheet,
+            variable_color_declarations(
+                custom_name("--brand"),
+                Some(VariableExpression::Value(Value::StyleColor(
+                    StyleColor::rgba(Color::TRANSPARENT),
+                ))),
+            )
+            .with_source(source),
+            precedence(1, 0),
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let output = resolver
+            .resolve_with_diagnostics(Context::new(&tree, 0))
+            .unwrap();
+
+        assert_eq!(
+            output.resolved().text_color(),
+            &StyleColor::rgba(Color::TRANSPARENT)
+        );
+        assert!(output.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn resolve_with_diagnostics_recomputes_diagnostics_when_resolved_style_is_cached() {
+        let source = StyleSourceId::try_new(14).unwrap();
+        let missing = custom_name("--missing");
+        let declarations = variable_color_declarations(missing.clone(), None).with_source(source);
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut sheet = Sheet::new();
+        sheet
+            .push_authored_rule(
+                Selector::tag("button").unwrap(),
+                declarations,
+                precedence(0, 0),
+            )
+            .unwrap();
+        let mut resolver = Resolver::new(sheet);
+
+        let cached = resolver.resolve(Context::new(&tree, 0)).unwrap();
+        let output = resolver
+            .resolve_with_diagnostics(Context::new(&tree, 0))
+            .unwrap();
+
+        assert_eq!(cached.text_color(), &StyleColor::rgba(Color::BLACK));
+        assert_eq!(
+            output.resolved().text_color(),
+            &StyleColor::rgba(Color::BLACK)
+        );
+        assert_eq!(output.diagnostics().len(), 1);
+        assert_eq!(
+            output.diagnostics()[0].reason(),
+            &InvalidAtComputedValueReason::MissingCustomProperty(missing)
+        );
+        assert_eq!(resolver.cache_hits(), 0);
+    }
+
+    #[test]
+    fn existing_resolve_api_still_returns_only_resolved_style() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut resolver = Resolver::new(Sheet::new());
+
+        let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
 
         assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
     }

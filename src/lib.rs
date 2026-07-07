@@ -59,7 +59,7 @@ pub use precedence::{
     StyleLayerName, StyleLayerNameList,
 };
 pub use property::{Impact, Interpolation, Metadata, Property};
-pub use resolver::{Context, Resolved, Resolver};
+pub use resolver::{Context, Resolved, ResolvedWithDiagnostics, Resolver};
 pub use scope::{RuleScope, ScopeSelectorList};
 pub use selector::{
     AttributeCaseSensitivity, AttributeMatcher, AttributeSelector, Combinator, ComplexSelector,

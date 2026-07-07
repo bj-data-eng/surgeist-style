@@ -31,8 +31,8 @@ use surgeist_style::{
     Property, PseudoClassSelector, PseudoElement, QueryComparison, QueryLength, QueryLengthBasis,
     QueryLengthUnit, RangeFeature, RangeState, Ratio, ReducedMotionPreference,
     ReducedTransparencyPreference, RelativeSelector, RelativeSelectorList, Resolution,
-    ResolutionUnit, Rotate, RulePrecedence, RuleScope, RuleTarget, RuntimePseudoClass, Scale,
-    ScaleValues, ScopeSelectorList, ScrollbarWidth, Selector, SelectorList,
+    ResolutionUnit, ResolvedWithDiagnostics, Rotate, RulePrecedence, RuleScope, RuleTarget,
+    RuntimePseudoClass, Scale, ScaleValues, ScopeSelectorList, ScrollbarWidth, Selector, SelectorList,
     SelectorListPseudoClass, SelectorSpecificity, SelectorFactChange, Sheet, SourceOrder,
     StateFlag, StructuralSelector, StyleAttributeName, StyleAttributeValue, StyleBucket,
     StyleBucketPolicy, StyleColor, StyleDiagnostic, StyleDiagnosticKind, StyleDiagnosticSubject,
@@ -880,6 +880,8 @@ fn main() -> surgeist_style::Result<()> {
     assert!(authored.len() >= 2);
     Ok(())
 }
+
+fn _accepts_resolved_with_diagnostics(_value: Option<ResolvedWithDiagnostics>) {}
 
 struct PublicTree;
 
