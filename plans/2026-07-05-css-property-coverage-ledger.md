@@ -261,11 +261,18 @@ This ledger does not introduce Rust source changes, parser dependencies,
 adapters, generated content materialization, layout algorithms, text shaping, or
 render resources.
 
-## Next Sequence Context
+## Operation 15 Artifact State
 
-After Operation 14 lands, the next implementation plan should cover Operation
-15: API artifacts, compile-fail coverage, and root handoff notes over the
-completed CSS-facing style surface sequence.
+Operation 15 has a crate-local API artifact and root handoff notes over the
+completed CSS-facing style surface sequence:
+
+- `plans/2026-07-07-style-css-api-artifact.md`
+- `plans/2026-07-07-style-root-handoff-notes.md`
+
+## Next Work
+
+Root integration/lowering planning should proceed from the API artifact, root
+handoff notes, and these rebased ledgers.
 
 Use this ledger instead of re-inventorying the full CSS property surface.
 
@@ -274,5 +281,6 @@ paint/color/effects rows, Operation 11 generated content/counters/lists rows,
 and Operation 12 timing/animation/keyframes rows have been rebased after
 implementation. Operation 13 condition/layer/scope rows are now rebased in the
 surface ledger as well, and Operation 14 cache, invalidation, and diagnostic
-contracts are now rebased there. Operation 15 should proceed from the current
-API artifact, compile-fail coverage, and root handoff-note gaps.
+contracts are now rebased there. Further style work should be driven by
+concrete root lowering findings or new CSS/parser surface changes, not by
+another broad style inventory pass.

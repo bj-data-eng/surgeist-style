@@ -569,8 +569,17 @@ Rust checks were skipped because this plan creates a source-derived planning led
 4. Which media, container, and environment facts can root provide to style in the first integration pass?
 5. Should `@font-face` descriptors become style-owned symbolic data now, or remain root/text-owned until font loading exists?
 
-## Next Sequence Context
+## Operation 15 Artifact State
 
-After Operation 14 lands, the next implementation plan should cover Operation
-15: API artifacts, compile-fail coverage, and root handoff notes over the
-completed CSS-facing style surface sequence.
+Operation 15 has a crate-local API artifact and root handoff notes over the
+completed CSS-facing style surface sequence:
+
+- `plans/2026-07-07-style-css-api-artifact.md`
+- `plans/2026-07-07-style-root-handoff-notes.md`
+
+## Next Work
+
+Root integration/lowering planning should proceed from the API artifact, root
+handoff notes, and these rebased ledgers. Further style work should be driven
+by concrete root lowering findings or new CSS/parser surface changes, not by
+another broad style inventory pass.
