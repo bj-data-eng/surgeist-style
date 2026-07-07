@@ -14,10 +14,13 @@ replacement.
 
 | Source | Value |
 | --- | --- |
-| style commit | `cf42d793fe14bf0ad28509d0c55a42980e2d093c` |
+| pre-artifact/base style snapshot | `cf42d793fe14bf0ad28509d0c55a42980e2d093c` |
 | CSS surface ledger | `plans/2026-07-05-css-surface-style-ledger.md` |
 | property coverage ledger | `plans/2026-07-05-css-property-coverage-ledger.md` |
 | sequence | `plans/2026-07-05-css-surface-style-operations-sequence.md` |
+
+The final Operation 15 handoff commit is reported by the coordinator after
+verification.
 
 ## Boundary
 
@@ -183,6 +186,8 @@ generated CSS syntax output in this pass.
 - `tests/compile_fail/invalid_precedence_newtype_literal.rs` and
   `tests/compile_fail/invalid_precedence_struct_literal.rs`: layer/source-order
   and precedence invariants.
+- `tests/compile_fail/invalid_layer_registry_struct_literal.rs`:
+  `LayerRegistry` private construction invariant.
 - `tests/compile_fail/invalid_rule_scope_literal.rs`,
   `tests/compile_fail/invalid_rule_target_struct_literal.rs`, and
   `tests/compile_fail/invalid_selector_specificity_struct_literal.rs`: scoped
@@ -190,5 +195,7 @@ generated CSS syntax output in this pass.
 - `tests/compile_fail/invalid_style_source_id_literal.rs` and
   `tests/compile_fail/invalid_style_diagnostic_literal.rs`: opaque source and
   diagnostic privacy invariants.
+- `tests/compile_fail/invalid_resolved_with_diagnostics_literal.rs`:
+  `ResolvedWithDiagnostics` private construction invariant.
 - `tests/compile_fail/invalid_keyframe_offset_literal.rs`: keyframe offset
   validation and privacy invariant.

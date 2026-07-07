@@ -13,8 +13,11 @@ These notes describe lowering into public `surgeist-style` APIs only.
 
 | Source | Value |
 | --- | --- |
-| style commit | `cf42d793fe14bf0ad28509d0c55a42980e2d093c` |
+| pre-artifact/base style snapshot | `cf42d793fe14bf0ad28509d0c55a42980e2d093c` |
 | API artifact | `plans/2026-07-07-style-css-api-artifact.md` |
+
+The final Operation 15 handoff commit is reported by the coordinator after
+verification.
 
 ## Lowering Responsibilities
 
