@@ -3971,6 +3971,68 @@ mod tests {
     }
 
     #[test]
+    fn resolver_cache_key_distinguishes_condition_facts() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let query = MediaQueryList::try_new([MediaQuery::Condition(MediaCondition::Feature(
+            MediaFeatureQuery::Width(RangeFeature::new(
+                Some(QueryComparison::GreaterThanOrEqual),
+                QueryLength::try_new(640.0, QueryLengthUnit::Px).unwrap(),
+            )),
+        ))])
+        .unwrap();
+        let sheet = Sheet::new().conditional_rule(
+            Selector::tag("button").unwrap(),
+            Declarations::new()
+                .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                .unwrap(),
+            [Condition::media(query)],
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let wide = resolver
+            .resolve(
+                Context::new(&tree, 0).media_environment(
+                    MediaEnvironment::new()
+                        .width(QueryLength::try_new(800.0, QueryLengthUnit::Px).unwrap()),
+                ),
+            )
+            .unwrap();
+        let narrow = resolver
+            .resolve(
+                Context::new(&tree, 0).media_environment(
+                    MediaEnvironment::new()
+                        .width(QueryLength::try_new(320.0, QueryLengthUnit::Px).unwrap()),
+                ),
+            )
+            .unwrap();
+
+        assert_ne!(wide.text_color(), narrow.text_color());
+        assert_eq!(resolver.cache_hits(), 0);
+    }
+
+    #[test]
+    fn resolver_cache_key_distinguishes_local_and_animated_overlays() {
+        let tree = TestTree::new(vec![TestNode::new(0, "button")]);
+        let mut resolver = Resolver::new(Sheet::new());
+        let local = Declarations::new()
+            .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+            .unwrap();
+        let animated = Declarations::new()
+            .try_concrete_text_color(Color::raw_rgba(0.0, 1.0, 0.0, 1.0))
+            .unwrap();
+
+        let local_resolved = resolver
+            .resolve(Context::new(&tree, 0).local(&local))
+            .unwrap();
+        let animated_resolved = resolver
+            .resolve(Context::new(&tree, 0).animated(&animated))
+            .unwrap();
+
+        assert_ne!(local_resolved.text_color(), animated_resolved.text_color());
+        assert_eq!(resolver.cache_hits(), 0);
+    }
+
+    #[test]
     fn pseudo_bucket_inherits_from_supplied_parent_style() {
         let tree = TestTree::new(vec![TestNode::new(0, "button").class("badge")]);
         let sheet = Sheet::new().targeted_rule(
@@ -4082,6 +4144,42 @@ mod tests {
         let resolved = resolver.resolve(Context::new(&tree, 0)).unwrap();
 
         assert_eq!(resolved.text_color(), &StyleColor::rgba(Color::BLACK));
+    }
+
+    #[test]
+    fn resolver_cache_key_distinguishes_selector_scope_anchor() {
+        let tree = TestTree::new(vec![
+            TestNode::new(0, "root").children([1, 2]),
+            TestNode::new(1, "section").class("scope").children([3]),
+            TestNode::new(2, "section").class("other").children([4]),
+            TestNode::new(3, "button"),
+            TestNode::new(4, "button"),
+        ]);
+        let selector = Selector::complex([
+            ComplexSelectorPart::root(Selector::compound().scope_anchor().class("scope").unwrap()),
+            ComplexSelectorPart::related(
+                Combinator::Descendant,
+                Selector::compound().tag("button").unwrap(),
+            ),
+        ])
+        .unwrap();
+        let sheet = Sheet::new().rule(
+            selector,
+            Declarations::new()
+                .try_concrete_text_color(Color::raw_rgba(1.0, 0.0, 0.0, 1.0))
+                .unwrap(),
+        );
+        let mut resolver = Resolver::new(sheet);
+
+        let scoped = resolver
+            .resolve(Context::new(&tree, 3).selector_root(0).selector_scope(1))
+            .unwrap();
+        let wrong_scope = resolver
+            .resolve(Context::new(&tree, 3).selector_root(0).selector_scope(2))
+            .unwrap();
+
+        assert_ne!(scoped.text_color(), wrong_scope.text_color());
+        assert_eq!(resolver.cache_hits(), 0);
     }
 
     #[test]
