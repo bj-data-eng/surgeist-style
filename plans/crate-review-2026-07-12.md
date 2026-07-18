@@ -3,9 +3,10 @@
 VERDICT: NOT CLEAN
 
 SCOPE: Repository-wide review of `surgeist-style` at
-`cb24432aa9e63c6da10ded4e2e626529d621e77d` on 2026-07-12. This is a review
-reference, not a specification, implementation sequence, or cycle plan. Product
-code remained read-only.
+`cb24432aa9e63c6da10ded4e2e626529d621e77d` on 2026-07-12, augmented with static
+performance findings on 2026-07-17. This is a review reference, not a
+specification, implementation sequence, or cycle plan. Product code remained
+read-only.
 
 CSS COMPLETENESS BASELINE: [CSS Snapshot 2026](https://www.w3.org/TR/css-2026/)
 Section 2.1, the official stable definition, plus Section 2.2, Reliable Candidate
@@ -35,6 +36,9 @@ checks passed:
 - Repository-wide tracked-Rust unsafe scan using the canonical Surgeist pattern;
   no executable or textual unsafe construct matched.
 
+The 2026-07-17 performance augmentation used static source inspection against the
+same source revision. The checks above were not rerun for that augmentation.
+
 FINDINGS:
 
 ## [Important] Resolver cache keys alias different trees and colliding node identities
@@ -57,6 +61,34 @@ selector, cascade, and cache correctness.
 Required remediation: Make cache identity equality-preserving for the tree and
 node, or scope/disable caching when that identity is unavailable. Add cross-tree
 and colliding-ID regression cases.
+
+## [Important] Resolver storage makes warm cache hits scale with the complete style
+
+Location: `src/resolver.rs:34-55`, `src/resolver.rs:910-935`,
+`src/resolver.rs:1082-1088`, `src/resolver.rs:1150-1169`,
+`src/resolver.rs:1254-1300`
+
+Evidence: `Resolved::new` allocates a `BTreeMap` and clones the default value for
+every canonical property. Inheritance clones inherited values and the complete
+custom-property map. A cache hit clones the complete `Resolved`; a cache miss
+clones it again when inserting it. Building a child cache key recomputes the
+parent fingerprint by hashing every resolved property, custom property, and
+dependency. Consequently even a warm cache hit traverses and copies state
+proportional to the complete resolved style rather than the changed or requested
+properties.
+
+Impact: Resolving or revisiting every node incurs repeated map allocation, value
+cloning, and full-style hashing. The cost grows with both tree size and the
+property/custom-property catalog, so completing the CSS vocabulary makes the core
+restyle path progressively more expensive and erodes the benefit of the cache.
+
+Required remediation: Give resolved styles an immutable, cheaply shared or
+otherwise allocation-conscious representation with canonical-property lookup that
+does not require a tree map per style. Make cache hits avoid full-style cloning and
+make parent identity/fingerprinting reusable rather than recomputed by traversal.
+Preserve equality-correct cache identity and add representative cold-resolution,
+inheritance, and warm-hit scale evidence that detects work proportional to the
+complete style where it is not semantically required.
 
 ## [Important] Custom-property cycle detection omits fallback references
 
@@ -216,6 +248,33 @@ Required remediation: Base sheet condition helpers on the typed condition-fact
 change's whole-tree scope and then add affected property impacts. Assert
 `scope.whole_tree` for media and unanchored container changes.
 
+## [Important] Selector-fact invalidation always requests a whole-tree rematch
+
+Location: `src/invalidation.rs:54-104`, `src/invalidation.rs:165-170`,
+`src/sheet.rs:798-804`
+
+Evidence: `SelectorFactChange` distinguishes tag, key, class, attribute, runtime
+state, structure, and scope changes, but `Change::from_selector_fact_change`
+ignores that value and unconditionally sets `rematch` plus `whole_tree`. `Scope`
+cannot express ancestor or directional-sibling impact, and the sheet retains no
+reverse dependency information describing which selector facts and combinators
+can be affected by a local change. A class, attribute, or runtime-state change is
+therefore represented identically to a genuinely global selector change.
+
+Impact: Ordinary interactive updates such as hover, focus, class, and attribute
+changes force every node to be reconsidered. Relational selectors such as
+`:has()` do require ancestor or sibling propagation, but the current contract can
+express that correctness only by discarding all locality, defeating incremental
+style resolution and downstream caches.
+
+Required remediation: Model selector dependencies and rematch directions for
+subject, ancestor, descendant, sibling, structure, and scope effects, and derive a
+fact-sensitive rematch plan from the compiled sheet plus the changed-node anchor.
+Use whole-tree rematching only when the selector or condition dependency is
+actually global. Add focused invalidation cases for local class/state/attribute
+changes and for descendant, sibling, and `:has()` relationships that prove both
+correct propagation and unaffected-region exclusion.
+
 ## [Important] The stable value algebra is incomplete and conflates incompatible property domains
 
 Location: `src/value.rs:623-660`, `src/value.rs:679-719`,
@@ -297,6 +356,35 @@ partial.
 Required remediation: Add typed feature-support conditions, complete the MQ4 fact
 and matching model, and extend tree/selector facts for complete stable selector and
 namespace-aware matching.
+
+## [Important] Selector matching forces owned fact copies and materialized tree walks
+
+Location: `src/tree.rs:11-35`, `src/selector.rs:138-160`,
+`src/selector.rs:527-579`, `src/selector.rs:886-888`,
+`src/selector.rs:1014-1029`, `src/selector.rs:1578-1644`,
+`src/sheet.rs:720-729`, `src/sheet.rs:765-784`
+
+Evidence: `Tree::node` must return an owned `Node` containing owned class and
+attribute vectors. Simple selectors request that owned node independently, and a
+compound selector obtains one node before requesting it again for each state and
+attribute selector. Rule candidate lookup materializes a `BTreeSet` and then a
+`Vec`; relative, sibling, descendant, and `:has()` matching similarly collects
+temporary vectors before matching, including recursive descendant collection.
+The public tree contract gives an adapter no borrowed or query-oriented way to
+serve facts without constructing the owned snapshot.
+
+Impact: Selector matching copies node facts and allocates relationship collections
+through the core per-node/per-rule path. Deep trees, broad sibling sets, relational
+selectors, and the review's required expansion of selector facts multiply that
+work and prevent short-circuiting before complete candidate collections are built.
+
+Required remediation: Replace the allocation-forcing tree boundary with borrowed,
+revision-scoped, or query-oriented selector facts, and expose relationship
+iteration that permits matching to short-circuit without first materializing the
+complete candidate set. Preserve deterministic candidate deduplication and order
+without requiring a fresh ordered set per node. Add representative selector-scale
+evidence proving allocation-free simple fact queries and early exit for successful
+relative and `:has()` matches.
 
 ## [Important] The leaf owns a render-lowering adapter and dependency outside its boundary
 
